@@ -90,13 +90,73 @@ class ImmichService {
         return $this->getServerUrl() !== '' && $this->getApiKey() !== '';
     }
 
+    /**
+     * Permissions the integration requires to work correctly.
+     * These map to Immich's permission strings (as shown in the API key editor).
+     */
+    private const REQUIRED_PERMISSIONS = [
+        'asset.view',
+        'asset.read',
+        'asset.update',
+        'asset.upload',
+        'asset.download',
+        'asset.delete',
+        'album.read',
+        'album.create',
+        'album.update',
+        'album.delete',
+        'albumAsset.create',
+        'albumAsset.delete',
+        'person.read',
+        'map.read',
+    ];
+
     public function validateConnection(): array {
         try {
             $response = $this->request('POST', '/auth/validateToken');
-            return ['success' => true, 'data' => $response];
+
+            // Check that the API key has all required permissions.
+            // Immich returns the granted permissions in the token validation response.
+            $missingPermissions = $this->detectMissingPermissions($response);
+
+            return [
+                'success' => true,
+                'data' => $response,
+                'missing_permissions' => $missingPermissions,
+            ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Compare the permissions granted to the API key against those required
+     * by the integration. Returns a (possibly empty) list of missing permission strings.
+     */
+    private function detectMissingPermissions(array $tokenResponse): array {
+        // Immich returns granted permissions under different keys depending on version.
+        // v2.x: $tokenResponse['permissions'] is an array of permission strings,
+        // or the key may be absent for "all permissions" keys created before v1.98.
+        $granted = $tokenResponse['permissions'] ?? null;
+
+        // If the key predates scoped permissions, 'permissions' will be absent — treat as all-granted.
+        if ($granted === null) {
+            return [];
+        }
+
+        // 'all' is a special wildcard that grants everything.
+        if (in_array('all', (array) $granted, true)) {
+            return [];
+        }
+
+        $granted = array_flip((array) $granted);
+        $missing = [];
+        foreach (self::REQUIRED_PERMISSIONS as $required) {
+            if (!isset($granted[$required])) {
+                $missing[] = $required;
+            }
+        }
+        return $missing;
     }
 
     public function getTimelineBuckets(string $size = 'MONTH', ?string $personId = null, ?string $assetType = null, bool $isFavorite = false): array {
@@ -379,6 +439,11 @@ class ImmichService {
                 'x-api-key' => $this->getApiKey(),
                 'Accept' => 'application/json',
             ],
+            // Prevent the worker from hanging indefinitely if Immich is slow or
+            // unresponsive. 60 s should be generous even for large timeline buckets.
+            'timeout' => 60,
+            // Do not throw exceptions for 4xx/5xx — we handle status codes ourselves.
+            'http_errors' => false,
         ];
 
         if (isset($options['body'])) {
@@ -396,6 +461,30 @@ class ImmichService {
                 default => throw new \InvalidArgumentException('Unsupported HTTP method: ' . $method),
             };
 
+            $statusCode = $response->getStatusCode();
+
+            // 403 means the API key lacks the required permission for this endpoint.
+            // Return an empty result instead of throwing so the UI shows empty content
+            // rather than a generic 500 error. A warning is logged to help with debugging.
+            if ($statusCode === 403) {
+                $this->logger->warning('Immich API returned 403 for ' . $endpoint . ' — API key may be missing required permissions.', [
+                    'app'      => Application::APP_ID,
+                    'endpoint' => $endpoint,
+                    'method'   => $method,
+                ]);
+                return [];
+            }
+
+            // For other non-2xx responses, log and throw so callers can handle them.
+            if ($statusCode < 200 || $statusCode >= 300) {
+                $this->logger->error('Immich API returned HTTP ' . $statusCode . ' for ' . $endpoint, [
+                    'app'      => Application::APP_ID,
+                    'endpoint' => $endpoint,
+                    'method'   => $method,
+                ]);
+                throw new \RuntimeException('Immich API error: HTTP ' . $statusCode);
+            }
+
             $body = $response->getBody();
             $decoded = json_decode($body, true);
             return $decoded ?? [];
@@ -404,6 +493,7 @@ class ImmichService {
                 'app'      => Application::APP_ID,
                 'endpoint' => $endpoint,
                 'method'   => $method,
+                'url'      => $url,
             ]);
             throw $e;
         }
@@ -416,6 +506,7 @@ class ImmichService {
         try {
             $response = $client->get($url, [
                 'headers' => ['x-api-key' => $this->getApiKey()],
+                'timeout' => 60,
             ]);
             return [
                 'body' => $response->getBody(),

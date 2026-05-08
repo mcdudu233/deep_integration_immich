@@ -75,7 +75,19 @@ class ConfigController extends Controller {
                     Http::STATUS_BAD_REQUEST
                 );
             }
-            return new JSONResponse(['success' => true, 'validation' => $result]);
+
+            $missingPermissions = $result['missing_permissions'] ?? [];
+            if (!empty($missingPermissions)) {
+                $this->logger->warning('Immich API key is missing required permissions: ' . implode(', ', $missingPermissions), [
+                    'app' => Application::APP_ID,
+                ]);
+            }
+
+            return new JSONResponse([
+                'success' => true,
+                'validation' => $result,
+                'missing_permissions' => $missingPermissions,
+            ]);
         }
 
         return new JSONResponse(['success' => true]);
