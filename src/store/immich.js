@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { defineStore } from 'pinia'
+import { translate as t } from '@nextcloud/l10n'
 import { getTimeline, getAlbums, getAlbum, getPeople, getMapMarkers, getExplore } from '../services/api.js'
 
 export const useImmichStore = defineStore('immich', {
@@ -53,7 +54,10 @@ export const useImmichStore = defineStore('immich', {
 				const response = await getTimeline()
 				this.timelineBuckets = Array.isArray(response.data) ? response.data : []
 			} catch (e) {
-				this.error = e.response?.data?.error || e.message
+				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
+				this.error = isTimeout
+					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
 			}
@@ -95,7 +99,10 @@ export const useImmichStore = defineStore('immich', {
 					return copy
 				})
 			} catch (e) {
-				this.error = e.response?.data?.error || e.message
+				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
+				this.error = isTimeout
+					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
 			}
@@ -132,7 +139,10 @@ export const useImmichStore = defineStore('immich', {
 				const response = await getTimeline({ isFavorite: true })
 				this.favoriteBuckets = Array.isArray(response.data) ? response.data : []
 			} catch (e) {
-				this.error = e.response?.data?.error || e.message
+				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
+				this.error = isTimeout
+					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
 			}
@@ -208,7 +218,10 @@ export const useImmichStore = defineStore('immich', {
 				const response = await getTimeline({ personId: id })
 				this.personBuckets = Array.isArray(response.data) ? response.data : []
 			} catch (e) {
-				this.error = e.response?.data?.error || e.message
+				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
+				this.error = isTimeout
+					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
 			}

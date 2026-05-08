@@ -44,6 +44,15 @@
 				<NcNoteCard v-if="message" :type="messageType">
 					{{ message }}
 				</NcNoteCard>
+				<NcNoteCard v-if="missingPermissions.length > 0" type="warning">
+					{{ t('integration_immich', 'Connection successful, but the API key is missing required permissions. The following features may not work:') }}
+					<ul style="margin: 8px 0 0 16px;">
+						<li v-for="perm in missingPermissions" :key="perm">
+							<code>{{ perm }}</code>
+						</li>
+					</ul>
+					{{ t('integration_immich', 'Please edit the API key in Immich (Account Settings → API Keys) and enable all required permissions, or create a new key with full permissions.') }}
+				</NcNoteCard>
 				<NcNoteCard v-if="localAccessBlocked" type="error">
 					{{ t('integration_immich', 'Nextcloud is blocking the connection because the Immich server address is a private/local IP. A Nextcloud administrator can allow this by running:') }}
 					<br><br>
@@ -78,6 +87,7 @@ const testing = ref(false)
 const message = ref('')
 const messageType = ref('success')
 const localAccessBlocked = ref(false)
+const missingPermissions = ref([])
 
 onMounted(() => {
 	try {
@@ -125,14 +135,22 @@ async function testConnection() {
 	testing.value = true
 	message.value = ''
 	localAccessBlocked.value = false
+	missingPermissions.value = []
 	try {
 		const config = { server_url: serverUrl.value, validate: true }
 		if (apiKey.value) {
 			config.api_key = apiKey.value
 		}
-		await setConfig(config)
-		message.value = t('integration_immich', 'Connection successful!')
-		messageType.value = 'success'
+		const response = await setConfig(config)
+		missingPermissions.value = response.data?.missing_permissions ?? []
+		if (missingPermissions.value.length === 0) {
+			message.value = t('integration_immich', 'Connection successful!')
+			messageType.value = 'success'
+		} else {
+			// Show success but let the warning card below explain the missing permissions
+			message.value = t('integration_immich', 'Connected, but some permissions are missing (see below).')
+			messageType.value = 'warning'
+		}
 	} catch (e) {
 		const data = e.response?.data
 		localAccessBlocked.value = data?.local_access_blocked === true
