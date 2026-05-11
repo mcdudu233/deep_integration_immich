@@ -750,7 +750,7 @@ watch([() => store.lightbox.visible, currentIndex], ([visible]) => {
 	justify-content: space-between;
 	padding: 0 12px 0 20px;
 	background: linear-gradient(180deg, rgba(0,0,0,0.72) 0%, transparent 100%);
-	z-index: 20;
+	z-index: 10;
 }
 
 .ic-lb-counter {
