@@ -185,6 +185,17 @@ class ImmichService {
             $query['isFavorite'] = 'true';
         }
         $raw = $this->request('GET', '/timeline/bucket', ['query' => $query]);
+
+        // Debug: log the asset count returned by Immich so we can diagnose empty-bucket issues.
+        $assetCount = isset($raw['id']) && is_array($raw['id']) ? count($raw['id']) : count($raw);
+        $this->logger->debug('Immich /timeline/bucket returned ' . $assetCount . ' assets', [
+            'app'        => Application::APP_ID,
+            'timeBucket' => $timeBucket,
+            'size'       => $size,
+            'query'      => $query,
+            'rawKeys'    => array_keys($raw),
+        ]);
+
         return $this->transformBucketAssets($raw);
     }
 
