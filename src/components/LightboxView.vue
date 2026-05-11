@@ -176,6 +176,11 @@
 			<!-- Info panel -->
 			<Transition name="ic-lb-slide">
 				<div v-if="showInfo" class="ic-lb-info" @click.stop>
+					<button class="ic-lb-panel-close" :title="t('integration_immich', 'Close')" @click.stop="showInfo = false">
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+						</svg>
+					</button>
 					<!-- Loading spinner while EXIF is being fetched -->
 					<div v-if="fetchingInfo" class="ic-lb-album-panel__loading">
 						<svg viewBox="0 0 24 24" class="ic-lb-spin ic-lb-album-panel__spinner" aria-hidden="true">
@@ -195,6 +200,11 @@
 			<!-- Album picker panel -->
 			<Transition name="ic-lb-slide">
 				<div v-if="showAlbumPanel" class="ic-lb-info ic-lb-album-panel" @click.stop>
+					<button class="ic-lb-panel-close" :title="t('integration_immich', 'Close')" @click.stop="showAlbumPanel = false">
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+						</svg>
+					</button>
 					<p class="ic-lb-album-panel__title">{{ t('integration_immich', 'Add to album') }}</p>
 					<div v-if="loadingAlbums" class="ic-lb-album-panel__loading">
 						<svg viewBox="0 0 24 24" class="ic-lb-spin ic-lb-album-panel__spinner" aria-hidden="true">
@@ -740,7 +750,7 @@ watch([() => store.lightbox.visible, currentIndex], ([visible]) => {
 	justify-content: space-between;
 	padding: 0 12px 0 20px;
 	background: linear-gradient(180deg, rgba(0,0,0,0.72) 0%, transparent 100%);
-	z-index: 10;
+	z-index: 20;
 }
 
 .ic-lb-counter {
@@ -932,6 +942,36 @@ watch([() => store.lightbox.visible, currentIndex], ([visible]) => {
 .ic-lb-info::-webkit-scrollbar { width: 4px; }
 .ic-lb-info::-webkit-scrollbar-track { background: transparent; }
 .ic-lb-info::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.ic-lb-panel-close {
+	all: unset;
+	box-sizing: border-box;
+	cursor: pointer;
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	width: 36px;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	color: rgba(255,255,255,0.6);
+	transition: color 0.15s, background 0.15s;
+}
+
+.ic-lb-panel-close:hover {
+	color: #fff;
+	background: rgba(255,255,255,0.1);
+}
+
+.ic-lb-panel-close svg {
+	width: 18px;
+	height: 18px;
+	fill: currentColor;
+	pointer-events: none;
+	display: block;
+}
 
 /* slide animation */
 .ic-lb-slide-enter-active,
