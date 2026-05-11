@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-05-11
+
+### Added
+
+- **Permission warnings** — Admin settings now detect and display missing API-key permissions with a remediation hint
+- **Timeout error feedback** — Timeline/bucket fetches now show a user-friendly message instead of a raw Axios error on timeout
+
+### Fixed
+
+- Lightbox: info/album panel overlapped the toolbar, making all buttons (Close, Download, Info, …) inaccessible (#49)
+- Lightbox: added close button (✕) to info panel and album panel so they can be dismissed without pressing Escape
+- HTTP: added 60 s timeout to all Guzzle requests to prevent PHP workers from hanging on slow/unresponsive Immich instances
+- HTTP: 403 responses from Immich now return `[]` with a warning log instead of throwing HTTP 500
+
+### Changed
+
+- Debug logging: bucket fetches now log asset count per bucket (enable with `occ log:manage --level debug`)
+
+### Dependencies
+
+- `@nextcloud/axios` 2.5.2 → 2.6.0
+- `@nextcloud/vue` 9.6.0 → 9.7.0
+- `vue` 3.5.32 → 3.5.33
+- `vue-router` 5.0.4 → 5.0.6
+- `eslint-webpack-plugin` 5.0.3 → 6.0.0 (dev)
+- `fast-xml-builder` 1.1.5 → 1.2.0
+- `fast-uri` 3.1.0 → 3.1.2 (dev)
+
 ## [1.1.1] - 2026-04-27
 
 ### Fixed
