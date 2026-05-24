@@ -174,6 +174,11 @@ class ImmichService {
     }
 
     public function getTimelineBucket(string $timeBucket, string $size = 'MONTH', ?string $personId = null, ?string $assetType = null, bool $isFavorite = false): array {
+        // Immich v2 requires ISO-8601 format (YYYY-MM-DDTHH:MM:SS.000Z) for timeBucket.
+        // Older API responses returned short dates (YYYY-MM-DD); normalize them here.
+        if (strlen($timeBucket) === 10) {
+            $timeBucket .= 'T00:00:00.000Z';
+        }
         $query = ['timeBucket' => $timeBucket, 'size' => $size];
         if ($personId !== null && $personId !== '') {
             $query['personId'] = $personId;
@@ -332,7 +337,7 @@ class ImmichService {
             }
             $raw = $this->request('GET', '/timeline/bucket', [
                 'query' => [
-                    'timeBucket' => $timeBucket,
+                    'timeBucket' => (strlen($timeBucket) === 10 ? $timeBucket . 'T00:00:00.000Z' : $timeBucket),
                     'size' => 'MONTH',
                     'personId' => $id,
                 ],
