@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-05-25
+
+### Fixed
+
+- Timeline & People view: normalize `timeBucket` to ISO-8601 (`YYYY-MM-DDTHH:MM:SS.000Z`) for Immich v2 API compatibility — fixes empty All Media and Faces views (#53, closes #46)
+
+### Dependencies
+
+- `@nextcloud/dialogs` 7.3.0 → 7.4.0
+- `vue-router` 5.0.6 → 5.0.7
+- `webpack-dev-server` 5.2.3 → 5.2.4 (dev)
+- `qs` 6.15.1 → 6.15.2
+- `express` 4.22.1 → 4.22.2
+
 ## [1.1.3] - 2026-05-11
 
 ### Fixed
