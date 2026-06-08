@@ -11,7 +11,9 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
-use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\ActionPolicyService;
+use OCA\IntegrationImmich\Service\BrowsingAuthService;
+use OCA\IntegrationImmich\Service\ImmichAssetService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,15 +23,18 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\Http\Client\IClientService;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 class AssetsController extends Controller {
     public function __construct(
         IRequest $request,
-        private ImmichService $immichService,
+        private IClientService $clientService,
+        private BrowsingAuthService $browsingAuthService,
         private IRootFolder $rootFolder,
         private ?string $userId,
+        private ActionPolicyService $actionPolicyService,
         private LoggerInterface $logger,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -49,14 +54,13 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function timeline(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         try {
+            $assetService = $this->assetService($credentials);
             $timeBucket = $this->request->getParam('timeBucket');
             $size = $this->request->getParam('size', 'MONTH');
             $personId = $this->request->getParam('personId');
@@ -65,22 +69,20 @@ class AssetsController extends Controller {
             $isFavorite = $isFavoriteParam === 'true';
 
             if ($timeBucket) {
-                $data = $this->immichService->getTimelineBucket($timeBucket, $size, $personId, null, $isFavorite);
-                // Immich timeline/bucket does not support assetType filtering.
-                // Immich returns isImage (bool) instead of a type field — filter in PHP.
-                if ($assetType === 'IMAGE') {
-                    $data = array_values(array_filter(
-                        $data,
-                        static fn(array $asset): bool => (bool)($asset['isImage'] ?? true)
-                    ));
-                } elseif ($assetType === 'VIDEO') {
-                    $data = array_values(array_filter(
-                        $data,
-                        static fn(array $asset): bool => !($asset['isImage'] ?? true)
-                    ));
-                }
+                $data = $assetService->getTimelineBucket($timeBucket, $size, $personId, null, $isFavorite);
+                $data = $this->filterAssetsByType($data, is_string($assetType) ? $assetType : null);
+                $data = $this->filterAssetListForBrowsing($data, $credentials);
             } else {
-                $data = $this->immichService->getTimelineBuckets($size, $personId, null, $isFavorite);
+                $buckets = $assetService->getTimelineBuckets($size, $personId, null, $isFavorite);
+                $data = $this->filterTimelineBucketsForBrowsing(
+                    $assetService,
+                    $buckets,
+                    $credentials,
+                    (string)$size,
+                    is_string($personId) ? $personId : null,
+                    is_string($assetType) ? $assetType : null,
+                    $isFavorite
+                );
             }
 
             return new JSONResponse($data);
@@ -92,18 +94,19 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function show(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $data = $this->immichService->getAsset($id);
+            $data = $this->assetService($credentials)->getAsset($id);
+            if (!$this->assetResponseIsAuthorized($credentials, $data, $id)) {
+                return $this->ownershipFailureResponse();
+            }
             return new JSONResponse($data);
         } catch (\Exception $e) {
             return $this->errorResponse('asset info', $e);
@@ -112,10 +115,11 @@ class AssetsController extends Controller {
 
     #[NoAdminRequired]
     public function update(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
         $allowed = ['isFavorite', 'isArchived', 'description'];
@@ -124,7 +128,12 @@ class AssetsController extends Controller {
             return new JSONResponse(['error' => 'No valid fields provided'], Http::STATUS_BAD_REQUEST);
         }
         try {
-            $result = $this->immichService->updateAsset($id, $data);
+            $ownershipFailure = $this->ensureAssetOwnership($credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $result = $this->assetService($credentials)->updateAsset($id, $data);
             return new JSONResponse($result);
         } catch (\Exception $e) {
             return $this->errorResponse('asset update', $e);
@@ -134,20 +143,23 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function thumbnail(string $id): DataDownloadResponse|JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
+            $ownershipFailure = $this->ensureAssetOwnership($credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
             $size = $this->request->getParam('size', 'thumbnail');
             $size = in_array($size, ['thumbnail', 'preview'], true) ? $size : 'thumbnail';
-            $result = $this->immichService->getAssetThumbnail($id, $size);
+            $result = $this->assetService($credentials)->getAssetThumbnail($id, $size);
             $response = new DataDownloadResponse(
                 $result['body'],
                 $id . '.jpg',
@@ -163,18 +175,21 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function original(string $id): DataDownloadResponse|JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $result = $this->immichService->getAssetOriginal($id);
+            $ownershipFailure = $this->ensureAssetOwnership($credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $result = $this->assetService($credentials)->getAssetOriginal($id);
             $response = new DataDownloadResponse(
                 $result['body'],
                 $id,
@@ -189,22 +204,25 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function videoStream(string $id): DataDownloadResponse|JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
+            $ownershipFailure = $this->ensureAssetOwnership($credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
             $rangeHeader = $this->request->getHeader('Range') ?? '';
             if ($rangeHeader !== '' && !preg_match('/^bytes=(\d+-\d*|-\d+)(,\s*(\d+-\d*|-\d+))*$/', $rangeHeader)) {
                 $rangeHeader = '';
             }
-            $result = $this->immichService->getVideoStream($id, $rangeHeader);
+            $result = $this->assetService($credentials)->getVideoStream($id, $rangeHeader);
 
             $response = new DataDownloadResponse(
                 $result['body'],
@@ -234,15 +252,14 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function mapMarkers(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         try {
-            $markers = $this->immichService->getMapMarkers();
+            $markers = $this->assetService($credentials)->getMapMarkers();
+            $markers = $this->filterAssetListForBrowsing($markers, $credentials);
             return new JSONResponse($markers);
         } catch (\Exception $e) {
             return $this->errorResponse('map markers', $e);
@@ -252,15 +269,18 @@ class AssetsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function explore(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         try {
-            $data = $this->immichService->getExplore();
+            if (($credentials['mode'] ?? '') === BrowsingAuthService::MODE_ADMIN_PROXY) {
+                $markers = $this->assetService($credentials)->getMapMarkers();
+                $data = $this->buildExploreFromMarkers($this->filterAssetListForBrowsing($markers, $credentials));
+            } else {
+                $data = $this->assetService($credentials)->getExplore();
+            }
             return new JSONResponse($data);
         } catch (\Exception $e) {
             return $this->errorResponse('explore', $e);
@@ -269,11 +289,9 @@ class AssetsController extends Controller {
 
     #[NoAdminRequired]
     public function downloadAssets(): DataDownloadResponse|JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         $assetIds = $this->request->getParam('assetIds', []);
@@ -286,19 +304,25 @@ class AssetsController extends Controller {
         }
 
         foreach ($assetIds as $id) {
-            if (!preg_match(ImmichService::UUID_PATTERN, (string)$id)) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$id)) {
                 return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
             }
         }
 
         try {
+            $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, array_values(array_map('strval', $assetIds)));
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $assetService = $this->assetService($credentials);
             if (count($assetIds) === 1) {
                 // Single asset → GET /api/assets/{id}/original
                 $assetId = (string) $assetIds[0];
-                $asset = $this->immichService->getAsset($assetId);
+                $asset = $assetService->getAsset($assetId);
                 $fileName = $asset['originalFileName'] ?? ($assetId . '.bin');
 
-                $result = $this->immichService->getAssetOriginal($assetId);
+                $result = $assetService->getAssetOriginal($assetId);
                 $response = new DataDownloadResponse(
                     $result['body'],
                     $fileName,
@@ -309,7 +333,7 @@ class AssetsController extends Controller {
 
             // Multiple assets → POST /api/download/archive → Immich builds the ZIP
             $zipName = 'immich-download-' . date('Y-m-d') . '.zip';
-            $result = $this->immichService->downloadArchive(array_values(array_map('strval', $assetIds)));
+            $result = $assetService->downloadArchive(array_values(array_map('strval', $assetIds)));
             $response = new DataDownloadResponse(
                 $result['body'],
                 $zipName,
@@ -323,11 +347,9 @@ class AssetsController extends Controller {
 
     #[NoAdminRequired]
     public function deleteAssets(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         $assetIds = $this->request->getParam('assetIds', []);
@@ -339,14 +361,24 @@ class AssetsController extends Controller {
             return new JSONResponse(['error' => 'assetIds must be a non-empty array'], Http::STATUS_BAD_REQUEST);
         }
 
+        if (!$this->actionPolicyService->isDeleteEnabled()) {
+            return new JSONResponse(['error' => 'Delete from Immich is disabled by the administrator'], Http::STATUS_FORBIDDEN);
+        }
+
         foreach ($assetIds as $id) {
-            if (!preg_match(ImmichService::UUID_PATTERN, (string)$id)) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$id)) {
                 return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
             }
         }
 
         try {
-            $this->immichService->deleteAssets(array_values(array_map('strval', $assetIds)));
+            $assetIds = array_values(array_map('strval', $assetIds));
+            $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, $assetIds);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $this->assetService($credentials)->deleteAssets($assetIds);
             return new JSONResponse(['success' => true]);
         } catch (\Exception $e) {
             return $this->errorResponse('delete assets', $e);
@@ -355,11 +387,9 @@ class AssetsController extends Controller {
 
     #[NoAdminRequired]
     public function saveToNextcloud(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         $assetIds = $this->request->getParam('assetIds', []);
@@ -377,12 +407,33 @@ class AssetsController extends Controller {
             return new JSONResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
         }
 
-        $userFolder = $this->rootFolder->getUserFolder($this->userId);
+        if (!$this->actionPolicyService->isExportCopyEnabled()) {
+            return new JSONResponse(['error' => 'Export copy to Nextcloud is disabled by the administrator'], Http::STATUS_FORBIDDEN);
+        }
+
+        foreach ($assetIds as $id) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$id)) {
+                return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
+            }
+        }
+
         $normalizedPath = trim((string)$path, '/');
 
         if (str_contains($normalizedPath, '..') || str_contains($normalizedPath, "\0")) {
             return new JSONResponse(['error' => 'Invalid path'], Http::STATUS_BAD_REQUEST);
         }
+
+        if ($this->actionPolicyService->isPathInsideMirrorMount($this->userId, $normalizedPath)) {
+            return new JSONResponse(['error' => 'Exporting into the read-only Immich mirror mount is not allowed'], Http::STATUS_FORBIDDEN);
+        }
+
+        $assetIds = array_values(array_map('strval', $assetIds));
+        $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, $assetIds);
+        if ($ownershipFailure !== null) {
+            return $ownershipFailure;
+        }
+
+        $userFolder = $this->rootFolder->getUserFolder($this->userId);
 
         try {
             $targetNode = $userFolder->get($normalizedPath);
@@ -396,18 +447,19 @@ class AssetsController extends Controller {
         $saved = 0;
         $failed = 0;
         $errors = [];
+        $assetService = $this->assetService($credentials);
 
         foreach ($assetIds as $assetId) {
             try {
                 // Fetch metadata to get the original filename
-                $asset = $this->immichService->getAsset((string)$assetId);
+                $asset = $assetService->getAsset($assetId);
                 $fileName = $asset['originalFileName'] ?? ($assetId . '.bin');
 
                 // Ensure unique filename in target folder
                 $fileName = $this->getUniqueFileName($targetNode, (string)$fileName);
 
                 // Fetch the original binary (works for images and videos)
-                $result = $this->immichService->getAssetOriginal((string)$assetId);
+                $result = $assetService->getAssetOriginal($assetId);
 
                 // Write to Nextcloud — body is a stream, putContent accepts resource
                 $file = $targetNode->newFile($fileName);
@@ -425,6 +477,216 @@ class AssetsController extends Controller {
         }
 
         return new JSONResponse(['saved' => $saved, 'failed' => $failed, 'errors' => $errors]);
+    }
+
+    /**
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|JSONResponse
+     */
+    private function resolveBrowsingCredentials(): array|JSONResponse {
+        if ($this->userId === null) {
+            return new JSONResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+
+        $credentials = $this->browsingAuthService->resolveCredentials($this->userId);
+        if (($credentials['mode'] ?? '') === BrowsingAuthService::MODE_UNAVAILABLE) {
+            return new JSONResponse([
+                'error' => 'Immich browsing is not configured for this account',
+                'setup' => 'Configure a personal Immich server URL and API key in personal settings, or ask an administrator to enable admin proxy browsing and provision your Immich user mapping.',
+            ], Http::STATUS_PRECONDITION_FAILED);
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function assetService(array $credentials): ImmichAssetService {
+        return new ImmichAssetService(
+            $this->clientService,
+            $this->logger,
+            static fn (): array => $credentials,
+        );
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function ensureAssetOwnership(array $credentials, string $assetId): ?JSONResponse {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return null;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        if (!$this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId)) {
+            return $this->ownershipFailureResponse();
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param string[] $assetIds
+     */
+    private function ensureAssetIdsOwnership(array $credentials, array $assetIds): ?JSONResponse {
+        foreach ($assetIds as $assetId) {
+            $failure = $this->ensureAssetOwnership($credentials, $assetId);
+            if ($failure !== null) {
+                return $failure;
+            }
+        }
+
+        return null;
+    }
+
+    private function ownershipFailureResponse(): JSONResponse {
+        return new JSONResponse(['error' => 'Asset is not available for this user'], Http::STATUS_FORBIDDEN);
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function assetResponseIsAuthorized(array $credentials, array $asset, string $assetId): bool {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return true;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        if ($this->browsingAuthService->assetBelongsToUser($asset, $immichUserId)) {
+            return true;
+        }
+
+        return $this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId);
+    }
+
+    /**
+     * @param array<int, mixed> $assets
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function filterAssetListForBrowsing(array $assets, array $credentials): array {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return $assets;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        return array_values(array_filter($assets, function (mixed $asset) use ($immichUserId): bool {
+            if (!is_array($asset)) {
+                return false;
+            }
+
+            if ($this->browsingAuthService->assetBelongsToUser($asset, $immichUserId)) {
+                return true;
+            }
+
+            $assetId = $this->assetIdFromResponse($asset);
+            return $assetId !== null && $this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId);
+        }));
+    }
+
+    /**
+     * @param array<int, mixed> $assets
+     */
+    private function filterAssetsByType(array $assets, ?string $assetType): array {
+        if ($assetType === 'IMAGE') {
+            return array_values(array_filter(
+                $assets,
+                static fn(mixed $asset): bool => is_array($asset) && (bool)($asset['isImage'] ?? true)
+            ));
+        }
+
+        if ($assetType === 'VIDEO') {
+            return array_values(array_filter(
+                $assets,
+                static fn(mixed $asset): bool => is_array($asset) && !($asset['isImage'] ?? true)
+            ));
+        }
+
+        return $assets;
+    }
+
+    /**
+     * @param array<int, mixed> $buckets
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function filterTimelineBucketsForBrowsing(
+        ImmichAssetService $assetService,
+        array $buckets,
+        array $credentials,
+        string $size,
+        ?string $personId,
+        ?string $assetType,
+        bool $isFavorite,
+    ): array {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return $buckets;
+        }
+
+        $filteredBuckets = [];
+        foreach ($buckets as $bucket) {
+            if (!is_array($bucket) || !isset($bucket['timeBucket'])) {
+                continue;
+            }
+
+            $assets = $assetService->getTimelineBucket((string)$bucket['timeBucket'], $size, $personId, null, $isFavorite);
+            $assets = $this->filterAssetsByType($assets, $assetType);
+            $assets = $this->filterAssetListForBrowsing($assets, $credentials);
+            if ($assets === []) {
+                continue;
+            }
+
+            $bucket['count'] = count($assets);
+            $filteredBuckets[] = $bucket;
+        }
+
+        return $filteredBuckets;
+    }
+
+    /**
+     * @param array<int, mixed> $markers
+     */
+    private function buildExploreFromMarkers(array $markers): array {
+        $cities = [];
+        $countries = [];
+        foreach ($markers as $marker) {
+            if (!is_array($marker)) {
+                continue;
+            }
+
+            $id = $marker['id'] ?? null;
+            if (!is_string($id) || $id === '') {
+                continue;
+            }
+
+            $city = $marker['city'] ?? null;
+            $country = $marker['country'] ?? null;
+            if (is_string($city) && $city !== '' && !isset($cities[$city])) {
+                $cities[$city] = ['value' => $city, 'data' => ['id' => $id]];
+            }
+            if (is_string($country) && $country !== '' && !isset($countries[$country])) {
+                $countries[$country] = ['value' => $country, 'data' => ['id' => $id]];
+            }
+        }
+
+        $result = [];
+        if ($cities !== []) {
+            $result[] = ['fieldName' => 'exifInfo.city', 'items' => array_values($cities)];
+        }
+        if ($countries !== []) {
+            $result[] = ['fieldName' => 'exifInfo.country', 'items' => array_values($countries)];
+        }
+
+        return $result;
+    }
+
+    private function assetIdFromResponse(array $asset): ?string {
+        foreach (['id', 'assetId'] as $key) {
+            if (isset($asset[$key]) && is_string($asset[$key]) && $asset[$key] !== '') {
+                return $asset[$key];
+            }
+        }
+
+        return null;
     }
 
     private function getUniqueFileName(Folder $folder, string $fileName): string {

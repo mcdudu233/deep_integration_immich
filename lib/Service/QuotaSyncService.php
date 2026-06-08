@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Marcel Meyer <gh@grenzallee.eu>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\IntegrationImmich\Service;
+
+use OCA\IntegrationImmich\AppInfo\Application;
+use OCP\Files\IRootFolder;
+use OCP\IUserManager;
+use Psr\Log\LoggerInterface;
+
+class QuotaSyncService {
+    private mixed $usageProvider;
+    private ?string $lastError = null;
+    private bool $lastQuotaUnlimited = false;
+
+    public function __construct(
+        private IUserManager $userManager,
+        private AdminConfigService $adminConfigService,
+        private LoggerInterface $logger,
+        private ?IRootFolder $rootFolder = null,
+        ?callable $usageProvider = null,
+    ) {
+        $this->usageProvider = $usageProvider;
+    }
+
+    public function setNextcloudUsageProvider(callable $usageProvider): void {
+        $this->usageProvider = $usageProvider;
+    }
+
+    public function computeQuota(string $ncUid, ?int $immichUsage): ?int {
+        $this->lastError = null;
+        $this->lastQuotaUnlimited = false;
+
+        try {
+            $user = $this->userManager->get($ncUid);
+            if ($user === null) {
+                throw new \RuntimeException('Nextcloud user was not found.');
+            }
+
+            $nextcloudQuota = $this->parseQuota($user->getQuota());
+            if ($nextcloudQuota === null) {
+                $this->lastQuotaUnlimited = true;
+                return null;
+            }
+
+            $nextcloudUsed = $this->getNextcloudTotalUsage($ncUid);
+            if ($nextcloudUsed === null || $nextcloudUsed < 0) {
+                throw new \RuntimeException('Nextcloud total usage is unavailable.');
+            }
+
+            $immichUsage = max(0, $immichUsage ?? 0);
+            $nonImmichUsage = max(0, $nextcloudUsed - $immichUsage);
+            $reserveBytes = $this->getReserveBytes();
+            $computedQuota = max($immichUsage, $nextcloudQuota - $nonImmichUsage - $reserveBytes);
+
+            if ($computedQuota <= 0) {
+                throw new \RuntimeException('Computed Immich quota is zero; leaving quota unchanged.');
+            }
+
+            return $computedQuota;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            $this->logger->warning('Immich quota computation failed for Nextcloud user "' . $ncUid . '": ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'ncUid' => $ncUid,
+            ]);
+            return null;
+        }
+    }
+
+    public function getLastError(): ?string {
+        return $this->lastError;
+    }
+
+    public function wasLastQuotaUnlimited(): bool {
+        return $this->lastQuotaUnlimited && $this->lastError === null;
+    }
+
+    private function parseQuota(mixed $quota): ?int {
+        if (is_int($quota)) {
+            if ($quota < 0) {
+                return null;
+            }
+            if ($quota === 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $quota;
+        }
+
+        if (!is_string($quota)) {
+            throw new \RuntimeException('Nextcloud quota is unavailable.');
+        }
+
+        $quota = trim($quota);
+        if ($quota === '') {
+            throw new \RuntimeException('Nextcloud quota is unavailable.');
+        }
+
+        if (in_array(strtolower($quota), ['none', 'unlimited', '-1'], true)) {
+            return null;
+        }
+
+        if (preg_match('/^\d+$/', $quota) === 1) {
+            $bytes = (int)$quota;
+            if ($bytes <= 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $bytes;
+        }
+
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*([kmgtp])i?b?$/i', $quota, $matches) === 1) {
+            $bytes = (int)round((float)$matches[1] * $this->quotaUnitMultiplier(strtolower($matches[2])));
+            if ($bytes <= 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $bytes;
+        }
+
+        throw new \RuntimeException('Nextcloud quota must be a finite byte value or unlimited.');
+    }
+
+    private function quotaUnitMultiplier(string $unit): int {
+        return match ($unit) {
+            'k' => 1024,
+            'm' => 1024 ** 2,
+            'g' => 1024 ** 3,
+            't' => 1024 ** 4,
+            'p' => 1024 ** 5,
+            default => throw new \RuntimeException('Unsupported Nextcloud quota unit.'),
+        };
+    }
+
+    private function getNextcloudTotalUsage(string $ncUid): ?int {
+        if (is_callable($this->usageProvider)) {
+            $usage = ($this->usageProvider)($ncUid);
+            return is_int($usage) ? $usage : null;
+        }
+
+        if ($this->rootFolder !== null) {
+            $usage = $this->rootFolder->getUserFolder($ncUid)->getSize();
+            return is_numeric($usage) ? (int)$usage : null;
+        }
+
+        return null;
+    }
+
+    private function getReserveBytes(): int {
+        $config = $this->adminConfigService->getAdminConfig();
+        $reserve = $config[AdminConfigService::KEY_QUOTA_RESERVE_BYTES] ?? 0;
+
+        if (is_int($reserve)) {
+            return max(0, $reserve);
+        }
+
+        if (is_string($reserve) && preg_match('/^\d+$/', trim($reserve)) === 1) {
+            return (int)trim($reserve);
+        }
+
+        return 0;
+    }
+}

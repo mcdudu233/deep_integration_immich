@@ -11,11 +11,13 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\Service\ActionPolicyService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
@@ -26,6 +28,7 @@ class UploadController extends Controller {
         private ImmichService $immichService,
         private IRootFolder $rootFolder,
         private ?string $userId,
+        private ActionPolicyService $actionPolicyService,
         private LoggerInterface $logger,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -33,6 +36,13 @@ class UploadController extends Controller {
 
     #[NoAdminRequired]
     public function upload(): JSONResponse {
+        if (!$this->actionPolicyService->isImportToImmichEnabled()) {
+            return new JSONResponse(
+                ['error' => 'Import to Immich is disabled by the administrator'],
+                Http::STATUS_FORBIDDEN
+            );
+        }
+
         if (!$this->immichService->isConfigured()) {
             return new JSONResponse(
                 ['error' => 'Immich is not configured'],
@@ -64,10 +74,17 @@ class UploadController extends Controller {
 
             $file = $files[0];
 
-            if (!($file instanceof \OCP\Files\File)) {
+            if (!($file instanceof File)) {
                 return new JSONResponse(
                     ['error' => 'Not a file'],
                     Http::STATUS_BAD_REQUEST
+                );
+            }
+
+            if ($this->actionPolicyService->isPathInsideMirrorMount($this->userId, $file->getPath())) {
+                return new JSONResponse(
+                    ['error' => 'Files inside the read-only Immich mirror mount cannot be imported back into Immich'],
+                    Http::STATUS_FORBIDDEN
                 );
             }
 

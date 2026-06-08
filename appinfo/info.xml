@@ -3,9 +3,9 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>integration_immich</id>
     <name>Immich Integration</name>
-    <summary>Browse your Immich photo library directly in Nextcloud</summary>
+    <summary>Browse Immich in Nextcloud with admin provisioning support</summary>
     <description><![CDATA[
-Seamlessly integrates your [Immich](https://immich.app) photo library into Nextcloud.
+Seamlessly integrates your [Immich](https://immich.app) photo library into Nextcloud while adding admin-side orchestration for provisioning, user-scoped read-only mirrors, and quota coordination with clear caveats.
 
 **Features:**
 - 🖼️ **Timeline** — lazy-loaded photo & video timeline grouped by date
@@ -15,9 +15,14 @@ Seamlessly integrates your [Immich](https://immich.app) photo library into Nextc
 - 🔍 **Explore** — browse by city, country, state, object or tag
 - 🔎 **Lightbox** — full-screen viewer with keyboard navigation, pinch-to-zoom and EXIF metadata
 - ⭐ **Favorites** — mark and unmark photos as favorites
-- 💾 **Save to Nextcloud** — save Immich originals directly to your Nextcloud Files
-- ⬆️ **Upload to Immich** — send photos and videos from Nextcloud Files to Immich
+- 💾 **Export copy to Nextcloud** — copy Immich originals into Nextcloud Files
+- ⬆️ **Import into Immich (opt-in)** — send selected photos and videos from Nextcloud Files to Immich
 - ☑️ **Multi-select** — batch operations across any view
+
+**Admin orchestration:**
+- configure Immich admin provisioning from Nextcloud
+- provision user-scoped read-only mirrors for matching Nextcloud users
+- coordinate Immich quota with Nextcloud quota and usage, with scan/timing caveats
     ]]></description>
     <version>1.1.4</version>
     <licence>AGPL-3.0-or-later</licence>
@@ -42,6 +47,8 @@ Seamlessly integrates your [Immich](https://immich.app) photo library into Nextc
         </navigation>
     </navigations>
     <settings>
+        <admin>OCA\IntegrationImmich\Settings\AdminSettings</admin>
+        <admin-section>OCA\IntegrationImmich\Settings\AdminSection</admin-section>
         <personal>OCA\IntegrationImmich\Settings\PersonalSettings</personal>
         <personal-section>OCA\IntegrationImmich\Settings\PersonalSection</personal-section>
     </settings>

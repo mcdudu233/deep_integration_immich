@@ -11,7 +11,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
-use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\FrontendInitialStateService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -23,7 +23,8 @@ class PageController extends Controller {
     public function __construct(
         IRequest $request,
         private IInitialState $initialState,
-        private ImmichService $immichService,
+        private FrontendInitialStateService $frontendInitialStateService,
+        private ?string $userId,
     ) {
         parent::__construct(Application::APP_ID, $request);
     }
@@ -31,9 +32,10 @@ class PageController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function index(): TemplateResponse {
-        $this->initialState->provideInitialState('user-config', [
-            'server_url' => $this->immichService->getServerUrl(),
-        ]);
+        $state = $this->frontendInitialStateService->buildUserState($this->userId);
+        $state['server_url'] = $state['immich_url'];
+
+        $this->initialState->provideInitialState('user-config', $state);
         return new TemplateResponse(Application::APP_ID, 'main');
     }
 }

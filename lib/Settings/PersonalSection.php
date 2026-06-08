@@ -16,6 +16,8 @@ use OCP\IURLGenerator;
 use OCP\Settings\IIconSection;
 
 class PersonalSection implements IIconSection {
+    public const SECTION_ID = 'integration_immich-personal';
+
     public function __construct(
         private IL10N $l,
         private IURLGenerator $urlGenerator,
@@ -23,11 +25,11 @@ class PersonalSection implements IIconSection {
     }
 
     public function getID(): string {
-        return Application::APP_ID;
+        return self::SECTION_ID;
     }
 
     public function getName(): string {
-        return $this->l->t('Immich Integration');
+        return $this->l->t('Immich Browsing');
     }
 
     public function getPriority(): int {

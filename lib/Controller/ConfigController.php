@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\Service\ActionPolicyService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -24,6 +25,8 @@ class ConfigController extends Controller {
     public function __construct(
         IRequest $request,
         private ImmichService $immichService,
+        private ActionPolicyService $actionPolicyService,
+        private ?string $userId,
         private LoggerInterface $logger,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -35,6 +38,7 @@ class ConfigController extends Controller {
         return new JSONResponse([
             'server_url' => $this->immichService->getServerUrl(),
             'api_key_set' => $this->immichService->getApiKey() !== '',
+            'actionCapabilities' => $this->actionPolicyService->getCapabilityFlags($this->userId),
         ]);
     }
 

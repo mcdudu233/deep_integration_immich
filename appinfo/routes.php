@@ -17,6 +17,19 @@ return [
         ['name' => 'config#setConfig', 'url' => '/api/v1/config', 'verb' => 'PUT'],
         ['name' => 'config#getConfig', 'url' => '/api/v1/config', 'verb' => 'GET'],
 
+        // Admin Orchestration
+        ['name' => 'admin_settings#getConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'GET'],
+        ['name' => 'admin_settings#setConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'PUT'],
+        ['name' => 'admin_settings#validateConnection', 'url' => '/api/v1/admin/config/validate-connection',              'verb' => 'POST'],
+        ['name' => 'admin_provisioning#dryRun',         'url' => '/api/v1/admin/provisioning/dry-run/{ncUid}',             'verb' => 'GET'],
+        ['name' => 'admin_provisioning#dryRunAll',      'url' => '/api/v1/admin/provisioning/dry-run',                     'verb' => 'GET'],
+        ['name' => 'admin_provisioning#reconcileOne',   'url' => '/api/v1/admin/provisioning/reconcile/{ncUid}',           'verb' => 'POST'],
+        ['name' => 'admin_provisioning#reconcileAll',   'url' => '/api/v1/admin/provisioning/reconcile',                   'verb' => 'POST'],
+        ['name' => 'admin_provisioning#recomputeQuotaOne', 'url' => '/api/v1/admin/provisioning/quota/{ncUid}',            'verb' => 'POST'],
+        ['name' => 'admin_provisioning#recomputeQuotaAll', 'url' => '/api/v1/admin/provisioning/quota',                    'verb' => 'POST'],
+        ['name' => 'admin_provisioning#listSyncState',  'url' => '/api/v1/admin/provisioning/sync-state',                 'verb' => 'GET'],
+        ['name' => 'admin_provisioning#verifyHealth',   'url' => '/api/v1/admin/provisioning/health/{ncUid}',              'verb' => 'POST'],
+
         // Assets / Timeline
         ['name' => 'assets#timeline',        'url' => '/api/v1/timeline',                    'verb' => 'GET'],
         ['name' => 'assets#downloadAssets',  'url' => '/api/v1/download',                    'verb' => 'POST'],

@@ -11,20 +11,24 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
-use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\BrowsingAuthService;
+use OCA\IntegrationImmich\Service\ImmichAssetService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Http\Client\IClientService;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 class AlbumsController extends Controller {
     public function __construct(
         IRequest $request,
-        private ImmichService $immichService,
+        private IClientService $clientService,
+        private BrowsingAuthService $browsingAuthService,
+        private ?string $userId,
         private LoggerInterface $logger,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -44,21 +48,27 @@ class AlbumsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function index(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         $assetId = $this->request->getParam('assetId', '');
-        if ($assetId !== '' && !preg_match(ImmichService::UUID_PATTERN, $assetId)) {
+        if ($assetId !== '' && !preg_match(ImmichAssetService::UUID_PATTERN, $assetId)) {
             return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $albums = $this->immichService->getAlbums($assetId);
-            return new JSONResponse($albums);
+            if ($assetId !== '') {
+                $ownershipFailure = $this->ensureAssetOwnership($credentials, (string)$assetId);
+                if ($ownershipFailure !== null) {
+                    return $ownershipFailure;
+                }
+            }
+
+            $assetService = $this->assetService($credentials);
+            $albums = $assetService->getAlbums((string)$assetId);
+            return new JSONResponse($this->filterAlbumListForBrowsing($assetService, $albums, $credentials));
         } catch (\Exception $e) {
             return $this->errorResponse('albums list', $e);
         }
@@ -67,19 +77,21 @@ class AlbumsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function show(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $album = $this->immichService->getAlbum($id);
-            return new JSONResponse($album);
+            $album = $this->assetService($credentials)->getAlbum($id);
+            if (!$this->albumResponseIsAuthorized($credentials, $album)) {
+                return $this->ownershipFailureResponse();
+            }
+
+            return new JSONResponse($this->sanitizeAlbumForBrowsing($album, $credentials));
         } catch (\Exception $e) {
             return $this->errorResponse('album show', $e);
         }
@@ -87,8 +99,9 @@ class AlbumsController extends Controller {
 
     #[NoAdminRequired]
     public function create(): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
         $albumName = $this->request->getParam('albumName', '');
@@ -100,14 +113,21 @@ class AlbumsController extends Controller {
 
         $assetIds = is_array($assetIds) ? $assetIds : [];
         foreach ($assetIds as $assetId) {
-            if (!preg_match(ImmichService::UUID_PATTERN, (string)$assetId)) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$assetId)) {
                 return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
             }
         }
 
+        $assetIds = array_values(array_map('strval', $assetIds));
+
         try {
-            $album = $this->immichService->createAlbum($albumName, $assetIds);
-            return new JSONResponse($album, Http::STATUS_CREATED);
+            $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, $assetIds);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $album = $this->assetService($credentials)->createAlbum($albumName, $assetIds);
+            return new JSONResponse($this->sanitizeAlbumForBrowsing($album, $credentials), Http::STATUS_CREATED);
         } catch (\Exception $e) {
             return $this->errorResponse('album create', $e);
         }
@@ -115,14 +135,21 @@ class AlbumsController extends Controller {
 
     #[NoAdminRequired]
     public function delete(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
         try {
-            $this->immichService->deleteAlbum($id);
+            $assetService = $this->assetService($credentials);
+            $ownershipFailure = $this->ensureAlbumOwnershipById($assetService, $credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $assetService->deleteAlbum($id);
             return new JSONResponse(['success' => true]);
         } catch (\Exception $e) {
             return $this->errorResponse('album delete', $e);
@@ -131,10 +158,11 @@ class AlbumsController extends Controller {
 
     #[NoAdminRequired]
     public function rename(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
         $albumName = trim($this->request->getParam('albumName', ''));
@@ -142,8 +170,14 @@ class AlbumsController extends Controller {
             return new JSONResponse(['error' => 'albumName is required'], Http::STATUS_BAD_REQUEST);
         }
         try {
-            $album = $this->immichService->renameAlbum($id, $albumName);
-            return new JSONResponse($album);
+            $assetService = $this->assetService($credentials);
+            $ownershipFailure = $this->ensureAlbumOwnershipById($assetService, $credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $album = $assetService->renameAlbum($id, $albumName);
+            return new JSONResponse($this->sanitizeAlbumForBrowsing($album, $credentials));
         } catch (\Exception $e) {
             return $this->errorResponse('album rename', $e);
         }
@@ -151,10 +185,11 @@ class AlbumsController extends Controller {
 
     #[NoAdminRequired]
     public function removeAssets(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
         $assetIds = $this->request->getParam('assetIds', []);
@@ -162,12 +197,25 @@ class AlbumsController extends Controller {
             return new JSONResponse(['error' => 'assetIds must be a non-empty array'], Http::STATUS_BAD_REQUEST);
         }
         foreach ($assetIds as $assetId) {
-            if (!preg_match(ImmichService::UUID_PATTERN, (string)$assetId)) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$assetId)) {
                 return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
             }
         }
+
+        $assetIds = array_values(array_map('strval', $assetIds));
         try {
-            $result = $this->immichService->removeAssetsFromAlbum($id, $assetIds);
+            $assetService = $this->assetService($credentials);
+            $ownershipFailure = $this->ensureAlbumOwnershipById($assetService, $credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, $assetIds);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $result = $assetService->removeAssetsFromAlbum($id, $assetIds);
             return new JSONResponse($result);
         } catch (\Exception $e) {
             return $this->errorResponse('album remove assets', $e);
@@ -176,11 +224,12 @@ class AlbumsController extends Controller {
 
     #[NoAdminRequired]
     public function addAssets(string $id): JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(['error' => 'Immich is not configured'], Http::STATUS_PRECONDITION_FAILED);
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
 
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
 
@@ -190,13 +239,26 @@ class AlbumsController extends Controller {
         }
 
         foreach ($assetIds as $assetId) {
-            if (!preg_match(ImmichService::UUID_PATTERN, (string)$assetId)) {
+            if (!preg_match(ImmichAssetService::UUID_PATTERN, (string)$assetId)) {
                 return new JSONResponse(['error' => 'Invalid asset ID format'], Http::STATUS_BAD_REQUEST);
             }
         }
 
+        $assetIds = array_values(array_map('strval', $assetIds));
+
         try {
-            $result = $this->immichService->addAssetsToAlbum($id, $assetIds);
+            $assetService = $this->assetService($credentials);
+            $ownershipFailure = $this->ensureAlbumOwnershipById($assetService, $credentials, $id);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $ownershipFailure = $this->ensureAssetIdsOwnership($credentials, $assetIds);
+            if ($ownershipFailure !== null) {
+                return $ownershipFailure;
+            }
+
+            $result = $assetService->addAssetsToAlbum($id, $assetIds);
             return new JSONResponse($result);
         } catch (\Exception $e) {
             return $this->errorResponse('album add assets', $e);
@@ -206,22 +268,36 @@ class AlbumsController extends Controller {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function thumbnail(string $id): DataDownloadResponse|JSONResponse {
-        if (!$this->immichService->isConfigured()) {
-            return new JSONResponse(
-                ['error' => 'Immich is not configured'],
-                Http::STATUS_PRECONDITION_FAILED
-            );
+        $credentials = $this->resolveBrowsingCredentials();
+        if ($credentials instanceof JSONResponse) {
+            return $credentials;
         }
-        if (!preg_match(ImmichService::UUID_PATTERN, $id)) {
+        if (!preg_match(ImmichAssetService::UUID_PATTERN, $id)) {
             return new JSONResponse(['error' => 'Invalid album ID format'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $album = $this->immichService->getAlbum($id);
-            $thumbnailAssetId = $album['albumThumbnailAssetId'] ?? null;
+            $assetService = $this->assetService($credentials);
+            $album = $assetService->getAlbum($id);
+            if (!$this->albumResponseIsAuthorized($credentials, $album)) {
+                return $this->ownershipFailureResponse();
+            }
+
+            $album = $this->sanitizeAlbumForBrowsing($album, $credentials);
+            $thumbnailAssetId = $this->ownedThumbnailAssetId($album, $credentials);
 
             if (!$thumbnailAssetId && !empty($album['assets'])) {
-                $thumbnailAssetId = $album['assets'][0]['id'];
+                foreach ($album['assets'] as $asset) {
+                    if (!is_array($asset)) {
+                        continue;
+                    }
+
+                    $assetId = $this->assetIdFromResponse($asset);
+                    if ($assetId !== null && $this->ensureAssetOwnership($credentials, $assetId) === null) {
+                        $thumbnailAssetId = $assetId;
+                        break;
+                    }
+                }
             }
 
             if (!$thumbnailAssetId) {
@@ -231,7 +307,7 @@ class AlbumsController extends Controller {
                 );
             }
 
-            $result = $this->immichService->getAssetThumbnail($thumbnailAssetId);
+            $result = $assetService->getAssetThumbnail($thumbnailAssetId);
             $response = new DataDownloadResponse(
                 $result['body'],
                 $id . '.jpg',
@@ -242,5 +318,268 @@ class AlbumsController extends Controller {
         } catch (\Exception $e) {
             return $this->errorResponse('album thumbnail', $e);
         }
+    }
+
+    /**
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|JSONResponse
+     */
+    private function resolveBrowsingCredentials(): array|JSONResponse {
+        if ($this->userId === null) {
+            return new JSONResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+
+        $credentials = $this->browsingAuthService->resolveCredentials($this->userId);
+        if (($credentials['mode'] ?? '') === BrowsingAuthService::MODE_UNAVAILABLE) {
+            return new JSONResponse([
+                'error' => 'Immich browsing is not configured for this account',
+                'setup' => 'Configure a personal Immich server URL and API key in personal settings, or ask an administrator to enable admin proxy browsing and provision your Immich user mapping.',
+            ], Http::STATUS_PRECONDITION_FAILED);
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function assetService(array $credentials): ImmichAssetService {
+        return new ImmichAssetService(
+            $this->clientService,
+            $this->logger,
+            static fn (): array => $credentials,
+        );
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function ensureAlbumOwnershipById(ImmichAssetService $assetService, array $credentials, string $albumId): ?JSONResponse {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return null;
+        }
+
+        $album = $assetService->getAlbum($albumId);
+        if (!$this->albumResponseIsAuthorized($credentials, $album)) {
+            return $this->ownershipFailureResponse();
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function ensureAssetOwnership(array $credentials, string $assetId): ?JSONResponse {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return null;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        if (!$this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId)) {
+            return $this->ownershipFailureResponse();
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param string[] $assetIds
+     */
+    private function ensureAssetIdsOwnership(array $credentials, array $assetIds): ?JSONResponse {
+        foreach ($assetIds as $assetId) {
+            $failure = $this->ensureAssetOwnership($credentials, $assetId);
+            if ($failure !== null) {
+                return $failure;
+            }
+        }
+
+        return null;
+    }
+
+    private function ownershipFailureResponse(): JSONResponse {
+        return new JSONResponse(['error' => 'Album is not available for this user'], Http::STATUS_FORBIDDEN);
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function albumResponseIsAuthorized(array $credentials, array $album): bool {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return true;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        $ownerId = $this->extractOwnerId($album);
+        if ($ownerId !== null) {
+            return hash_equals($immichUserId, $ownerId);
+        }
+
+        $assets = $album['assets'] ?? null;
+        if (!is_array($assets) || $assets === []) {
+            return false;
+        }
+
+        foreach ($assets as $asset) {
+            if (!is_array($asset)) {
+                return false;
+            }
+
+            if ($this->browsingAuthService->assetBelongsToUser($asset, $immichUserId)) {
+                continue;
+            }
+
+            $assetId = $this->assetIdFromResponse($asset);
+            if ($assetId === null || !$this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<int, mixed> $albums
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function filterAlbumListForBrowsing(ImmichAssetService $assetService, array $albums, array $credentials): array {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return $albums;
+        }
+
+        $filtered = [];
+        foreach ($albums as $album) {
+            if (!is_array($album)) {
+                continue;
+            }
+
+            if ($this->albumResponseIsAuthorized($credentials, $album)) {
+                $filtered[] = $this->sanitizeAlbumForBrowsing($album, $credentials);
+                continue;
+            }
+
+            if ($this->extractOwnerId($album) !== null) {
+                continue;
+            }
+
+            $albumId = $this->albumIdFromResponse($album);
+            if ($albumId === null) {
+                continue;
+            }
+
+            try {
+                $detailedAlbum = $assetService->getAlbum($albumId);
+            } catch (\Throwable $e) {
+                $this->logger->warning('Immich album ownership detail check failed: ' . $e->getMessage(), [
+                    'app' => Application::APP_ID,
+                    'albumId' => $albumId,
+                ]);
+                continue;
+            }
+
+            if ($this->albumResponseIsAuthorized($credentials, $detailedAlbum)) {
+                $filtered[] = $this->sanitizeAlbumForBrowsing($album, $credentials);
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function sanitizeAlbumForBrowsing(array $album, array $credentials): array {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return $album;
+        }
+
+        foreach (['sharedUsers', 'albumUsers', 'users', 'sharedLinks'] as $field) {
+            unset($album[$field]);
+        }
+
+        if (isset($album['assets']) && is_array($album['assets'])) {
+            $album['assets'] = $this->filterAssetListForBrowsing($album['assets'], $credentials);
+        }
+
+        return $album;
+    }
+
+    /**
+     * @param array<int, mixed> $assets
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function filterAssetListForBrowsing(array $assets, array $credentials): array {
+        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+            return $assets;
+        }
+
+        $immichUserId = (string)($credentials['immichUserId'] ?? '');
+        return array_values(array_filter($assets, function (mixed $asset) use ($immichUserId): bool {
+            if (!is_array($asset)) {
+                return false;
+            }
+
+            if ($this->browsingAuthService->assetBelongsToUser($asset, $immichUserId)) {
+                return true;
+            }
+
+            $assetId = $this->assetIdFromResponse($asset);
+            return $assetId !== null && $this->browsingAuthService->assertAssetOwnership($immichUserId, $assetId);
+        }));
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     */
+    private function ownedThumbnailAssetId(array $album, array $credentials): ?string {
+        $thumbnailAssetId = $album['albumThumbnailAssetId'] ?? null;
+        if (!is_string($thumbnailAssetId) || $thumbnailAssetId === '') {
+            return null;
+        }
+
+        if ($this->ensureAssetOwnership($credentials, $thumbnailAssetId) !== null) {
+            return null;
+        }
+
+        return $thumbnailAssetId;
+    }
+
+    private function extractOwnerId(array $item): ?string {
+        foreach (['ownerId', 'ownerID', 'userId'] as $key) {
+            if (isset($item[$key]) && is_string($item[$key]) && $item[$key] !== '') {
+                return $item[$key];
+            }
+        }
+
+        if (isset($item['owner']) && is_string($item['owner']) && $item['owner'] !== '') {
+            return $item['owner'];
+        }
+
+        if (isset($item['owner']) && is_array($item['owner'])) {
+            $owner = $item['owner'];
+            if (isset($owner['id']) && is_string($owner['id']) && $owner['id'] !== '') {
+                return $owner['id'];
+            }
+        }
+
+        return null;
+    }
+
+    private function albumIdFromResponse(array $album): ?string {
+        if (isset($album['id']) && is_string($album['id']) && $album['id'] !== '') {
+            return $album['id'];
+        }
+
+        return null;
+    }
+
+    private function assetIdFromResponse(array $asset): ?string {
+        foreach (['id', 'assetId'] as $key) {
+            if (isset($asset[$key]) && is_string($asset[$key]) && $asset[$key] !== '') {
+                return $asset[$key];
+            }
+        }
+
+        return null;
     }
 }

@@ -16,6 +16,8 @@ use OCP\IURLGenerator;
 use OCP\Settings\IIconSection;
 
 class AdminSection implements IIconSection {
+    public const SECTION_ID = 'integration_immich-admin';
+
     public function __construct(
         private IL10N $l,
         private IURLGenerator $urlGenerator,
@@ -23,11 +25,11 @@ class AdminSection implements IIconSection {
     }
 
     public function getID(): string {
-        return Application::APP_ID;
+        return self::SECTION_ID;
     }
 
     public function getName(): string {
-        return $this->l->t('Immich Integration');
+        return $this->l->t('Immich Administration');
     }
 
     public function getPriority(): int {
