@@ -9,7 +9,7 @@
 			class="album-detail__loading" />
 
 		<NcEmptyContent v-else-if="store.error"
-			:name="t('integration_immich', 'Error')"
+			:name="t('deep_integration_immich', 'Error')"
 			:description="store.error">
 			<template #icon>
 				<AlertIcon :size="64" />
@@ -25,12 +25,12 @@
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
 					</template>
-					{{ t('integration_immich', 'Back') }}
+					{{ t('deep_integration_immich', 'Back') }}
 				</NcButton>
 				<div class="album-detail__title">
 					<h2>{{ store.currentAlbum.albumName }}</h2>
 					<span class="album-detail__count">
-						{{ t('integration_immich', '{count} photos', { count: store.currentAlbum.assets?.length || 0 }) }}
+						{{ t('deep_integration_immich', '{count} photos', { count: store.currentAlbum.assets?.length || 0 }) }}
 					</span>
 				</div>
 
@@ -42,7 +42,7 @@
 						<template #icon>
 							<PencilIcon :size="20" />
 						</template>
-						{{ t('integration_immich', 'Rename') }}
+						{{ t('deep_integration_immich', 'Rename') }}
 					</NcButton>
 					<NcButton v-if="store.currentAlbum.assets && store.currentAlbum.assets.length > 0"
 						variant="secondary"
@@ -51,7 +51,7 @@
 						<template #icon>
 							<ImagePlusIcon :size="20" />
 						</template>
-						{{ t('integration_immich', 'Add photos') }}
+						{{ t('deep_integration_immich', 'Add photos') }}
 					</NcButton>
 				</div>
 
@@ -59,7 +59,7 @@
 				<div class="album-detail__actions-mobile">
 					<button class="album-detail__kebab"
 						data-testid="album-detail-more-actions-button"
-						:aria-label="t('integration_immich', 'More actions')"
+						:aria-label="t('deep_integration_immich', 'More actions')"
 						@click.stop="headerMenuOpen = !headerMenuOpen">
 						<DotsVerticalIcon :size="20" />
 					</button>
@@ -68,14 +68,14 @@
 							data-testid="album-detail-rename-mobile"
 							@click="startRename">
 							<PencilIcon :size="18" />
-							{{ t('integration_immich', 'Rename') }}
+							{{ t('deep_integration_immich', 'Rename') }}
 						</button>
 						<button v-if="store.currentAlbum.assets && store.currentAlbum.assets.length > 0"
 							class="album-detail__kebab-item"
 							data-testid="album-detail-add-photos-mobile"
 							@click="showPicker = true">
 							<ImagePlusIcon :size="18" />
-							{{ t('integration_immich', 'Add photos') }}
+							{{ t('deep_integration_immich', 'Add photos') }}
 						</button>
 					</div>
 				</div>
@@ -83,11 +83,11 @@
 
 			<!-- Rename Dialog -->
 			<NcDialog v-if="showRenameDialog"
-				:name="t('integration_immich', 'Rename album')"
+				:name="t('deep_integration_immich', 'Rename album')"
 				@closing="showRenameDialog = false">
 				<div style="padding: 8px 0; min-width: 300px;">
 					<NcTextField
-						:label="t('integration_immich', 'New album name')"
+						:label="t('deep_integration_immich', 'New album name')"
 						v-model="renameValue"
 						data-testid="album-detail-rename-input"
 						@keyup.enter="confirmRename" />
@@ -96,7 +96,7 @@
 					<NcButton variant="tertiary"
 						data-testid="album-detail-rename-cancel-button"
 						@click="showRenameDialog = false">
-						{{ t('integration_immich', 'Cancel') }}
+						{{ t('deep_integration_immich', 'Cancel') }}
 					</NcButton>
 					<NcButton variant="primary"
 						:disabled="!renameValue.trim() || renaming"
@@ -106,7 +106,7 @@
 							<NcLoadingIcon v-if="renaming" :size="20" />
 							<CheckIcon v-else :size="20" />
 						</template>
-						{{ t('integration_immich', 'Save') }}
+						{{ t('deep_integration_immich', 'Save') }}
 					</NcButton>
 				</template>
 			</NcDialog>
@@ -114,8 +114,8 @@
 			<!-- Scroll-Bereich -->
 			<div class="album-detail__scroll">
 				<NcEmptyContent v-if="!store.currentAlbum.assets || store.currentAlbum.assets.length === 0"
-					:name="t('integration_immich', 'Album is empty')"
-					:description="t('integration_immich', 'This album does not contain any photos yet.')">
+					:name="t('deep_integration_immich', 'Album is empty')"
+					:description="t('deep_integration_immich', 'This album does not contain any photos yet.')">
 					<template #icon>
 						<ImageIcon :size="64" />
 					</template>
@@ -126,7 +126,7 @@
 							<template #icon>
 								<ImagePlusIcon :size="20" />
 							</template>
-							{{ t('integration_immich', 'Add photos') }}
+							{{ t('deep_integration_immich', 'Add photos') }}
 						</NcButton>
 					</template>
 				</NcEmptyContent>
@@ -206,10 +206,10 @@ async function confirmRename() {
 	try {
 		await apiRenameAlbum(props.id, renameValue.value.trim())
 		showRenameDialog.value = false
-		showSuccess(t('integration_immich', 'Album renamed'))
+		showSuccess(t('deep_integration_immich', 'Album renamed'))
 		await Promise.all([store.fetchAlbum(props.id), store.fetchAlbums()])
 	} catch (e) {
-		showError(t('integration_immich', 'Error renaming: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error renaming: {msg}', { msg: e.message }))
 	} finally {
 		renaming.value = false
 	}
@@ -228,15 +228,15 @@ async function addAssetsToAlbum(assetIds) {
 		const failed = results.length - succeeded
 		showPicker.value = false
 		if (failed === 0) {
-			showSuccess(t('integration_immich', '{count} photos added to album', { count: succeeded }))
+			showSuccess(t('deep_integration_immich', '{count} photos added to album', { count: succeeded }))
 		} else if (succeeded > 0) {
-			showError(t('integration_immich', '{succeeded} added, {failed} failed', { succeeded, failed }))
+			showError(t('deep_integration_immich', '{succeeded} added, {failed} failed', { succeeded, failed }))
 		} else {
-			showError(t('integration_immich', 'Error adding to album'))
+			showError(t('deep_integration_immich', 'Error adding to album'))
 		}
 		await store.fetchAlbum(props.id)
 	} catch (e) {
-		showError(t('integration_immich', 'Error adding: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error adding: {msg}', { msg: e.message }))
 	} finally {
 		addingAssets.value = false
 	}

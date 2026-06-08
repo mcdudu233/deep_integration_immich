@@ -3,7 +3,7 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<NcContent app-name="integration_immich">
+	<NcContent app-name="deep_integration_immich">
 		<Navigation />
 		<NcAppContent>
 			<div class="view-content">
@@ -20,14 +20,14 @@
 							<template #icon>
 								<CheckboxMultipleOutlineIcon :size="20" />
 							</template>
-							{{ t('integration_immich', 'Select') }}
+							{{ t('deep_integration_immich', 'Select') }}
 						</NcButton>
 					</template>
 
 					<!-- Selection mode: count + action buttons -->
 					<template v-else>
 						<span class="view-toolbar__selection-count" data-testid="selection-count">
-							{{ t('integration_immich', '{count} selected', { count: store.selectedAssetIds.size }) }}
+							{{ t('deep_integration_immich', '{count} selected', { count: store.selectedAssetIds.size }) }}
 						</span>
 						<div class="view-toolbar__selection-actions">
 							<!-- Primary action: always visible -->
@@ -40,7 +40,7 @@
 									<NcLoadingIcon v-if="saving" :size="20" />
 									<ContentSaveIcon v-else :size="20" />
 								</template>
-								<span class="selection-btn-label">{{ t('integration_immich', 'Export copy to Nextcloud') }}</span>
+								<span class="selection-btn-label">{{ t('deep_integration_immich', 'Export copy to Nextcloud') }}</span>
 							</NcButton>
 
 							<!-- Secondary actions: visible on desktop, collapsed on mobile -->
@@ -53,7 +53,7 @@
 										<NcLoadingIcon v-if="downloading" :size="20" />
 										<DownloadIcon v-else :size="20" />
 									</template>
-									{{ t('integration_immich', 'Download') }}
+									{{ t('deep_integration_immich', 'Download') }}
 								</NcButton>
 							</div>
 
@@ -61,7 +61,7 @@
 							<div class="selection-actions-desktop">
 								<button class="selection-kebab"
 									data-testid="selection-more-actions-desktop"
-									:aria-label="t('integration_immich', 'More actions')"
+									:aria-label="t('deep_integration_immich', 'More actions')"
 									@click.stop="mobileMenuOpen = !mobileMenuOpen">
 									<DotsVerticalIcon :size="20" />
 								</button>
@@ -72,7 +72,7 @@
 										data-testid="selection-remove-from-album-desktop"
 										@click="removeFromCurrentAlbum">
 										<FolderRemoveIcon :size="18" />
-										{{ t('integration_immich', 'Remove from album') }}
+										{{ t('deep_integration_immich', 'Remove from album') }}
 									</button>
 									<button v-else
 										class="selection-kebab-menu__item"
@@ -80,7 +80,7 @@
 										data-testid="selection-add-to-album-desktop"
 										@click="showAlbumPicker = true">
 										<FolderPlusIcon :size="18" />
-										{{ t('integration_immich', 'Add to album') }}
+										{{ t('deep_integration_immich', 'Add to album') }}
 									</button>
 									<button class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || togglingFavorite"
@@ -89,8 +89,8 @@
 										<HeartIcon v-if="selectedAllFavorited" :size="18" />
 										<HeartOutlineIcon v-else :size="18" />
 										{{ selectedAllFavorited
-											? t('integration_immich', 'Remove from favorites')
-											: t('integration_immich', 'Add to favorites') }}
+											? t('deep_integration_immich', 'Remove from favorites')
+											: t('deep_integration_immich', 'Add to favorites') }}
 									</button>
 									<button v-if="!isAlbumDetailView && canDeleteFromImmich"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
@@ -98,7 +98,7 @@
 										data-testid="selection-delete-from-immich-desktop"
 										@click="deleteSelectedAssets">
 										<DeleteIcon :size="18" />
-										{{ t('integration_immich', 'Delete from Immich') }}
+										{{ t('deep_integration_immich', 'Delete from Immich') }}
 									</button>
 								</div>
 							</div>
@@ -107,7 +107,7 @@
 							<div class="selection-actions-mobile" :class="{ 'selection-actions-mobile--open': mobileMenuOpen }">
 								<button class="selection-kebab"
 									data-testid="selection-more-actions-mobile"
-									:aria-label="t('integration_immich', 'More actions')"
+									:aria-label="t('deep_integration_immich', 'More actions')"
 									@click.stop="mobileMenuOpen = !mobileMenuOpen">
 									<DotsVerticalIcon :size="20" />
 								</button>
@@ -117,7 +117,7 @@
 										data-testid="selection-download-mobile"
 										@click="downloadSelected">
 										<DownloadIcon :size="18" />
-										{{ t('integration_immich', 'Download') }}
+										{{ t('deep_integration_immich', 'Download') }}
 									</button>
 									<button v-if="isAlbumDetailView"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
@@ -125,7 +125,7 @@
 										data-testid="selection-remove-from-album-mobile"
 										@click="removeFromCurrentAlbum">
 										<FolderRemoveIcon :size="18" />
-										{{ t('integration_immich', 'Remove from album') }}
+										{{ t('deep_integration_immich', 'Remove from album') }}
 									</button>
 									<button v-else
 										class="selection-kebab-menu__item"
@@ -133,7 +133,7 @@
 										data-testid="selection-add-to-album-mobile"
 										@click="showAlbumPicker = true">
 										<FolderPlusIcon :size="18" />
-										{{ t('integration_immich', 'Add to album') }}
+										{{ t('deep_integration_immich', 'Add to album') }}
 									</button>
 									<button class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || togglingFavorite"
@@ -142,8 +142,8 @@
 										<HeartIcon v-if="selectedAllFavorited" :size="18" />
 										<HeartOutlineIcon v-else :size="18" />
 										{{ selectedAllFavorited
-											? t('integration_immich', 'Remove from favorites')
-											: t('integration_immich', 'Add to favorites') }}
+											? t('deep_integration_immich', 'Remove from favorites')
+											: t('deep_integration_immich', 'Add to favorites') }}
 									</button>
 									<button v-if="!isAlbumDetailView && canDeleteFromImmich"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
@@ -151,7 +151,7 @@
 										data-testid="selection-delete-from-immich-mobile"
 										@click="deleteSelectedAssets">
 										<DeleteIcon :size="18" />
-										{{ t('integration_immich', 'Delete from Immich') }}
+										{{ t('deep_integration_immich', 'Delete from Immich') }}
 									</button>
 								</div>
 							</div>
@@ -159,7 +159,7 @@
 							<NcButton variant="tertiary"
 								data-testid="selection-cancel-button"
 								@click="store.clearSelection()">
-								{{ t('integration_immich', 'Cancel') }}
+								{{ t('deep_integration_immich', 'Cancel') }}
 							</NcButton>
 						</div>
 					</template>
@@ -176,14 +176,14 @@
 	</NcContent>
 	<LightboxView />
 	<NcDialog v-if="showAlbumPicker"
-		:name="t('integration_immich', 'Select album')"
+		:name="t('deep_integration_immich', 'Select album')"
 		data-testid="selection-album-picker-dialog"
 		@closing="showAlbumPicker = false">
 		<div class="album-picker" data-testid="selection-album-picker">
 			<NcLoadingIcon v-if="loadingAlbums" :size="32" class="album-picker__loading" />
 			<template v-else>
 				<div v-if="albums.length === 0" class="album-picker__empty">
-					{{ t('integration_immich', 'No albums available') }}
+					{{ t('deep_integration_immich', 'No albums available') }}
 				</div>
 				<div v-for="album in albums"
 					:key="album.id"
@@ -221,7 +221,7 @@ import AlertOutlineIcon from 'vue-material-design-icons/AlertOutline.vue'
 
 const store = useImmichStore()
 const route = useRoute()
-const initialConfig = loadState('integration_immich', 'user-config', {})
+const initialConfig = loadState('deep_integration_immich', 'user-config', {})
 store.setUserState(initialConfig ?? {})
 const saving = ref(false)
 const downloading = ref(false)
@@ -249,23 +249,23 @@ const selectedAllFavorited = computed(() => {
 const isAlbumDetailView = computed(() => route.name === 'album-detail')
 
 const pageTitles = {
-	'timeline': t('integration_immich', 'All media'),
-	'photos': t('integration_immich', 'Photos'),
-	'videos': t('integration_immich', 'Videos'),
-	'favorites': t('integration_immich', 'Favorites'),
-	'albums': t('integration_immich', 'Albums'),
-	'album-detail': t('integration_immich', 'Albums'),
-	'people': t('integration_immich', 'People'),
-	'person-detail': t('integration_immich', 'People'),
-	'map': t('integration_immich', 'Map'),
-	'explore': t('integration_immich', 'Explore'),
-	'place-detail': t('integration_immich', 'Explore'),
+	'timeline': t('deep_integration_immich', 'All media'),
+	'photos': t('deep_integration_immich', 'Photos'),
+	'videos': t('deep_integration_immich', 'Videos'),
+	'favorites': t('deep_integration_immich', 'Favorites'),
+	'albums': t('deep_integration_immich', 'Albums'),
+	'album-detail': t('deep_integration_immich', 'Albums'),
+	'people': t('deep_integration_immich', 'People'),
+	'person-detail': t('deep_integration_immich', 'People'),
+	'map': t('deep_integration_immich', 'Map'),
+	'explore': t('deep_integration_immich', 'Explore'),
+	'place-detail': t('deep_integration_immich', 'Explore'),
 }
 
 // Views that contain individual selectable assets (photos/videos)
 const photoViews = new Set(['timeline', 'photos', 'videos', 'favorites', 'album-detail', 'person-detail', 'place-detail'])
 
-const pageTitle = computed(() => pageTitles[route.name] ?? t('integration_immich', 'Immich'))
+const pageTitle = computed(() => pageTitles[route.name] ?? t('deep_integration_immich', 'Immich'))
 const isPhotoView = computed(() => photoViews.has(route.name))
 const canExportCopy = computed(() => store.actionCapabilities.exportCopyEnabled === true)
 const canDeleteFromImmich = computed(() => store.actionCapabilities.immichDeleteEnabled === true)
@@ -274,7 +274,7 @@ const mappingMissingMessage = computed(() => {
 	if (store.mapping.message) {
 		return store.mapping.message
 	}
-	return t('integration_immich', 'No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.')
+	return t('deep_integration_immich', 'No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.')
 })
 
 // Clear selection when navigating to a different view
@@ -287,15 +287,15 @@ watch(() => route.name, () => {
 
 async function saveToNextcloud() {
 	if (!canExportCopy.value) {
-		showError(t('integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
+		showError(t('deep_integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
 		return
 	}
 
-	const picker = getFilePickerBuilder(t('integration_immich', 'Choose export location in Nextcloud'))
+	const picker = getFilePickerBuilder(t('deep_integration_immich', 'Choose export location in Nextcloud'))
 		.setMultiSelect(false)
 		.allowDirectories(true)
 		.addButton({
-			label: t('integration_immich', 'Export copy here'),
+			label: t('deep_integration_immich', 'Export copy here'),
 			type: 'primary',
 			callback: () => {},
 		})
@@ -306,7 +306,7 @@ async function saveToNextcloud() {
 		path = await picker.pick()
 	} catch (e) {
 		if (!(e instanceof FilePickerClosed)) {
-			showError(t('integration_immich', 'Error opening folder dialog'))
+			showError(t('deep_integration_immich', 'Error opening folder dialog'))
 		}
 		return
 	}
@@ -320,15 +320,15 @@ async function saveToNextcloud() {
 		const { saved, failed } = response.data
 
 		if (failed === 0) {
-			showSuccess(t('integration_immich', '{count} file(s) exported to Nextcloud', { count: saved }))
+			showSuccess(t('deep_integration_immich', '{count} file(s) exported to Nextcloud', { count: saved }))
 		} else if (saved > 0) {
-			showError(t('integration_immich', '{saved} exported, {failed} failed', { saved, failed }))
+			showError(t('deep_integration_immich', '{saved} exported, {failed} failed', { saved, failed }))
 		} else {
-			showError(t('integration_immich', 'Export failed'))
+			showError(t('deep_integration_immich', 'Export failed'))
 		}
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		saving.value = false
 	}
@@ -362,7 +362,7 @@ async function downloadSelected() {
 
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error downloading: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error downloading: {msg}', { msg: e.message }))
 	} finally {
 		downloading.value = false
 	}
@@ -375,7 +375,7 @@ watch(showAlbumPicker, async (val) => {
 			const response = await getAlbums()
 			albums.value = response.data ?? []
 		} catch (e) {
-			showError(t('integration_immich', 'Could not load albums'))
+			showError(t('deep_integration_immich', 'Could not load albums'))
 			showAlbumPicker.value = false
 		} finally {
 			loadingAlbums.value = false
@@ -394,15 +394,15 @@ async function addToAlbum(albumId) {
 		const failed = results.filter(r => !r.success).length
 
 		if (failed === 0) {
-			showSuccess(t('integration_immich', '{count} asset(s) added to album', { count: succeeded }))
+			showSuccess(t('deep_integration_immich', '{count} asset(s) added to album', { count: succeeded }))
 		} else if (succeeded > 0) {
-			showError(t('integration_immich', '{succeeded} added, {failed} failed', { succeeded, failed }))
+			showError(t('deep_integration_immich', '{succeeded} added, {failed} failed', { succeeded, failed }))
 		} else {
-			showError(t('integration_immich', 'Error adding to album'))
+			showError(t('deep_integration_immich', 'Error adding to album'))
 		}
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error adding: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error adding: {msg}', { msg: e.message }))
 	} finally {
 		addingToAlbum.value = false
 	}
@@ -420,16 +420,16 @@ async function removeFromCurrentAlbum() {
 		const succeeded = results.filter(r => r.success !== false).length
 		const failed = results.length - succeeded
 		if (failed === 0) {
-			showSuccess(t('integration_immich', '{count} asset(s) removed from album', { count: succeeded }))
+			showSuccess(t('deep_integration_immich', '{count} asset(s) removed from album', { count: succeeded }))
 		} else if (succeeded > 0) {
-			showError(t('integration_immich', '{succeeded} removed, {failed} failed', { succeeded, failed }))
+			showError(t('deep_integration_immich', '{succeeded} removed, {failed} failed', { succeeded, failed }))
 		} else {
-			showError(t('integration_immich', 'Error removing from album'))
+			showError(t('deep_integration_immich', 'Error removing from album'))
 		}
 		store.clearSelection()
 		await store.fetchAlbum(albumId)
 	} catch (e) {
-		showError(t('integration_immich', 'Error removing: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error removing: {msg}', { msg: e.message }))
 	} finally {
 		removingFromAlbum.value = false
 	}
@@ -446,11 +446,11 @@ async function toggleFavoritesSelection() {
 		store.patchAssetFavorite(assetIds, !removing)
 		if (removing) {
 			showSuccess(
-				t('integration_immich', '{count} asset(s) removed from favorites', { count: assetIds.length }),
+				t('deep_integration_immich', '{count} asset(s) removed from favorites', { count: assetIds.length }),
 			)
 		} else {
 			showSuccess(
-				t('integration_immich', '{count} asset(s) added to favorites', { count: assetIds.length }),
+				t('deep_integration_immich', '{count} asset(s) added to favorites', { count: assetIds.length }),
 			)
 		}
 		// Invalidate favorites cache and immediately reload if currently on favorites view
@@ -461,7 +461,7 @@ async function toggleFavoritesSelection() {
 		}
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error updating favorites: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error updating favorites: {msg}', { msg: e.message }))
 	} finally {
 		togglingFavorite.value = false
 	}
@@ -470,14 +470,14 @@ async function toggleFavoritesSelection() {
 async function deleteSelectedAssets() {
 	if (store.selectedAssetIds.size === 0 || deleting.value) return
 	if (!canDeleteFromImmich.value) {
-		showError(t('integration_immich', 'Delete from Immich is disabled by the administrator'))
+		showError(t('deep_integration_immich', 'Delete from Immich is disabled by the administrator'))
 		return
 	}
 
 	const confirmed = await new Promise((resolve) => {
 		OC.dialogs.confirm(
-			t('integration_immich', 'Are you sure you want to delete {count} file(s) from Immich? If trash is enabled in Immich, they will be moved to trash; otherwise they will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.', { count: store.selectedAssetIds.size }),
-			t('integration_immich', 'Delete from Immich'),
+			t('deep_integration_immich', 'Are you sure you want to delete {count} file(s) from Immich? If trash is enabled in Immich, they will be moved to trash; otherwise they will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.', { count: store.selectedAssetIds.size }),
+			t('deep_integration_immich', 'Delete from Immich'),
 			(result) => resolve(result),
 			true
 		)
@@ -494,12 +494,12 @@ async function deleteSelectedAssets() {
 	const ids = Array.from(store.selectedAssetIds)
 	try {
 		await deleteAssets(ids)
-		showSuccess(t('integration_immich', '{count} file(s) deleted from Immich', { count: ids.length }))
+		showSuccess(t('deep_integration_immich', '{count} file(s) deleted from Immich', { count: ids.length }))
 		// Remove from all caches
 		ids.forEach(id => store.removeAssetFromAllCaches(id))
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		deleting.value = false
 	}

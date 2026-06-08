@@ -30,7 +30,7 @@ use OCP\IDBConnection;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 
 class Application extends App implements IBootstrap {
-    public const APP_ID = 'integration_immich';
+    public const APP_ID = 'deep_integration_immich';
 
     private const DAILY_BACKGROUND_JOBS = [
         'OCA\\IntegrationImmich\\BackgroundJob\\ReconcileUsersJob',

@@ -11,12 +11,12 @@
 			<!-- Header -->
 			<div class="asset-picker-modal__header">
 				<h3 class="asset-picker-modal__title">
-					{{ t('integration_immich', 'Select photos for "{name}"', { name: albumName }) }}
+					{{ t('deep_integration_immich', 'Select photos for "{name}"', { name: albumName }) }}
 				</h3>
 				<span class="asset-picker-modal__hint">
 					{{ selectedIds.size > 0
-						? t('integration_immich', '{count} selected', { count: selectedIds.size })
-						: t('integration_immich', 'Tap photos to select') }}
+						? t('deep_integration_immich', '{count} selected', { count: selectedIds.size })
+						: t('deep_integration_immich', 'Tap photos to select') }}
 				</span>
 			</div>
 
@@ -26,7 +26,7 @@
 					<NcLoadingIcon :size="64" />
 				</div>
 				<div v-else-if="buckets.length === 0" class="asset-picker-modal__empty">
-					{{ t('integration_immich', 'No photos found') }}
+					{{ t('deep_integration_immich', 'No photos found') }}
 				</div>
 				<div v-else
 					ref="scrollContainer"
@@ -89,7 +89,7 @@
 				<NcButton variant="tertiary"
 					data-testid="asset-picker-cancel-button"
 					@click="$emit('cancel')">
-					{{ t('integration_immich', 'Cancel') }}
+					{{ t('deep_integration_immich', 'Cancel') }}
 				</NcButton>
 				<NcButton variant="primary"
 					:disabled="creating || selectedIds.size === 0"
@@ -99,7 +99,7 @@
 						<NcLoadingIcon v-if="creating" :size="20" />
 						<CheckIcon v-else :size="20" />
 					</template>
-					{{ t('integration_immich', 'Add ({count})', { count: selectedIds.size }) }}
+					{{ t('deep_integration_immich', 'Add ({count})', { count: selectedIds.size }) }}
 				</NcButton>
 			</div>
 		</div>

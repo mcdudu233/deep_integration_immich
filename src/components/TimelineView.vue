@@ -5,7 +5,7 @@
 <template>
 	<div class="timeline-view">
 		<NcEmptyContent v-if="store.error"
-			:name="t('integration_immich', 'Error')"
+			:name="t('deep_integration_immich', 'Error')"
 			:description="store.error">
 			<template #icon>
 				<AlertIcon :size="64" />
@@ -17,8 +17,8 @@
 			class="timeline-view__loading" />
 
 		<NcEmptyContent v-else-if="buckets.length === 0"
-			:name="t('integration_immich', 'No photos')"
-			:description="t('integration_immich', 'Your Immich library does not contain any photos yet.')">
+			:name="t('deep_integration_immich', 'No photos')"
+			:description="t('deep_integration_immich', 'Your Immich library does not contain any photos yet.')">
 			<template #icon>
 				<ImageIcon :size="64" />
 			</template>
@@ -38,7 +38,7 @@
 			<Transition name="timeline-fab">
 				<button v-if="scrollTop > 600"
 					class="timeline-view__fab"
-					:title="t('integration_immich', 'Scroll to top')"
+					:title="t('deep_integration_immich', 'Scroll to top')"
 					data-testid="timeline-scroll-top-button"
 					@click="scrollToTop">
 					<svg viewBox="0 0 24 24" aria-hidden="true">

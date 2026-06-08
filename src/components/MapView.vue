@@ -9,7 +9,7 @@
 			class="map-view__loading" />
 
 		<NcEmptyContent v-else-if="store.error"
-			:name="t('integration_immich', 'Error')"
+			:name="t('deep_integration_immich', 'Error')"
 			:description="store.error">
 			<template #icon>
 				<AlertIcon :size="64" />
@@ -17,8 +17,8 @@
 		</NcEmptyContent>
 
 		<NcEmptyContent v-else-if="store.mapMarkers.length === 0 && !store.loading"
-			:name="t('integration_immich', 'No locations')"
-			:description="t('integration_immich', 'No photos with GPS data found.')">
+			:name="t('deep_integration_immich', 'No locations')"
+			:description="t('deep_integration_immich', 'No photos with GPS data found.')">
 			<template #icon>
 				<MapIcon :size="64" />
 			</template>
@@ -73,12 +73,12 @@ const infoText = computed(() => {
 	const shown = sampledMarkers.value.length
 	if (shown < total) {
 		return t(
-			'integration_immich',
+			'deep_integration_immich',
 			'{total} photos with location – showing {shown} places',
 			{ total, shown },
 		)
 	}
-	return t('integration_immich', '{count} photos with location', { count: total })
+	return t('deep_integration_immich', '{count} photos with location', { count: total })
 })
 
 async function initMap() {
@@ -99,7 +99,7 @@ async function initMap() {
 	leafletMap = L.map(mapContainer.value, { renderer: canvasRenderer })
 
 	L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		attribution: t('integration_immich', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'),
+		attribution: t('deep_integration_immich', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'),
 		maxZoom: 19,
 		crossOrigin: '',
 		referrerPolicy: 'no-referrer-when-downgrade',

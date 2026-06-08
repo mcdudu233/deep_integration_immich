@@ -34,7 +34,7 @@
 			<!-- Video badge — pill bottom-right -->
 			<div v-if="asset.isImage === false" class="photo-grid__video-badge">
 				<VideoIcon :size="12" />
-				<span>{{ t('integration_immich', 'Video') }}</span>
+				<span>{{ t('deep_integration_immich', 'Video') }}</span>
 			</div>
 
 			<!-- Favorite heart — bottom-left -->

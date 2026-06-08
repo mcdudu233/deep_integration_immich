@@ -1,7 +1,7 @@
-# Build script for Nextcloud integration_immich app
+# Build script for Nextcloud deep_integration_immich app
 # Creates a release package ready for installation
 
-Write-Host "Building integration_immich release package..." -ForegroundColor Cyan
+Write-Host "Building deep_integration_immich release package..." -ForegroundColor Cyan
 
 # Clean previous builds
 Write-Host "Cleaning previous builds..." -ForegroundColor Yellow
@@ -18,8 +18,14 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Get version and app id from appinfo/info.xml
+[xml]$infoXml = Get-Content "appinfo/info.xml"
+$version = $infoXml.info.version
+$appId = $infoXml.info.id
+$repoDirName = Split-Path -Path $PSScriptRoot -Leaf
+
 # Create temp directory for packaging
-$tempDir = "build/release/integration_immich"
+$tempDir = "build/release/$appId"
 Write-Host "Creating package structure..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
@@ -52,11 +58,6 @@ Copy-Item "CHANGELOG.md" "$tempDir/CHANGELOG.md"
 Write-Host "Removing development files..." -ForegroundColor Yellow
 Get-ChildItem -Path "$tempDir/js" -Filter "*.map" -Recurse | Remove-Item -Force
 
-# Get version from appinfo/info.xml
-[xml]$infoXml = Get-Content "appinfo/info.xml"
-$version = $infoXml.info.version
-$appId = $infoXml.info.id
-
 Write-Host "Package: $appId v$version" -ForegroundColor Green
 
 # Create tar.gz archive
@@ -67,7 +68,7 @@ Write-Host "Creating archive: $archiveName..." -ForegroundColor Yellow
 
 # Use tar command (available in Windows 10+)
 Push-Location "build/release"
-tar -czf $archiveName "integration_immich"
+tar -czf $archiveName $appId
 Pop-Location
 
 if (Test-Path $archivePath) {
@@ -90,13 +91,13 @@ Write-Host "Creating source archive..." -ForegroundColor Yellow
 $sourceArchiveName = "${appId}-${version}-source.tar.gz"
 
 Push-Location ".."
-tar -czf "integration_immich/build/release/$sourceArchiveName" `
-    --exclude="integration_immich/node_modules" `
-    --exclude="integration_immich/build" `
-    --exclude="integration_immich/.git" `
-    --exclude="integration_immich/.github" `
-    --exclude="integration_immich/vendor" `
-    "integration_immich"
+tar -czf "$repoDirName/build/release/$sourceArchiveName" `
+    --exclude="$repoDirName/node_modules" `
+    --exclude="$repoDirName/build" `
+    --exclude="$repoDirName/.git" `
+    --exclude="$repoDirName/.github" `
+    --exclude="$repoDirName/vendor" `
+    $repoDirName
 Pop-Location
 
 if (Test-Path "build/release/$sourceArchiveName") {

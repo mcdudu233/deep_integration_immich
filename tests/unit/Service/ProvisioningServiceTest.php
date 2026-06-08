@@ -59,7 +59,7 @@ class ProvisioningServiceTest extends TestCase {
 
         $result = $this->service()->reconcileUser('alice', true);
 
-        $this->assertSame('integration_immich_provision_alice', $this->lockService->lastKey);
+        $this->assertSame('deep_integration_immich_provision_alice', $this->lockService->lastKey);
         $this->assertSame(60, $this->lockService->lastTimeout);
         $this->assertTrue($this->lockService->released);
         $this->assertSame('created', $result['action']);

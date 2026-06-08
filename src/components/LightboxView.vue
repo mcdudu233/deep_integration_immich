@@ -22,7 +22,7 @@
 						v-if="currentAsset && canExportCopy"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--loading': savingToNc }"
-						:title="t('integration_immich', 'Export copy to Nextcloud')"
+						:title="t('deep_integration_immich', 'Export copy to Nextcloud')"
 						:disabled="savingToNc"
 						data-testid="lightbox-export-button"
 						@click.stop="saveCurrentToNextcloud"
@@ -38,7 +38,7 @@
 						v-if="currentAsset"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--loading': downloadingAsset }"
-						:title="t('integration_immich', 'Download')"
+						:title="t('deep_integration_immich', 'Download')"
 						:disabled="downloadingAsset"
 						data-testid="lightbox-download-button"
 						@click.stop="downloadCurrent"
@@ -54,7 +54,7 @@
 						v-if="currentAsset"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--active': isFavorite }"
-						:title="isFavorite ? t('integration_immich', 'Remove from favorites') : t('integration_immich', 'Add to favorites')"
+						:title="isFavorite ? t('deep_integration_immich', 'Remove from favorites') : t('deep_integration_immich', 'Add to favorites')"
 						:disabled="togglingFavorite"
 						data-testid="lightbox-favorite-button"
 						@click.stop="toggleFavorite"
@@ -71,7 +71,7 @@
 						v-if="currentAsset"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--active': showAlbumPanel }"
-						:title="t('integration_immich', 'Add to album')"
+						:title="t('deep_integration_immich', 'Add to album')"
 						:disabled="addingToAlbum"
 						data-testid="lightbox-add-to-album-button"
 						@click.stop="toggleAlbumPanel()"
@@ -87,7 +87,7 @@
 						v-if="currentAsset && canDeleteFromImmich"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--loading': deletingAsset }"
-						:title="t('integration_immich', 'Delete from Immich')"
+						:title="t('deep_integration_immich', 'Delete from Immich')"
 						:disabled="deletingAsset"
 						data-testid="lightbox-delete-button"
 						@click.stop="deleteCurrent"
@@ -102,7 +102,7 @@
 					<button
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--active': showInfo }"
-						:title="t('integration_immich', 'Info')"
+						:title="t('deep_integration_immich', 'Info')"
 						data-testid="lightbox-info-button"
 						@click.stop="showAlbumPanel = false; showInfo = !showInfo"
 					>
@@ -111,7 +111,7 @@
 						</svg>
 					</button>
 					<button class="ic-lb-btn"
-						:title="t('integration_immich', 'Close')"
+						:title="t('deep_integration_immich', 'Close')"
 						data-testid="lightbox-close-button"
 						@click.stop="close">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -125,7 +125,7 @@
 			<button
 				v-if="currentIndex > 0"
 				class="ic-lb-arrow ic-lb-arrow--prev"
-				:title="t('integration_immich', 'Previous')"
+				:title="t('deep_integration_immich', 'Previous')"
 				data-testid="lightbox-previous-button"
 				@click.stop="navigate(-1)"
 			>
@@ -170,7 +170,7 @@
 			<button
 				v-if="currentIndex < assets.length - 1"
 				class="ic-lb-arrow ic-lb-arrow--next"
-				:title="t('integration_immich', 'Next')"
+				:title="t('deep_integration_immich', 'Next')"
 				data-testid="lightbox-next-button"
 				@click.stop="navigate(1)"
 			>
@@ -189,7 +189,7 @@
 			<Transition name="ic-lb-slide">
 				<div v-if="showInfo" class="ic-lb-info" @click.stop>
 					<button class="ic-lb-panel-close"
-						:title="t('integration_immich', 'Close')"
+						:title="t('deep_integration_immich', 'Close')"
 						data-testid="lightbox-info-close-button"
 						@click.stop="showInfo = false">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -207,7 +207,7 @@
 							<span class="ic-lb-info__label">{{ label }}</span>
 							<span class="ic-lb-info__val">{{ val }}</span>
 						</div>
-						<p v-if="!infoRows.length" class="ic-lb-info__empty">{{ t('integration_immich', 'No metadata available') }}</p>
+						<p v-if="!infoRows.length" class="ic-lb-info__empty">{{ t('deep_integration_immich', 'No metadata available') }}</p>
 					</template>
 				</div>
 			</Transition>
@@ -216,14 +216,14 @@
 			<Transition name="ic-lb-slide">
 				<div v-if="showAlbumPanel" class="ic-lb-info ic-lb-album-panel" @click.stop>
 					<button class="ic-lb-panel-close"
-						:title="t('integration_immich', 'Close')"
+						:title="t('deep_integration_immich', 'Close')"
 						data-testid="lightbox-album-close-button"
 						@click.stop="showAlbumPanel = false">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
 						</svg>
 					</button>
-					<p class="ic-lb-album-panel__title">{{ t('integration_immich', 'Add to album') }}</p>
+					<p class="ic-lb-album-panel__title">{{ t('deep_integration_immich', 'Add to album') }}</p>
 					<div v-if="loadingAlbums" class="ic-lb-album-panel__loading">
 						<svg viewBox="0 0 24 24" class="ic-lb-spin ic-lb-album-panel__spinner" aria-hidden="true">
 							<path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z" fill="currentColor" />
@@ -238,14 +238,14 @@
 							<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;flex-shrink:0" aria-hidden="true">
 								<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z" />
 							</svg>
-							{{ t('integration_immich', 'New album') }}
+							{{ t('deep_integration_immich', 'New album') }}
 						</div>
 						<div v-else class="ic-lb-album-panel__new-form">
 							<input
 								ref="newAlbumInputEl"
 								v-model="newAlbumName"
 								class="ic-lb-album-panel__new-input"
-								:placeholder="t('integration_immich', 'Album name …')"
+								:placeholder="t('deep_integration_immich', 'Album name …')"
 								data-testid="lightbox-new-album-name-input"
 								@keyup.enter="createAndAdd"
 								@keyup.escape="creatingAlbum = false"
@@ -262,12 +262,12 @@
 								</svg>
 							</button>
 						</div>
-						<p v-if="albums.length === 0" class="ic-lb-info__empty">{{ t('integration_immich', 'No albums available') }}</p>
+						<p v-if="albums.length === 0" class="ic-lb-info__empty">{{ t('deep_integration_immich', 'No albums available') }}</p>
 						<div v-for="album in albums"
 							:key="album.id"
 							class="ic-lb-album-panel__item"
 							:class="{ 'ic-lb-album-panel__item--in-album': currentAssetAlbumIds.has(album.id) }"
-							:title="currentAssetAlbumIds.has(album.id) ? t('integration_immich', 'Already in this album') : ''"
+							:title="currentAssetAlbumIds.has(album.id) ? t('deep_integration_immich', 'Already in this album') : ''"
 							:data-testid="'lightbox-album-option-' + album.id"
 							@click.stop="currentAssetAlbumIds.has(album.id) ? null : addCurrentToAlbum(album.id)">
 							<svg v-if="currentAssetAlbumIds.has(album.id)"
@@ -452,21 +452,21 @@ const infoRows = computed(() => {
 	const e = asset.exifInfo || {}
 	const rows = []
 	const date = formatDate(asset)
-	if (date) rows.push([t('integration_immich', 'Date'), date])
+	if (date) rows.push([t('deep_integration_immich', 'Date'), date])
 	const camera = [e.make, e.model].filter(Boolean).join(' ')
-	if (camera) rows.push([t('integration_immich', 'Camera'), camera])
-	if (e.lensModel) rows.push([t('integration_immich', 'Lens'), e.lensModel])
+	if (camera) rows.push([t('deep_integration_immich', 'Camera'), camera])
+	if (e.lensModel) rows.push([t('deep_integration_immich', 'Lens'), e.lensModel])
 	const exposure = [
 		e.fNumber ? `f/${e.fNumber}` : null,
 		e.exposureTime ? `${e.exposureTime}s` : null,
 		e.iso ? `ISO\u00a0${e.iso}` : null,
 		e.focalLength ? `${e.focalLength}\u00a0mm` : null,
 	].filter(Boolean)
-	if (exposure.length) rows.push([t('integration_immich', 'Exposure'), exposure.join('  ·  ')])
+	if (exposure.length) rows.push([t('deep_integration_immich', 'Exposure'), exposure.join('  ·  ')])
 	const location = [e.city, e.state, e.country].filter(Boolean).join(', ')
-	if (location) rows.push([t('integration_immich', 'Location'), location])
-	if (e.fileSizeInByte) rows.push([t('integration_immich', 'Size'), (e.fileSizeInByte / 1024 / 1024).toFixed(1) + '\u00a0MB'])
-	if (asset.originalFileName) rows.push([t('integration_immich', 'Filename'), asset.originalFileName])
+	if (location) rows.push([t('deep_integration_immich', 'Location'), location])
+	if (e.fileSizeInByte) rows.push([t('deep_integration_immich', 'Size'), (e.fileSizeInByte / 1024 / 1024).toFixed(1) + '\u00a0MB'])
+	if (asset.originalFileName) rows.push([t('deep_integration_immich', 'Filename'), asset.originalFileName])
 	return rows
 })
 
@@ -506,7 +506,7 @@ async function downloadCurrent() {
 		document.body.removeChild(a)
 		URL.revokeObjectURL(url)
 	} catch (e) {
-		showError(t('integration_immich', 'Error downloading: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error downloading: {msg}', { msg: e.message }))
 	} finally {
 		downloadingAsset.value = false
 	}
@@ -515,15 +515,15 @@ async function downloadCurrent() {
 async function saveCurrentToNextcloud() {
 	if (!currentAsset.value || savingToNc.value) return
 	if (!canExportCopy.value) {
-		showError(t('integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
+		showError(t('deep_integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
 		return
 	}
 
-	const picker = getFilePickerBuilder(t('integration_immich', 'Choose export location in Nextcloud'))
+	const picker = getFilePickerBuilder(t('deep_integration_immich', 'Choose export location in Nextcloud'))
 		.setMultiSelect(false)
 		.allowDirectories(true)
 		.addButton({
-			label: t('integration_immich', 'Export copy here'),
+			label: t('deep_integration_immich', 'Export copy here'),
 			type: 'primary',
 			callback: () => {},
 		})
@@ -536,7 +536,7 @@ async function saveCurrentToNextcloud() {
 	} catch (e) {
 		pickerOpen.value = false
 		if (!(e instanceof FilePickerClosed)) {
-			showError(t('integration_immich', 'Error opening folder dialog'))
+			showError(t('deep_integration_immich', 'Error opening folder dialog'))
 		}
 		return
 	}
@@ -549,12 +549,12 @@ async function saveCurrentToNextcloud() {
 		const response = await saveAssetsToNextcloud([currentAsset.value.id], path)
 		const { saved, failed } = response.data
 		if (failed === 0) {
-			showSuccess(t('integration_immich', 'File copy exported to Nextcloud'))
+			showSuccess(t('deep_integration_immich', 'File copy exported to Nextcloud'))
 		} else {
-			showError(t('integration_immich', 'Export failed'))
+			showError(t('deep_integration_immich', 'Export failed'))
 		}
 	} catch (e) {
-		showError(t('integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		savingToNc.value = false
 	}
@@ -568,10 +568,10 @@ async function toggleFavorite() {
 		await updateAsset(currentAsset.value.id, { isFavorite: newVal })
 		store.patchAssetFavorite([currentAsset.value.id], newVal)
 		showSuccess(newVal
-			? t('integration_immich', 'Added to favorites')
-			: t('integration_immich', 'Removed from favorites'))
+			? t('deep_integration_immich', 'Added to favorites')
+			: t('deep_integration_immich', 'Removed from favorites'))
 	} catch (e) {
-		showError(t('integration_immich', 'Error: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error: {msg}', { msg: e.message }))
 	} finally {
 		togglingFavorite.value = false
 	}
@@ -580,15 +580,15 @@ async function toggleFavorite() {
 async function deleteCurrent() {
 	if (!currentAsset.value || deletingAsset.value) return
 	if (!canDeleteFromImmich.value) {
-		showError(t('integration_immich', 'Delete from Immich is disabled by the administrator'))
+		showError(t('deep_integration_immich', 'Delete from Immich is disabled by the administrator'))
 		return
 	}
 
 	// Show confirmation dialog
 	const confirmed = await new Promise((resolve) => {
 		OC.dialogs.confirm(
-			t('integration_immich', 'Are you sure you want to delete this file from Immich? If trash is enabled in Immich, it will be moved to trash; otherwise it will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.'),
-			t('integration_immich', 'Delete from Immich'),
+			t('deep_integration_immich', 'Are you sure you want to delete this file from Immich? If trash is enabled in Immich, it will be moved to trash; otherwise it will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.'),
+			t('deep_integration_immich', 'Delete from Immich'),
 			(result) => resolve(result),
 			true
 		)
@@ -608,14 +608,14 @@ async function deleteCurrent() {
 	try {
 		await deleteAssets([assetId])
 		store.removeAssetFromLightbox(assetId)
-		showSuccess(t('integration_immich', 'File deleted from Immich'))
+		showSuccess(t('deep_integration_immich', 'File deleted from Immich'))
 
 		// If this was the last asset, close the lightbox
 		if (wasLastAsset) {
 			close()
 		}
 	} catch (e) {
-		showError(t('integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		deletingAsset.value = false
 	}
@@ -652,7 +652,7 @@ async function openAlbumPanel() {
 		const [allRes] = await Promise.all([getAlbums(), refreshAssetAlbumIds()])
 		albums.value = allRes.data ?? []
 	} catch (e) {
-		showError(t('integration_immich', 'Could not load albums'))
+		showError(t('deep_integration_immich', 'Could not load albums'))
 		showAlbumPanel.value = false
 	} finally {
 		loadingAlbums.value = false
@@ -668,12 +668,12 @@ async function addCurrentToAlbum(albumId) {
 		const results = response.data ?? []
 		const failed = results.filter(r => !r.success).length
 		if (failed === 0) {
-			showSuccess(t('integration_immich', 'Added to album'))
+			showSuccess(t('deep_integration_immich', 'Added to album'))
 		} else {
-			showError(t('integration_immich', 'Error adding to album'))
+			showError(t('deep_integration_immich', 'Error adding to album'))
 		}
 	} catch (e) {
-		showError(t('integration_immich', 'Error adding: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error adding: {msg}', { msg: e.message }))
 	} finally {
 		addingToAlbum.value = false
 	}
@@ -690,18 +690,18 @@ async function createAndAdd() {
 			const addRes = await addAssetsToAlbum(albumId, [currentAsset.value.id])
 			const failed = (addRes.data ?? []).filter(r => !r.success).length
 			if (failed === 0) {
-				showSuccess(t('integration_immich', 'Album created and photo added'))
+				showSuccess(t('deep_integration_immich', 'Album created and photo added'))
 			} else {
-				showError(t('integration_immich', 'Album created, but error adding photo'))
+				showError(t('deep_integration_immich', 'Album created, but error adding photo'))
 			}
 		} else {
-			showSuccess(t('integration_immich', 'Album created'))
+			showSuccess(t('deep_integration_immich', 'Album created'))
 		}
 		showAlbumPanel.value = false
 		creatingAlbum.value = false
 		newAlbumName.value = ''
 	} catch (e) {
-		showError(t('integration_immich', 'Error creating: {msg}', { msg: e.message }))
+		showError(t('deep_integration_immich', 'Error creating: {msg}', { msg: e.message }))
 	} finally {
 		creatingNewAlbum.value = false
 	}

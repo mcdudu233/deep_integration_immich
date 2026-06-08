@@ -1,5 +1,5 @@
 OC.L10N.register(
-  "integration_immich",
+  "deep_integration_immich",
   {
     "All media": "Tous les médias",
     "Photos": "Photos",
@@ -72,7 +72,7 @@ OC.L10N.register(
     "Error uploading to Immich: {error}": "Erreur lors du téléchargement vers Immich : {error}",
     "{count} files added to Immich": "{count} fichier(s) ajouté(s) à Immich",
     "{count} files could not be uploaded": "{count} fichier(s) n'a/ont pas pu être téléchargé(s)",
-    "Immich Integration": "Intégration Immich",
+    "Deep Integration Immich": "Deep Integration Immich",
     "Connect Nextcloud with your Immich server": "Connectez Nextcloud à votre serveur Immich",
     "Immich server URL": "URL du serveur Immich",
     "API key": "Clé API",

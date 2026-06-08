@@ -5,13 +5,13 @@
 <template>
 	<div id="immich-admin-settings">
 		<!-- ═══ Section 1: Immich Connection ═══════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Immich Connection')"
-			:description="t('integration_immich', 'Configure the Immich server URL and admin credentials')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Immich Connection')"
+			:description="t('deep_integration_immich', 'Configure the Immich server URL and admin credentials')">
 			<div class="immich-settings-form">
 				<div class="field">
 					<NcTextField id="immich-server-url"
 						v-model="form.immich_base_url"
-						:label="t('integration_immich', 'Immich server URL')"
+						:label="t('deep_integration_immich', 'Immich server URL')"
 						placeholder="https://immich.example.com"
 						data-testid="immich-admin-url" />
 				</div>
@@ -19,11 +19,11 @@
 				<div class="field">
 					<NcPasswordField id="immich-admin-api-key"
 						v-model="form.admin_api_key"
-						:label="t('integration_immich', 'Admin API key')"
-						:placeholder="apiKeyConfigured ? t('integration_immich', 'API key is set') : t('integration_immich', 'Enter Immich admin API key')"
+						:label="t('deep_integration_immich', 'Admin API key')"
+						:placeholder="apiKeyConfigured ? t('deep_integration_immich', 'API key is set') : t('deep_integration_immich', 'Enter Immich admin API key')"
 						data-testid="immich-admin-api-key" />
 					<p v-if="apiKeyConfigured" class="hint">
-						{{ t('integration_immich', 'An API key is already configured. Leave blank to keep the current key.') }}
+						{{ t('deep_integration_immich', 'An API key is already configured. Leave blank to keep the current key.') }}
 					</p>
 				</div>
 
@@ -35,7 +35,7 @@
 						<template #icon>
 							<NcLoadingIcon v-if="testingConnection" :size="20" />
 						</template>
-						{{ t('integration_immich', 'Test connection') }}
+						{{ t('deep_integration_immich', 'Test connection') }}
 					</NcButton>
 
 					<NcButton type="primary"
@@ -45,7 +45,7 @@
 						<template #icon>
 							<NcLoadingIcon v-if="saving" :size="20" />
 						</template>
-						{{ t('integration_immich', 'Save') }}
+						{{ t('deep_integration_immich', 'Save') }}
 					</NcButton>
 				</div>
 
@@ -58,41 +58,41 @@
 				<NcNoteCard v-if="missingPermissions.length > 0"
 					type="warning"
 					data-testid="admin-missing-permissions-warning">
-					{{ t('integration_immich', 'Connection successful, but the API key is missing required permissions. The following features may not work:') }}
+					{{ t('deep_integration_immich', 'Connection successful, but the API key is missing required permissions. The following features may not work:') }}
 					<ul style="margin: 8px 0 0 16px;">
 						<li v-for="perm in missingPermissions" :key="perm">
 							<code>{{ perm }}</code>
 						</li>
 					</ul>
-					{{ t('integration_immich', 'Please edit the API key in Immich (Account Settings → API Keys) and enable all required permissions, or create a new key with full permissions.') }}
+					{{ t('deep_integration_immich', 'Please edit the API key in Immich (Account Settings → API Keys) and enable all required permissions, or create a new key with full permissions.') }}
 				</NcNoteCard>
 
 				<NcNoteCard v-if="localAccessBlocked"
 					type="error"
 					data-testid="admin-local-access-warning">
-					{{ t('integration_immich', 'Nextcloud is blocking the connection because the Immich server address is a private/local IP. A Nextcloud administrator can allow this by running:') }}
+					{{ t('deep_integration_immich', 'Nextcloud is blocking the connection because the Immich server address is a private/local IP. A Nextcloud administrator can allow this by running:') }}
 					<br><br>
 					<code>php occ config:system:set allow_local_remote_servers --value=true --type=boolean</code>
 					<br><br>
-					{{ t('integration_immich', 'Alternatively, use a public hostname for your Immich server instead of a local IP address.') }}
+					{{ t('deep_integration_immich', 'Alternatively, use a public hostname for your Immich server instead of a local IP address.') }}
 				</NcNoteCard>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 2: Provisioning ═══════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'User Provisioning')"
-			:description="t('integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'User Provisioning')"
+			:description="t('deep_integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
 			<div class="immich-settings-form">
 				<div class="field">
 					<NcCheckboxRadioSwitch :checked="form.provisioning_enabled"
 						data-testid="provisioning-enabled"
 						@update:checked="form.provisioning_enabled = $event">
-						{{ t('integration_immich', 'Enable user provisioning') }}
+						{{ t('deep_integration_immich', 'Enable user provisioning') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 
 				<div class="field">
-					<label class="field-label">{{ t('integration_immich', 'User scope') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'User scope') }}</label>
 					<div class="radio-group" data-testid="provisioning-scope-filter">
 						<NcCheckboxRadioSwitch :checked="form.user_scope_mode"
 							name="user_scope_mode"
@@ -100,7 +100,7 @@
 							data-testid="provisioning-scope"
 							type="radio"
 							@update:checked="form.user_scope_mode = 'all'">
-							{{ t('integration_immich', 'All Nextcloud users') }}
+							{{ t('deep_integration_immich', 'All Nextcloud users') }}
 						</NcCheckboxRadioSwitch>
 						<NcCheckboxRadioSwitch :checked="form.user_scope_mode"
 							name="user_scope_mode"
@@ -108,55 +108,55 @@
 							type="radio"
 							data-testid="provisioning-scope-groups"
 							@update:checked="form.user_scope_mode = 'groups'">
-							{{ t('integration_immich', 'Only users in selected groups') }}
+							{{ t('deep_integration_immich', 'Only users in selected groups') }}
 						</NcCheckboxRadioSwitch>
 					</div>
 				</div>
 
 				<div v-if="form.user_scope_mode === 'groups'" class="field">
-					<label class="field-label">{{ t('integration_immich', 'Selected groups') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Selected groups') }}</label>
 					<NcSelect v-model="selectedGroups"
 						:options="availableGroups"
 						:multiple="true"
 						:taggable="true"
 						:close-on-select="false"
-						:placeholder="t('integration_immich', 'Select or type group IDs')"
+						:placeholder="t('deep_integration_immich', 'Select or type group IDs')"
 						data-testid="provisioning-groups"
 						@option:created="onGroupCreated" />
 					<p class="hint">
-						{{ t('integration_immich', 'Only users belonging to at least one of these groups will be provisioned.') }}
+						{{ t('deep_integration_immich', 'Only users belonging to at least one of these groups will be provisioned.') }}
 					</p>
 				</div>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 3: Templates ══════════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Templates')"
-			:description="t('integration_immich', 'Configure naming and path templates for Immich users and mounts')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Templates')"
+			:description="t('deep_integration_immich', 'Configure naming and path templates for Immich users and mounts')">
 			<div class="immich-settings-form">
 				<NcNoteCard type="info">
-					{{ t('integration_immich', 'Available placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the storage label template after assets exist may require a migration.') }}
+					{{ t('deep_integration_immich', 'Available placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the storage label template after assets exist may require a migration.') }}
 				</NcNoteCard>
 
 				<div class="field">
 					<NcTextField v-model="form.storage_label_template"
-						:label="t('integration_immich', 'Storage label template')"
+						:label="t('deep_integration_immich', 'Storage label template')"
 						placeholder="{uid}"
 						data-testid="storage-label-template" />
 				</div>
 
 				<div class="field">
 					<NcTextField v-model="form.email_template"
-						:label="t('integration_immich', 'Email fallback template')"
+						:label="t('deep_integration_immich', 'Email fallback template')"
 						placeholder="{uid}@immich.local"
 						data-testid="email-template" />
 					<p class="hint">
-						{{ t('integration_immich', 'Used when a Nextcloud user has no email address configured.') }}
+						{{ t('deep_integration_immich', 'Used when a Nextcloud user has no email address configured.') }}
 					</p>
 				</div>
 
 				<div class="field" data-testid="password-policy-selector">
-					<label class="field-label">{{ t('integration_immich', 'Initial password policy') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Initial password policy') }}</label>
 					<div class="radio-group">
 						<NcCheckboxRadioSwitch :checked="form.initial_password_policy"
 							name="initial_password_policy"
@@ -164,7 +164,7 @@
 							type="radio"
 							data-testid="password-policy-random"
 							@update:checked="form.initial_password_policy = 'random'">
-							{{ t('integration_immich', 'Random generated password') }}
+							{{ t('deep_integration_immich', 'Random generated password') }}
 						</NcCheckboxRadioSwitch>
 						<NcCheckboxRadioSwitch :checked="form.initial_password_policy"
 							name="initial_password_policy"
@@ -172,58 +172,58 @@
 							type="radio"
 							data-testid="password-policy-sso-oidc"
 							@update:checked="form.initial_password_policy = 'sso_oidc'">
-							{{ t('integration_immich', 'SSO/OIDC mode') }}
+							{{ t('deep_integration_immich', 'SSO/OIDC mode') }}
 						</NcCheckboxRadioSwitch>
 					</div>
 					<p class="hint">
-						{{ t('integration_immich', 'Random mode creates an initial Immich password that is not shown after user creation. Use SSO/OIDC mode only when Immich and Nextcloud share authentication.') }}
+						{{ t('deep_integration_immich', 'Random mode creates an initial Immich password that is not shown after user creation. Use SSO/OIDC mode only when Immich and Nextcloud share authentication.') }}
 					</p>
 				</div>
 
 				<div class="field">
 					<NcTextField v-model="form.mount_name_template"
-						:label="t('integration_immich', 'Mount name template')"
+						:label="t('deep_integration_immich', 'Mount name template')"
 						placeholder="Immich Photos"
 						data-testid="mount-name-template" />
 					<p class="hint">
-						{{ t('integration_immich', 'The name shown in Nextcloud Files for the external storage mount.') }}
+						{{ t('deep_integration_immich', 'The name shown in Nextcloud Files for the external storage mount.') }}
 					</p>
 				</div>
 
 				<div class="field">
 					<NcTextField v-model="form.host_path_template"
-						:label="t('integration_immich', 'Host path template')"
+						:label="t('deep_integration_immich', 'Host path template')"
 						placeholder="/srv/immich/originals/library/{storageLabel}"
 						data-testid="host-path-template" />
 					<p class="hint">
-						{{ t('integration_immich', 'The filesystem path on the host where Immich stores each user\'s library folder.') }}
+						{{ t('deep_integration_immich', 'The filesystem path on the host where Immich stores each user\'s library folder.') }}
 					</p>
 				</div>
 
 				<div class="field">
 					<NcTextField v-model="form.nc_visible_path_template"
-						:label="t('integration_immich', 'Nextcloud-visible path template')"
+						:label="t('deep_integration_immich', 'Nextcloud-visible path template')"
 						placeholder="/mnt/immich-library/{storageLabel}"
 						data-testid="nc-visible-path-template" />
 					<p class="hint">
-						{{ t('integration_immich', 'The path visible inside the Nextcloud container that maps to the host path. Must be outside Nextcloud\'s data directory.') }}
+						{{ t('deep_integration_immich', 'The path visible inside the Nextcloud container that maps to the host path. Must be outside Nextcloud\'s data directory.') }}
 					</p>
 				</div>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 4: Storage ═════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Storage Settings')"
-			:description="t('integration_immich', 'Control directory creation and external storage mount provisioning')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Storage Settings')"
+			:description="t('deep_integration_immich', 'Control directory creation and external storage mount provisioning')">
 			<div class="immich-settings-form">
 				<div class="field">
 					<NcCheckboxRadioSwitch :checked="form.mkdir_policy_enabled"
 						data-testid="mkdir-policy"
 						@update:checked="form.mkdir_policy_enabled = $event">
-						{{ t('integration_immich', 'Allow creating empty per-user directories') }}
+						{{ t('deep_integration_immich', 'Allow creating empty per-user directories') }}
 					</NcCheckboxRadioSwitch>
 					<p class="hint">
-						{{ t('integration_immich', 'If enabled, the app may create empty directories under the configured base path when a user\'s Immich library folder does not exist yet. Only directories are created, never media files.') }}
+						{{ t('deep_integration_immich', 'If enabled, the app may create empty directories under the configured base path when a user\'s Immich library folder does not exist yet. Only directories are created, never media files.') }}
 					</p>
 				</div>
 
@@ -231,27 +231,27 @@
 					<NcCheckboxRadioSwitch :checked="form.external_storage_auto_create"
 						data-testid="auto-create-external-storage"
 						@update:checked="form.external_storage_auto_create = $event">
-						{{ t('integration_immich', 'Auto-create external storage mounts') }}
+						{{ t('deep_integration_immich', 'Auto-create external storage mounts') }}
 					</NcCheckboxRadioSwitch>
 					<p class="hint">
-						{{ t('integration_immich', 'If enabled, the app will attempt to create per-user read-only Local External Storage mounts automatically. If disabled, the app can only verify existing mounts and admins must configure them manually.') }}
+						{{ t('deep_integration_immich', 'If enabled, the app will attempt to create per-user read-only Local External Storage mounts automatically. If disabled, the app can only verify existing mounts and admins must configure them manually.') }}
 					</p>
 				</div>
 
 				<NcNoteCard v-if="form.external_storage_auto_create"
 					type="warning"
 					data-testid="admin-general-warning-external-storage-auto-create">
-					{{ t('integration_immich', 'Auto-creating external storage mounts depends on Nextcloud\'s files_external API stability. If the API is unavailable or insufficient, the app will report the required manual steps instead of guessing at private Nextcloud internals.') }}
+					{{ t('deep_integration_immich', 'Auto-creating external storage mounts depends on Nextcloud\'s files_external API stability. If the API is unavailable or insufficient, the app will report the required manual steps instead of guessing at private Nextcloud internals.') }}
 				</NcNoteCard>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 5: Quota Sync ══════════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Quota Synchronization')"
-			:description="t('integration_immich', 'Control how Immich user quotas are derived from Nextcloud quotas')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Quota Synchronization')"
+			:description="t('deep_integration_immich', 'Control how Immich user quotas are derived from Nextcloud quotas')">
 			<div class="immich-settings-form">
 				<div class="field">
-					<label class="field-label">{{ t('integration_immich', 'Quota sync mode') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Quota sync mode') }}</label>
 					<div class="radio-group" data-testid="quota-mode-selector">
 						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
 							name="quota_sync_mode"
@@ -259,7 +259,7 @@
 							type="radio"
 							data-testid="quota-sync-mode"
 							@update:checked="form.quota_sync_mode = 'disabled'">
-							{{ t('integration_immich', 'Disabled') }}
+							{{ t('deep_integration_immich', 'Disabled') }}
 						</NcCheckboxRadioSwitch>
 						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
 							name="quota_sync_mode"
@@ -267,7 +267,7 @@
 							type="radio"
 							data-testid="quota-sync-mode-manual"
 							@update:checked="form.quota_sync_mode = 'manual'">
-							{{ t('integration_immich', 'Manual only') }}
+							{{ t('deep_integration_immich', 'Manual only') }}
 						</NcCheckboxRadioSwitch>
 						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
 							name="quota_sync_mode"
@@ -275,33 +275,33 @@
 							type="radio"
 							data-testid="quota-sync-mode-event-scheduled"
 							@update:checked="form.quota_sync_mode = 'event_scheduled'">
-							{{ t('integration_immich', 'Event + scheduled job') }}
+							{{ t('deep_integration_immich', 'Event + scheduled job') }}
 						</NcCheckboxRadioSwitch>
 					</div>
 				</div>
 
 				<div v-if="form.quota_sync_mode !== 'disabled'" class="field">
 					<NcTextField v-model="quotaReserveDisplay"
-						:label="t('integration_immich', 'Safety reserve (MiB)')"
+						:label="t('deep_integration_immich', 'Safety reserve (MiB)')"
 						placeholder="256"
 						data-testid="quota-reserve-bytes"
 						type="number"
 						:min="0" />
 					<p class="hint">
-						{{ t('integration_immich', 'Bytes reserved before setting the Immich quota. Prevents the combined usage from reaching the exact Nextcloud limit.') }}
+						{{ t('deep_integration_immich', 'Bytes reserved before setting the Immich quota. Prevents the combined usage from reaching the exact Nextcloud limit.') }}
 					</p>
 				</div>
 
 				<NcNoteCard v-if="form.quota_sync_mode !== 'disabled'"
 					type="warning"
 					data-testid="quota-warning-section">
-					{{ t('integration_immich', 'Quota sync is a coordination mechanism, not mathematically perfect real-time accounting. Nextcloud external-storage quota inclusion is experimental and may lag until filecache scans run. Immich thumbnails, encoded videos, and ML data are app overhead not charged through this quota formula.') }}
+					{{ t('deep_integration_immich', 'Quota sync is a coordination mechanism, not mathematically perfect real-time accounting. Nextcloud external-storage quota inclusion is experimental and may lag until filecache scans run. Immich thumbnails, encoded videos, and ML data are app overhead not charged through this quota formula.') }}
 				</NcNoteCard>
 
 				<NcNoteCard v-if="form.quota_sync_mode !== 'disabled'"
 					type="info"
 					data-testid="quota-config-info-section">
-					{{ t('integration_immich', 'For quota sync to work correctly, enable external storage quota inclusion in config.php:') }}
+					{{ t('deep_integration_immich', 'For quota sync to work correctly, enable external storage quota inclusion in config.php:') }}
 					<br>
 					<code>'quota_include_external_storage' => true</code>
 				</NcNoteCard>
@@ -309,11 +309,11 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 6: Delete/Disable Policy ═══════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Delete / Disable Policy')"
-			:description="t('integration_immich', 'What happens to the Immich user when a Nextcloud user is deleted or disabled')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Delete / Disable Policy')"
+			:description="t('deep_integration_immich', 'What happens to the Immich user when a Nextcloud user is deleted or disabled')">
 			<div class="immich-settings-form">
 				<div class="field">
-					<label class="field-label">{{ t('integration_immich', 'Policy when a Nextcloud user is deleted or disabled') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled') }}</label>
 					<div class="radio-group" data-testid="delete-disable-policy-selector">
 						<NcCheckboxRadioSwitch :checked="form.delete_disable_policy"
 							name="delete_disable_policy"
@@ -321,7 +321,7 @@
 							type="radio"
 							data-testid="delete-disable-policy"
 							@update:checked="onDeletePolicyChange('disable_suspend')">
-							{{ t('integration_immich', 'Disable / suspend Immich user (recommended)') }}
+							{{ t('deep_integration_immich', 'Disable / suspend Immich user (recommended)') }}
 						</NcCheckboxRadioSwitch>
 						<NcCheckboxRadioSwitch :checked="form.delete_disable_policy"
 							name="delete_disable_policy"
@@ -329,7 +329,7 @@
 							type="radio"
 							data-testid="delete-disable-policy-delete"
 							@update:checked="onDeletePolicyChange('delete_opt_in')">
-							{{ t('integration_immich', 'Delete Immich user and assets (destructive)') }}
+							{{ t('deep_integration_immich', 'Delete Immich user and assets (destructive)') }}
 						</NcCheckboxRadioSwitch>
 					</div>
 				</div>
@@ -337,34 +337,34 @@
 				<NcNoteCard v-if="form.delete_disable_policy === 'disable_suspend'"
 					type="info"
 					data-testid="delete-disable-policy-info">
-					{{ t('integration_immich', 'When a Nextcloud user is deleted or disabled, the corresponding Immich user will be suspended if supported. Assets are never deleted automatically.') }}
+					{{ t('deep_integration_immich', 'When a Nextcloud user is deleted or disabled, the corresponding Immich user will be suspended if supported. Assets are never deleted automatically.') }}
 				</NcNoteCard>
 
 				<div v-if="form.delete_disable_policy === 'delete_opt_in'" class="field">
 					<NcCheckboxRadioSwitch :checked="deleteOptInConfirmed"
 						data-testid="delete-opt-in-confirm"
 						@update:checked="deleteOptInConfirmed = $event">
-						{{ t('integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted') }}
+						{{ t('deep_integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 
 				<NcNoteCard v-if="form.delete_disable_policy === 'delete_opt_in' && !deleteOptInConfirmed"
 					type="error"
 					data-testid="delete-disable-policy-warning">
-					{{ t('integration_immich', 'You must confirm the destructive policy before it can be saved. This action cannot be undone.') }}
+					{{ t('deep_integration_immich', 'You must confirm the destructive policy before it can be saved. This action cannot be undone.') }}
 				</NcNoteCard>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 7: Actions ═════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Provisioning Actions')"
-			:description="t('integration_immich', 'Dry-run, reconcile, and recompute quota for Immich users')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Provisioning Actions')"
+			:description="t('deep_integration_immich', 'Dry-run, reconcile, and recompute quota for Immich users')">
 			<div class="immich-settings-form">
 				<div class="field">
-					<label class="field-label">{{ t('integration_immich', 'Single user actions') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Single user actions') }}</label>
 					<div class="actions-row">
 						<NcTextField v-model="actionNcUid"
-							:label="t('integration_immich', 'Nextcloud user ID')"
+							:label="t('deep_integration_immich', 'Nextcloud user ID')"
 							placeholder="alice"
 							data-testid="action-nc-uid"
 							class="uid-input" />
@@ -375,7 +375,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.dryRun.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Dry run') }}
+							{{ t('deep_integration_immich', 'Dry run') }}
 						</NcButton>
 						<NcButton type="secondary"
 							:disabled="!actionNcUid || store.reconcile.loading"
@@ -384,7 +384,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.reconcile.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Reconcile') }}
+							{{ t('deep_integration_immich', 'Reconcile') }}
 						</NcButton>
 						<NcButton type="secondary"
 							:disabled="!actionNcUid || store.quotaRecompute.loading"
@@ -393,7 +393,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.quotaRecompute.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Recompute quota') }}
+							{{ t('deep_integration_immich', 'Recompute quota') }}
 						</NcButton>
 						<NcButton type="secondary"
 							:disabled="!actionNcUid || store.mountVerify.loading"
@@ -402,13 +402,13 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.mountVerify.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Verify mount') }}
+							{{ t('deep_integration_immich', 'Verify mount') }}
 						</NcButton>
 					</div>
 				</div>
 
 				<div class="field">
-					<label class="field-label">{{ t('integration_immich', 'Bulk actions') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Bulk actions') }}</label>
 					<div class="actions-row">
 						<NcButton type="secondary"
 							:disabled="store.dryRun.loading"
@@ -417,7 +417,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.dryRun.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Dry run all') }}
+							{{ t('deep_integration_immich', 'Dry run all') }}
 						</NcButton>
 						<NcButton type="secondary"
 							:disabled="store.reconcile.loading"
@@ -426,7 +426,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.reconcile.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Reconcile all') }}
+							{{ t('deep_integration_immich', 'Reconcile all') }}
 						</NcButton>
 						<NcButton type="secondary"
 							:disabled="store.quotaRecompute.loading"
@@ -435,7 +435,7 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.quotaRecompute.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Recompute all quotas') }}
+							{{ t('deep_integration_immich', 'Recompute all quotas') }}
 						</NcButton>
 					</div>
 				</div>
@@ -448,7 +448,7 @@
 				</NcNoteCard>
 
 				<div v-if="dryRunResults.length > 0" class="results-block" data-testid="dry-run-results">
-					<h4>{{ t('integration_immich', 'Planned changes') }}</h4>
+					<h4>{{ t('deep_integration_immich', 'Planned changes') }}</h4>
 					<ul>
 						<li v-for="(item, idx) in dryRunResults" :key="idx">
 							<strong>{{ item.ncUid || item.nc_uid || item.uid }}</strong>:
@@ -458,20 +458,20 @@
 				</div>
 
 				<div v-if="reconcileStatus && Object.keys(reconcileStatus).length > 0" class="results-block" data-testid="reconcile-results">
-					<h4>{{ t('integration_immich', 'Reconcile result') }}</h4>
+					<h4>{{ t('deep_integration_immich', 'Reconcile result') }}</h4>
 					<pre class="result-json">{{ JSON.stringify(reconcileStatus, null, 2) }}</pre>
 				</div>
 
 				<div v-if="mountHealth && Object.keys(mountHealth).length > 0" class="results-block" data-testid="mount-verify-results">
-					<h4>{{ t('integration_immich', 'Mount health') }}</h4>
+					<h4>{{ t('deep_integration_immich', 'Mount health') }}</h4>
 					<pre class="result-json">{{ JSON.stringify(mountHealth, null, 2) }}</pre>
 				</div>
 			</div>
 		</NcSettingsSection>
 
 		<!-- ═══ Section 8: Status ══════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('integration_immich', 'Provisioning Status')"
-			:description="t('integration_immich', 'Current sync state, mount health, and quota status for provisioned users')">
+		<NcSettingsSection :name="t('deep_integration_immich', 'Provisioning Status')"
+			:description="t('deep_integration_immich', 'Current sync state, mount health, and quota status for provisioned users')">
 			<div class="immich-settings-form">
 				<!-- Warnings -->
 				<div v-if="warnings.length > 0" data-testid="admin-general-warning-section">
@@ -486,7 +486,7 @@
 				<!-- Sync state table -->
 				<div class="field">
 					<div class="section-header">
-						<h4>{{ t('integration_immich', 'User sync state') }}</h4>
+						<h4>{{ t('deep_integration_immich', 'User sync state') }}</h4>
 						<NcButton type="tertiary"
 							:disabled="store.syncStates.loading"
 							data-testid="refresh-sync-states"
@@ -494,29 +494,29 @@
 							<template #icon>
 								<NcLoadingIcon v-if="store.syncStates.loading" :size="20" />
 							</template>
-							{{ t('integration_immich', 'Refresh') }}
+							{{ t('deep_integration_immich', 'Refresh') }}
 						</NcButton>
 					</div>
 
 					<div v-if="store.syncStates.loading && syncStates.length === 0" class="loading-placeholder">
 						<NcLoadingIcon :size="24" />
-						<span>{{ t('integration_immich', 'Loading sync states…') }}</span>
+						<span>{{ t('deep_integration_immich', 'Loading sync states…') }}</span>
 					</div>
 
 					<div v-else-if="syncStates.length === 0" class="empty-placeholder">
-						{{ t('integration_immich', 'No provisioned users yet. Enable provisioning and reconcile users to see sync state here.') }}
+						{{ t('deep_integration_immich', 'No provisioned users yet. Enable provisioning and reconcile users to see sync state here.') }}
 					</div>
 
 					<div v-else class="table-wrapper" data-testid="sync-state-table">
 						<table class="sync-table">
 							<thead>
 								<tr>
-									<th>{{ t('integration_immich', 'NC User') }}</th>
-									<th>{{ t('integration_immich', 'Immich User ID') }}</th>
-									<th>{{ t('integration_immich', 'Storage Label') }}</th>
-									<th>{{ t('integration_immich', 'Status') }}</th>
-									<th>{{ t('integration_immich', 'Last Sync') }}</th>
-									<th>{{ t('integration_immich', 'Last Error') }}</th>
+									<th>{{ t('deep_integration_immich', 'NC User') }}</th>
+									<th>{{ t('deep_integration_immich', 'Immich User ID') }}</th>
+									<th>{{ t('deep_integration_immich', 'Storage Label') }}</th>
+									<th>{{ t('deep_integration_immich', 'Status') }}</th>
+									<th>{{ t('deep_integration_immich', 'Last Sync') }}</th>
+									<th>{{ t('deep_integration_immich', 'Last Error') }}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -541,11 +541,11 @@
 
 				<!-- Mount health cards -->
 				<div class="field" data-testid="mount-health-section">
-					<h4>{{ t('integration_immich', 'Mount health') }}</h4>
+					<h4>{{ t('deep_integration_immich', 'Mount health') }}</h4>
 					<div v-if="mountHealthCards.length === 0"
 						class="empty-placeholder"
 						data-testid="mount-health-empty">
-						{{ t('integration_immich', 'No mount health data available. Verify a user\'s mount to see health details.') }}
+						{{ t('deep_integration_immich', 'No mount health data available. Verify a user\'s mount to see health details.') }}
 					</div>
 					<div v-else class="health-cards" data-testid="mount-health-card">
 						<div v-for="card in mountHealthCards"
@@ -558,16 +558,16 @@
 							</div>
 							<div class="health-card-body">
 								<div v-if="card.mountId !== null" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Mount ID') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Mount ID') }}</span>
 									<span class="mono">{{ card.mountId }}</span>
 								</div>
 								<div v-if="card.path" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Mount path') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Mount path') }}</span>
 									<span>{{ card.path }}</span>
 								</div>
 								<div class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Read-only') }}</span>
-									<span>{{ card.readOnly === true ? t('integration_immich', 'Yes') : card.readOnly === false ? t('integration_immich', 'No') : '—' }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Read-only') }}</span>
+									<span>{{ card.readOnly === true ? t('deep_integration_immich', 'Yes') : card.readOnly === false ? t('deep_integration_immich', 'No') : '—' }}</span>
 								</div>
 							</div>
 						</div>
@@ -576,11 +576,11 @@
 
 				<!-- Quota status cards -->
 				<div class="field" data-testid="quota-status-section">
-					<h4>{{ t('integration_immich', 'Quota status') }}</h4>
+					<h4>{{ t('deep_integration_immich', 'Quota status') }}</h4>
 					<div v-if="quotaStatusCards.length === 0"
 						class="empty-placeholder"
 						data-testid="quota-status-empty">
-						{{ t('integration_immich', 'No quota status data available. Enable quota sync and recompute quotas to see details.') }}
+						{{ t('deep_integration_immich', 'No quota status data available. Enable quota sync and recompute quotas to see details.') }}
 					</div>
 					<div v-else class="health-cards" data-testid="quota-status-card">
 						<div v-for="card in quotaStatusCards"
@@ -593,23 +593,23 @@
 							</div>
 							<div class="health-card-body">
 								<div v-if="card.ncQuota !== null" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'NC quota') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'NC quota') }}</span>
 									<span class="mono">{{ formatBytes(card.ncQuota) }}</span>
 								</div>
 								<div v-if="card.ncUsed !== null" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'NC used') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'NC used') }}</span>
 									<span class="mono">{{ formatBytes(card.ncUsed) }}</span>
 								</div>
 								<div v-if="card.immichUsage !== null" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Immich usage') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Immich usage') }}</span>
 									<span class="mono">{{ formatBytes(card.immichUsage) }}</span>
 								</div>
 								<div v-if="card.computedImmichQuota !== null" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Computed Immich quota') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Computed Immich quota') }}</span>
 									<span class="mono">{{ formatBytes(card.computedImmichQuota) }}</span>
 								</div>
 								<div v-if="card.lastSyncAt" class="health-row">
-									<span class="health-label">{{ t('integration_immich', 'Last sync') }}</span>
+									<span class="health-label">{{ t('deep_integration_immich', 'Last sync') }}</span>
 									<span>{{ formatTimestamp(card.lastSyncAt) }}</span>
 								</div>
 								<div v-if="card.warning"
@@ -707,7 +707,7 @@ const quotaReserveDisplay = computed({
 // ── Lifecycle ─────────────────────────────────────────────────────────
 onMounted(() => {
 	try {
-		const state = loadState('integration_immich', 'admin-config')
+		const state = loadState('deep_integration_immich', 'admin-config')
 		applyLoadedState(state)
 	} catch (e) {
 		store.fetchAdminSettings().then(() => {
@@ -715,7 +715,7 @@ onMounted(() => {
 			applyConfigToForm(cfg)
 			apiKeyConfigured.value = cfg.admin_api_key_configured ?? false
 		}).catch(() => {
-			connectionMessage.value = t('integration_immich', 'Error loading configuration')
+			connectionMessage.value = t('deep_integration_immich', 'Error loading configuration')
 			connectionMessageType.value = 'error'
 		})
 	}
@@ -793,10 +793,10 @@ async function saveSettings() {
 		await store.saveAdminSettings(config)
 		form.admin_api_key = ''
 		apiKeyConfigured.value = true
-		connectionMessage.value = t('integration_immich', 'Settings saved')
+		connectionMessage.value = t('deep_integration_immich', 'Settings saved')
 		connectionMessageType.value = 'success'
 	} catch (e) {
-		connectionMessage.value = store.adminSettings.error || t('integration_immich', 'Error saving settings')
+		connectionMessage.value = store.adminSettings.error || t('deep_integration_immich', 'Error saving settings')
 		connectionMessageType.value = 'error'
 	} finally {
 		saving.value = false
@@ -813,18 +813,18 @@ async function testConnection() {
 		const response = await store.testConnection(form.immich_base_url, form.admin_api_key)
 		missingPermissions.value = response?.validation?.missing_permissions ?? []
 		if (missingPermissions.value.length === 0) {
-			connectionMessage.value = t('integration_immich', 'Connection successful!')
+			connectionMessage.value = t('deep_integration_immich', 'Connection successful!')
 			connectionMessageType.value = 'success'
 		} else {
-			connectionMessage.value = t('integration_immich', 'Connected, but some permissions are missing (see below).')
+			connectionMessage.value = t('deep_integration_immich', 'Connected, but some permissions are missing (see below).')
 			connectionMessageType.value = 'warning'
 		}
 	} catch (e) {
 		localAccessBlocked.value = e.localAccessBlocked === true
 		if (localAccessBlocked.value) {
-			connectionMessage.value = t('integration_immich', 'Connection failed: local IP blocked by Nextcloud')
+			connectionMessage.value = t('deep_integration_immich', 'Connection failed: local IP blocked by Nextcloud')
 		} else {
-			connectionMessage.value = e.message || store.adminSettings.error || t('integration_immich', 'Connection failed')
+			connectionMessage.value = e.message || store.adminSettings.error || t('deep_integration_immich', 'Connection failed')
 		}
 		connectionMessageType.value = 'error'
 	} finally {
@@ -854,10 +854,10 @@ async function dryRunOneUser() {
 	try {
 		const result = await store.dryRunUser(actionNcUid.value)
 		dryRunResults.value = Array.isArray(result?.plan) ? result.plan : [result?.plan ?? result]
-		actionMessage.value = t('integration_immich', 'Dry run completed')
+		actionMessage.value = t('deep_integration_immich', 'Dry run completed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.dryRun.error || t('integration_immich', 'Dry run failed')
+		actionMessage.value = store.dryRun.error || t('deep_integration_immich', 'Dry run failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -869,10 +869,10 @@ async function dryRunAllUsers() {
 		const result = await store.dryRunAllUsers()
 		const users = result?.plan?.users
 		dryRunResults.value = users && typeof users === 'object' ? Object.values(users) : store.dryRun.results
-		actionMessage.value = t('integration_immich', 'Dry run completed for all scoped users')
+		actionMessage.value = t('deep_integration_immich', 'Dry run completed for all scoped users')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.dryRun.error || t('integration_immich', 'Dry run failed')
+		actionMessage.value = store.dryRun.error || t('deep_integration_immich', 'Dry run failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -883,10 +883,10 @@ async function reconcileOneUser() {
 	try {
 		const result = await store.reconcileUser(actionNcUid.value)
 		reconcileStatus.value = result
-		actionMessage.value = t('integration_immich', 'Reconcile completed')
+		actionMessage.value = t('deep_integration_immich', 'Reconcile completed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.reconcile.error || t('integration_immich', 'Reconcile failed')
+		actionMessage.value = store.reconcile.error || t('deep_integration_immich', 'Reconcile failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -897,10 +897,10 @@ async function reconcileAllUsers() {
 	try {
 		const result = await store.reconcileAllUsers()
 		reconcileStatus.value = result
-		actionMessage.value = t('integration_immich', 'Reconcile all completed')
+		actionMessage.value = t('deep_integration_immich', 'Reconcile all completed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.reconcile.error || t('integration_immich', 'Reconcile all failed')
+		actionMessage.value = store.reconcile.error || t('deep_integration_immich', 'Reconcile all failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -909,10 +909,10 @@ async function recomputeQuotaOneUser() {
 	actionMessage.value = ''
 	try {
 		await store.recomputeQuotaForUser(actionNcUid.value)
-		actionMessage.value = t('integration_immich', 'Quota recomputed')
+		actionMessage.value = t('deep_integration_immich', 'Quota recomputed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.quotaRecompute.error || t('integration_immich', 'Quota recompute failed')
+		actionMessage.value = store.quotaRecompute.error || t('deep_integration_immich', 'Quota recompute failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -921,10 +921,10 @@ async function recomputeQuotaAllUsers() {
 	actionMessage.value = ''
 	try {
 		await store.recomputeQuotaForAll()
-		actionMessage.value = t('integration_immich', 'All quotas recomputed')
+		actionMessage.value = t('deep_integration_immich', 'All quotas recomputed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.quotaRecompute.error || t('integration_immich', 'Quota recompute failed')
+		actionMessage.value = store.quotaRecompute.error || t('deep_integration_immich', 'Quota recompute failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -949,10 +949,10 @@ async function verifyOneMount() {
 		} else {
 			mountHealthCards.value.push(card)
 		}
-		actionMessage.value = t('integration_immich', 'Mount verification completed')
+		actionMessage.value = t('deep_integration_immich', 'Mount verification completed')
 		actionMessageType.value = 'success'
 	} catch (e) {
-		actionMessage.value = store.mountVerify.error || t('integration_immich', 'Mount verification failed')
+		actionMessage.value = store.mountVerify.error || t('deep_integration_immich', 'Mount verification failed')
 		actionMessageType.value = 'error'
 	}
 }
@@ -980,17 +980,17 @@ function statusClass(status) {
 function statusLabel(status) {
 	const s = String(status || 'unknown').toLowerCase()
 	switch (s) {
-	case 'ok': return t('integration_immich', 'OK')
-	case 'active': return t('integration_immich', 'Active')
-	case 'synced': return t('integration_immich', 'Synced')
-	case 'pending': return t('integration_immich', 'Pending')
-	case 'provisioning': return t('integration_immich', 'Provisioning')
-	case 'failed': return t('integration_immich', 'Failed')
-	case 'error': return t('integration_immich', 'Error')
-	case 'deleted': return t('integration_immich', 'Deleted')
-	case 'warning': return t('integration_immich', 'Warning')
-	case 'stale': return t('integration_immich', 'Stale')
-	case 'unknown': return t('integration_immich', 'Unknown')
+	case 'ok': return t('deep_integration_immich', 'OK')
+	case 'active': return t('deep_integration_immich', 'Active')
+	case 'synced': return t('deep_integration_immich', 'Synced')
+	case 'pending': return t('deep_integration_immich', 'Pending')
+	case 'provisioning': return t('deep_integration_immich', 'Provisioning')
+	case 'failed': return t('deep_integration_immich', 'Failed')
+	case 'error': return t('deep_integration_immich', 'Error')
+	case 'deleted': return t('deep_integration_immich', 'Deleted')
+	case 'warning': return t('deep_integration_immich', 'Warning')
+	case 'stale': return t('deep_integration_immich', 'Stale')
+	case 'unknown': return t('deep_integration_immich', 'Unknown')
 	default: return String(status)
 	}
 }

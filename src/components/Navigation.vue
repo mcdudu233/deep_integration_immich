@@ -5,7 +5,7 @@
 <template>
 	<NcAppNavigation>
 		<NcAppNavigationList>
-			<NcAppNavigationItem :name="t('integration_immich', 'All media')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'All media')"
 				:to="{ name: 'timeline' }"
 				data-testid="nav-all-media"
 				:active="$route.name === 'timeline'">
@@ -13,7 +13,7 @@
 					<ImageIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Photos')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Photos')"
 				:to="{ name: 'photos' }"
 				data-testid="nav-photos"
 				:active="$route.name === 'photos'">
@@ -21,7 +21,7 @@
 					<PhotosIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Videos')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Videos')"
 				:to="{ name: 'videos' }"
 				data-testid="nav-videos"
 				:active="$route.name === 'videos'">
@@ -29,7 +29,7 @@
 					<VideoIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Favorites')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Favorites')"
 				:to="{ name: 'favorites' }"
 				data-testid="nav-favorites"
 				:active="$route.name === 'favorites'">
@@ -37,7 +37,7 @@
 					<HeartIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Albums')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Albums')"
 				:to="{ name: 'albums' }"
 				data-testid="nav-albums"
 				:active="$route.name === 'albums' || $route.name === 'album-detail'">
@@ -45,7 +45,7 @@
 					<FolderIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'People')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'People')"
 				:to="{ name: 'people' }"
 				data-testid="nav-people"
 				:active="$route.name === 'people' || $route.name === 'person-detail'">
@@ -53,7 +53,7 @@
 					<AccountGroupIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Map')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Map')"
 				:to="{ name: 'map' }"
 				data-testid="nav-map"
 				:active="$route.name === 'map'">
@@ -61,7 +61,7 @@
 					<MapIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcAppNavigationItem :name="t('integration_immich', 'Explore')"
+			<NcAppNavigationItem :name="t('deep_integration_immich', 'Explore')"
 				:to="{ name: 'explore' }"
 				data-testid="nav-explore"
 				:active="$route.name === 'explore' || $route.name === 'place-detail'">
@@ -83,7 +83,7 @@
 					<AlertCircleIcon v-else
 						:size="18" class="immich-status-icon immich-mapping-missing" />
 					<div class="immich-status-detail">
-						<span class="immich-status-label">{{ t('integration_immich', 'Mapping') }}</span>
+						<span class="immich-status-label">{{ t('deep_integration_immich', 'Mapping') }}</span>
 						<span class="immich-status-value" :class="'immich-mapping-' + userMapping.status">{{ mappingLabel }}</span>
 					</div>
 				</div>
@@ -99,7 +99,7 @@
 					<AlertIcon v-else
 						:size="18" class="immich-status-icon immich-mount-error" />
 					<div class="immich-status-detail">
-						<span class="immich-status-label">{{ t('integration_immich', 'Mount') }}</span>
+						<span class="immich-status-label">{{ t('deep_integration_immich', 'Mount') }}</span>
 						<span class="immich-status-value" :class="'immich-mount-' + userMount.status">{{ mountLabel }}</span>
 					</div>
 				</div>
@@ -109,7 +109,7 @@
 					type="warning"
 					class="immich-quota-note"
 					data-testid="quota-stale-warning-card">
-					{{ t('integration_immich', 'Quota sync is stale — run "Recompute" from the admin settings.') }}
+					{{ t('deep_integration_immich', 'Quota sync is stale — run "Recompute" from the admin settings.') }}
 				</NcNoteCard>
 
 				<!-- General warnings from initial state -->
@@ -123,7 +123,7 @@
 			</div>
 
 			<NcAppNavigationItem v-if="immichUrl"
-				:name="t('integration_immich', 'Open Immich')"
+				:name="t('deep_integration_immich', 'Open Immich')"
 				:href="immichUrl"
 				data-testid="nav-open-immich"
 				target="_blank"
@@ -158,7 +158,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
 
-const userConfig = loadState('integration_immich', 'user-config', {})
+const userConfig = loadState('deep_integration_immich', 'user-config', {})
 
 // Immich URL (existing — from personal config or initial state)
 const rawUrl = userConfig?.server_url || userConfig?.immich_url || ''
@@ -173,19 +173,19 @@ const warnings = Array.isArray(userConfig?.warnings) ? userConfig.warnings : []
 // Display labels
 const mappingLabel = computed(() => {
 	switch (userMapping.status) {
-		case 'mapped': return t('integration_immich', 'Mapped')
-		case 'pending': return t('integration_immich', 'Pending')
-		case 'missing': return t('integration_immich', 'Missing')
-		case 'error': return t('integration_immich', 'Error')
+		case 'mapped': return t('deep_integration_immich', 'Mapped')
+		case 'pending': return t('deep_integration_immich', 'Pending')
+		case 'missing': return t('deep_integration_immich', 'Missing')
+		case 'error': return t('deep_integration_immich', 'Error')
 		default: return userMapping.status.charAt(0).toUpperCase() + userMapping.status.slice(1)
 	}
 })
 
 const mountLabel = computed(() => {
 	switch (userMount.status) {
-		case 'available': return t('integration_immich', 'Available')
-		case 'unavailable': return t('integration_immich', 'Unavailable')
-		case 'error': return t('integration_immich', 'Mount error')
+		case 'available': return t('deep_integration_immich', 'Available')
+		case 'unavailable': return t('deep_integration_immich', 'Unavailable')
+		case 'error': return t('deep_integration_immich', 'Mount error')
 		default: return userMount.status.charAt(0).toUpperCase() + userMount.status.slice(1)
 	}
 })

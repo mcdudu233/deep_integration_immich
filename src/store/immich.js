@@ -169,7 +169,7 @@ export const useImmichStore = defineStore('immich', {
 			} catch (e) {
 				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
 				this.error = isTimeout
-					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					? t('deep_integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
 					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
@@ -214,7 +214,7 @@ export const useImmichStore = defineStore('immich', {
 			} catch (e) {
 				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
 				this.error = isTimeout
-					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					? t('deep_integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
 					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
@@ -254,7 +254,7 @@ export const useImmichStore = defineStore('immich', {
 			} catch (e) {
 				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
 				this.error = isTimeout
-					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					? t('deep_integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
 					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false
@@ -333,7 +333,7 @@ export const useImmichStore = defineStore('immich', {
 			} catch (e) {
 				const isTimeout = e.code === 'ECONNABORTED' || e.message?.includes('timeout')
 				this.error = isTimeout
-					? t('integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
+					? t('deep_integration_immich', 'Request timed out — Immich may be slow or unreachable. Check your server connection.')
 					: (e.response?.data?.error || e.message)
 			} finally {
 				this.loading = false

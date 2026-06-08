@@ -10,7 +10,7 @@ use Test\TestCase;
 class ApplicationTest extends TestCase {
 
 	public function testAppId(): void {
-		$this->assertEquals('integration_immich', Application::APP_ID);
+		$this->assertEquals('deep_integration_immich', Application::APP_ID);
 	}
 
 	public function testAppCanBeInstantiated(): void {

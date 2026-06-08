@@ -26,9 +26,9 @@ class LoadAdditionalScriptsListener implements IEventListener {
         // NC26-32 requires the v3 bundle which uses the old positional-args API.
         $ncMajorVersion = (int) Util::getVersion()[0];
         if ($ncMajorVersion >= 33) {
-            Util::addScript(Application::APP_ID, 'integration_immich-fileAction');
+            Util::addScript(Application::APP_ID, 'deep_integration_immich-fileAction');
         } else {
-            Util::addScript(Application::APP_ID, 'integration_immich-fileAction-nc32');
+            Util::addScript(Application::APP_ID, 'deep_integration_immich-fileAction-nc32');
         }
     }
 }

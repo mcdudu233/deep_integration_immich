@@ -1,6 +1,6 @@
 {
-    "name": "nextcloud/integration_immich",
-    "description": "Immich Integration for Nextcloud",
+    "name": "nextcloud/deep_integration_immich",
+    "description": "Deep Integration Immich for Nextcloud",
     "type": "project",
     "license": "AGPL-3.0-or-later",
     "authors": [

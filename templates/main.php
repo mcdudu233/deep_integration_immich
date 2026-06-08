@@ -10,4 +10,4 @@ declare(strict_types=1);
 
 use OCP\Util;
 
-Util::addScript('integration_immich', 'integration_immich-main');
+Util::addScript('deep_integration_immich', 'deep_integration_immich-main');

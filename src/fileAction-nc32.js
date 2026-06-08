@@ -23,7 +23,7 @@ let actionCapabilities = { ...defaultActionCapabilities }
 
 async function loadActionCapabilities() {
 	try {
-		const response = await axios.get(generateUrl('/apps/integration_immich/api/v1/config'))
+		const response = await axios.get(generateUrl('/apps/deep_integration_immich/api/v1/config'))
 		const capabilities = response.data?.actionCapabilities ?? {}
 		actionCapabilities = {
 			importToImmichEnabled: capabilities.importToImmichEnabled === true,
@@ -35,8 +35,8 @@ async function loadActionCapabilities() {
 }
 
 async function uploadFile(node) {
-	if (!node.fileid) throw new Error(t('integration_immich', 'File ID missing'))
-	const url = generateUrl('/apps/integration_immich/api/v1/upload')
+	if (!node.fileid) throw new Error(t('deep_integration_immich', 'File ID missing'))
+	const url = generateUrl('/apps/deep_integration_immich/api/v1/upload')
 	await axios.post(url, { fileId: node.fileid })
 }
 
@@ -86,7 +86,7 @@ function canImportNode(node) {
 loadActionCapabilities().finally(() => {
 	registerFileAction(new FileAction({
 		id: 'send-to-immich',
-		displayName: () => t('integration_immich', 'Import copy to Immich'),
+		displayName: () => t('deep_integration_immich', 'Import copy to Immich'),
 		iconSvgInline: () => immichSvg,
 
 		// NC32 calls: enabled(nodes, view)
@@ -102,16 +102,16 @@ loadActionCapabilities().finally(() => {
 		// NC32 calls: exec(node, view, dir)
 		async exec(node, view, dir) {
 			if (!canImportNode(node)) {
-				showError(t('integration_immich', 'Import to Immich is disabled or unavailable for this file'))
+				showError(t('deep_integration_immich', 'Import to Immich is disabled or unavailable for this file'))
 				return false
 			}
 			try {
 				await uploadFile(node)
-				showSuccess(t('integration_immich', '"{name}" imported to Immich', { name: node.basename }))
+				showSuccess(t('deep_integration_immich', '"{name}" imported to Immich', { name: node.basename }))
 				return true
 			} catch (e) {
 				const errorMsg = e.response?.data?.error || e.message
-				showError(t('integration_immich', 'Error importing to Immich: {error}', { error: errorMsg }))
+				showError(t('deep_integration_immich', 'Error importing to Immich: {error}', { error: errorMsg }))
 				return false
 			}
 		},
@@ -120,7 +120,7 @@ loadActionCapabilities().finally(() => {
 		async execBatch(nodes, view, dir) {
 			const importableNodes = nodes.filter(canImportNode)
 			if (importableNodes.length !== nodes.length) {
-				showError(t('integration_immich', 'Some files cannot be imported to Immich from this location'))
+				showError(t('deep_integration_immich', 'Some files cannot be imported to Immich from this location'))
 			}
 			const CONCURRENCY = 3
 			const results = new Array(nodes.length).fill(false)
@@ -146,10 +146,10 @@ loadActionCapabilities().finally(() => {
 			const failCount = results.length - successCount
 
 			if (successCount > 0) {
-				showSuccess(t('integration_immich', '{count} file(s) imported to Immich', { count: successCount }))
+				showSuccess(t('deep_integration_immich', '{count} file(s) imported to Immich', { count: successCount }))
 			}
 			if (failCount > 0) {
-				showError(t('integration_immich', '{count} file(s) could not be imported to Immich', { count: failCount }))
+				showError(t('deep_integration_immich', '{count} file(s) could not be imported to Immich', { count: failCount }))
 			}
 
 			return results

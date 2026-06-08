@@ -16,7 +16,7 @@ use OCP\IURLGenerator;
 use OCP\Settings\IIconSection;
 
 class AdminSection implements IIconSection {
-    public const SECTION_ID = 'integration_immich-admin';
+    public const SECTION_ID = 'deep_integration_immich-admin';
 
     public function __construct(
         private IL10N $l,

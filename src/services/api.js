@@ -5,8 +5,8 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
-const baseUrl = generateUrl('/apps/integration_immich/api/v1')
-const adminBaseUrl = generateUrl('/apps/integration_immich/api/v1/admin')
+const baseUrl = generateUrl('/apps/deep_integration_immich/api/v1')
+const adminBaseUrl = generateUrl('/apps/deep_integration_immich/api/v1/admin')
 
 export function getTimeline(params = {}, signal = null) {
 	return axios.get(`${baseUrl}/timeline`, { params, signal, timeout: 65000 })
@@ -49,23 +49,23 @@ export function updateAsset(assetId, data) {
 }
 
 export function getThumbnailUrl(assetId) {
-	return generateUrl(`/apps/integration_immich/api/v1/assets/${assetId}/thumbnail`)
+	return generateUrl(`/apps/deep_integration_immich/api/v1/assets/${assetId}/thumbnail`)
 }
 
 export function getPreviewUrl(assetId) {
-	return generateUrl(`/apps/integration_immich/api/v1/assets/${assetId}/thumbnail`) + '?size=preview'
+	return generateUrl(`/apps/deep_integration_immich/api/v1/assets/${assetId}/thumbnail`) + '?size=preview'
 }
 
 export function getOriginalUrl(assetId) {
-	return generateUrl(`/apps/integration_immich/api/v1/assets/${assetId}/original`)
+	return generateUrl(`/apps/deep_integration_immich/api/v1/assets/${assetId}/original`)
 }
 
 export function getVideoUrl(assetId) {
-	return generateUrl(`/apps/integration_immich/api/v1/assets/${assetId}/video`)
+	return generateUrl(`/apps/deep_integration_immich/api/v1/assets/${assetId}/video`)
 }
 
 export function getAlbumThumbnailUrl(albumId) {
-	return generateUrl(`/apps/integration_immich/api/v1/albums/${albumId}/thumbnail`)
+	return generateUrl(`/apps/deep_integration_immich/api/v1/albums/${albumId}/thumbnail`)
 }
 
 export function getPeople() {
@@ -77,7 +77,7 @@ export function getPersonAssets(personId) {
 }
 
 export function getPersonThumbnailUrl(personId) {
-	return generateUrl(`/apps/integration_immich/api/v1/people/${personId}/thumbnail`)
+	return generateUrl(`/apps/deep_integration_immich/api/v1/people/${personId}/thumbnail`)
 }
 
 export function getMapMarkers() {

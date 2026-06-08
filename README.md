@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="img/app-dark.svg" width="80" alt="Immich Integration">
+<img src="img/app-dark.svg" width="80" alt="Deep Integration Immich">
 
-# Immich Orchestration for Nextcloud
+# Deep Integration Immich for Nextcloud
 
 **Provision Immich users from Nextcloud, expose Immich-owned photo libraries as read-only Nextcloud mounts, and keep the existing Immich browsing UI inside Nextcloud.**
 
@@ -96,19 +96,19 @@ Nextcloud documents this setting as experimental. Quota values can lag because e
 ### Via Nextcloud App Store
 
 1. Open **Nextcloud -> Apps**.
-2. Search for `Immich Integration` or the packaged app name used by this fork.
+2. Search for `Deep Integration Immich` or the packaged app name used by this fork.
 3. Install and enable the app.
 
 ### Via Release Tarball
 
-1. Download `integration_immich.tar.gz` from the release page.
+1. Download `deep_integration_immich.tar.gz` from the release page.
 2. Extract it into your Nextcloud `apps/` directory:
    ```bash
-   tar -xzf integration_immich.tar.gz -C /path/to/nextcloud/apps/
+   tar -xzf deep_integration_immich.tar.gz -C /path/to/nextcloud/apps/
    ```
 3. Enable the app from an administrator console:
    ```bash
-   php occ app:enable integration_immich
+   php occ app:enable deep_integration_immich
    ```
 
 ---

@@ -26,7 +26,7 @@ for (const file of jsonFiles) {
 		.map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
 		.join(',\n')
 
-	const js = `OC.L10N.register(\n  "integration_immich",\n  {\n${entries}\n  },\n  ${JSON.stringify(pluralForm)}\n);\n`
+	const js = `OC.L10N.register(\n  "deep_integration_immich",\n  {\n${entries}\n  },\n  ${JSON.stringify(pluralForm)}\n);\n`
 
 	writeFileSync(jsPath, js, 'utf8')
 	console.log(`✓ l10n/${locale}.js generated`)

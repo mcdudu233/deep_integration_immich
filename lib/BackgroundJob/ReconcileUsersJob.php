@@ -69,7 +69,7 @@ class ReconcileUsersJob extends QueuedJob {
 		}
 
 		try {
-			return $this->lockService->withLock('integration_immich_reconcile_' . $ncUid, self::LOCK_TIMEOUT_SECONDS, function () use ($ncUid, $dryRun): array {
+			return $this->lockService->withLock('deep_integration_immich_reconcile_' . $ncUid, self::LOCK_TIMEOUT_SECONDS, function () use ($ncUid, $dryRun): array {
 				return $this->reconcileUsers([$ncUid], 'one', $dryRun);
 			});
 		} catch (\Throwable $e) {
@@ -85,7 +85,7 @@ class ReconcileUsersJob extends QueuedJob {
 
 	public function reconcileAllScopedUsers(bool $dryRun = false): array {
 		try {
-			return $this->lockService->withLock('integration_immich_reconcile_all', self::LOCK_TIMEOUT_SECONDS, function () use ($dryRun): array {
+			return $this->lockService->withLock('deep_integration_immich_reconcile_all', self::LOCK_TIMEOUT_SECONDS, function () use ($dryRun): array {
 				$config = $this->adminConfigService->getAdminConfig();
 				return $this->reconcileUsers($this->reconcileCandidateUserIds($config), 'all', $dryRun, $config);
 			});

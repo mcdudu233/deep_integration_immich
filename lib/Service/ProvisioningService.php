@@ -40,7 +40,7 @@ class ProvisioningService {
     }
 
     public function reconcileUser(string $ncUid, bool $dryRun = false): array {
-        $lockKey = 'integration_immich_provision_' . $ncUid;
+        $lockKey = 'deep_integration_immich_provision_' . $ncUid;
 
         try {
             return $this->lockService->withLock($lockKey, self::LOCK_TIMEOUT_SECONDS, function () use ($ncUid, $dryRun): array {

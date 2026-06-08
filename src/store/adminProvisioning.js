@@ -125,7 +125,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 		 * the backend rather than a dedicated API endpoint.
 		 *
 		 * Callers should pass the value of
-		 *   loadState('integration_immich', 'admin-config').capabilities
+		 *   loadState('deep_integration_immich', 'admin-config').capabilities
 		 * or call with no argument to load from the page-embedded state.
 		 */
 		loadCapabilities(capabilitiesData = null) {
@@ -139,7 +139,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 					// into every code path.  This module is compiled for the
 					// admin bundle where the library is already available.
 					const { loadState } = require('@nextcloud/initial-state')
-					const state = loadState('integration_immich', 'admin-config')
+					const state = loadState('deep_integration_immich', 'admin-config')
 					this.capabilities.data = state?.capabilities ?? {}
 				}
 			} catch (e) {

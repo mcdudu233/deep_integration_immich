@@ -9,7 +9,7 @@
 			class="explore-view__loading" />
 
 		<NcEmptyContent v-else-if="store.error"
-			:name="t('integration_immich', 'Error')"
+			:name="t('deep_integration_immich', 'Error')"
 			:description="store.error">
 			<template #icon>
 				<AlertIcon :size="64" />
@@ -17,8 +17,8 @@
 		</NcEmptyContent>
 
 		<NcEmptyContent v-else-if="store.exploreData.length === 0 && !store.loading"
-			:name="t('integration_immich', 'Nothing to explore')"
-			:description="t('integration_immich', 'Immich has not recognized any places or topics yet.')">
+			:name="t('deep_integration_immich', 'Nothing to explore')"
+			:description="t('deep_integration_immich', 'Immich has not recognized any places or topics yet.')">
 			<template #icon>
 				<CompassIcon :size="64" />
 			</template>
@@ -74,11 +74,11 @@ const sortedExploreData = computed(() =>
 
 function sectionLabel(fieldName) {
 	const labels = {
-		'exifInfo.city': t('integration_immich', 'Cities'),
-		'exifInfo.country': t('integration_immich', 'Countries'),
-		'exifInfo.state': t('integration_immich', 'States'),
-		'smartInfo.objects': t('integration_immich', 'Objects'),
-		'smartInfo.tags': t('integration_immich', 'Tags'),
+		'exifInfo.city': t('deep_integration_immich', 'Cities'),
+		'exifInfo.country': t('deep_integration_immich', 'Countries'),
+		'exifInfo.state': t('deep_integration_immich', 'States'),
+		'smartInfo.objects': t('deep_integration_immich', 'Objects'),
+		'smartInfo.tags': t('deep_integration_immich', 'Tags'),
 	}
 	return labels[fieldName] ?? fieldName
 }

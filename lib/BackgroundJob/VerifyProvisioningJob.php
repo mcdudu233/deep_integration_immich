@@ -76,7 +76,7 @@ class VerifyProvisioningJob extends QueuedJob {
 		}
 
 		try {
-			return $this->lockService->withLock('integration_immich_verify_' . $ncUid, self::LOCK_TIMEOUT_SECONDS, function () use ($ncUid): array {
+			return $this->lockService->withLock('deep_integration_immich_verify_' . $ncUid, self::LOCK_TIMEOUT_SECONDS, function () use ($ncUid): array {
 				return $this->verifyUsers([$ncUid], 'one', false);
 			});
 		} catch (\Throwable $e) {
@@ -92,7 +92,7 @@ class VerifyProvisioningJob extends QueuedJob {
 
 	public function verifyAllMappedUsers(): array {
 		try {
-			return $this->lockService->withLock('integration_immich_verify_all', self::LOCK_TIMEOUT_SECONDS, function (): array {
+			return $this->lockService->withLock('deep_integration_immich_verify_all', self::LOCK_TIMEOUT_SECONDS, function (): array {
 				$config = $this->adminConfigService->getAdminConfig();
 				return $this->verifyUsers($this->scopedUserIds($config), 'all', true, $config);
 			});

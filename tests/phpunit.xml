@@ -10,7 +10,7 @@
       <clover outputFile="./clover.xml"/>
     </report>
   </coverage>
-  <testsuite name="Immich Integration Tests">
+  <testsuite name="Deep Integration Immich Tests">
     <directory suffix="Test.php">.</directory>
   </testsuite>
   <logging/>
