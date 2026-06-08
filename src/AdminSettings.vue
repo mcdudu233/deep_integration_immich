@@ -52,7 +52,19 @@
 				<NcNoteCard v-if="connectionMessage"
 					:type="connectionMessageType"
 					data-testid="admin-connection-message">
-					{{ connectionMessage }}
+					<p class="connection-message-text">
+						{{ connectionMessage }}
+					</p>
+					<ul v-if="saveFieldErrors.length > 0"
+						class="validation-error-list"
+						:aria-label="t('deep_integration_immich', 'Configuration fields with errors')"
+						data-testid="admin-save-validation-fields">
+						<li v-for="fieldError in saveFieldErrors"
+							:key="fieldError.field + ':' + fieldError.message">
+							<span class="validation-error-field">{{ fieldError.fieldLabel }}</span>
+							<span v-if="fieldError.message" class="validation-error-message">{{ fieldError.message }}</span>
+						</li>
+					</ul>
 				</NcNoteCard>
 
 				<NcNoteCard v-if="missingPermissions.length > 0"
@@ -676,6 +688,7 @@ const connectionMessage = ref('')
 const connectionMessageType = ref('success')
 const localAccessBlocked = ref(false)
 const missingPermissions = ref([])
+const saveFieldErrors = ref([])
 
 // ── Action state ──────────────────────────────────────────────────────
 const actionNcUid = ref('')
@@ -714,6 +727,7 @@ onMounted(() => {
 			const cfg = store.adminSettings.data
 			applyConfigToForm(cfg)
 			apiKeyConfigured.value = cfg.admin_api_key_configured ?? false
+			saveFieldErrors.value = []
 		}).catch(() => {
 			connectionMessage.value = t('deep_integration_immich', 'Error loading configuration')
 			connectionMessageType.value = 'error'
@@ -722,6 +736,7 @@ onMounted(() => {
 })
 
 function applyLoadedState(state) {
+	saveFieldErrors.value = []
 	if (state.settings) {
 		applyConfigToForm(state.settings)
 	}
@@ -778,6 +793,7 @@ function applyAdminStatus(status) {
 async function saveSettings() {
 	saving.value = true
 	connectionMessage.value = ''
+	saveFieldErrors.value = []
 	try {
 		const config = { ...form }
 		// Map selected groups back to plain array
@@ -795,8 +811,17 @@ async function saveSettings() {
 		apiKeyConfigured.value = true
 		connectionMessage.value = t('deep_integration_immich', 'Settings saved')
 		connectionMessageType.value = 'success'
+		saveFieldErrors.value = []
 	} catch (e) {
-		connectionMessage.value = store.adminSettings.error || t('deep_integration_immich', 'Error saving settings')
+		const errorDetails = store.adminSettings.errorDetails
+		saveFieldErrors.value = (errorDetails?.fields ?? []).map(formatSaveFieldError)
+		if (errorDetails?.code === 'invalid_admin_config') {
+			connectionMessage.value = t('deep_integration_immich', 'Admin configuration is invalid. Please check the fields below.')
+		} else if (errorDetails?.code === 'admin_config_save_failed') {
+			connectionMessage.value = t('deep_integration_immich', 'Error saving settings')
+		} else {
+			connectionMessage.value = store.adminSettings.error || t('deep_integration_immich', 'Error saving settings')
+		}
 		connectionMessageType.value = 'error'
 	} finally {
 		saving.value = false
@@ -807,6 +832,7 @@ async function saveSettings() {
 async function testConnection() {
 	testingConnection.value = true
 	connectionMessage.value = ''
+	saveFieldErrors.value = []
 	localAccessBlocked.value = false
 	missingPermissions.value = []
 	try {
@@ -995,6 +1021,82 @@ function statusLabel(status) {
 	}
 }
 
+function formatSaveFieldError(error) {
+	const fieldLabel = labelForConfigField(error.field)
+	return {
+		field: error.field,
+		fieldLabel: error.field && fieldLabel !== error.field ? `${fieldLabel} (${error.field})` : fieldLabel,
+		message: localizeAdminConfigValidationMessage(error.message),
+	}
+}
+
+function localizeAdminConfigValidationMessage(message) {
+	if (!message) {
+		return message
+	}
+	const unsupportedPlaceholdersPrefix = 'Template contains unsupported placeholder(s): '
+	if (message.startsWith(unsupportedPlaceholdersPrefix)) {
+		return t('deep_integration_immich', 'Template contains unsupported placeholder(s): {placeholders}', {
+			placeholders: message.slice(unsupportedPlaceholdersPrefix.length),
+		})
+	}
+	switch (message) {
+	case 'Immich base URL must be a valid http or https URL with a host.':
+		return t('deep_integration_immich', 'Immich base URL must be a valid http or https URL with a host.')
+	case 'User scope mode must be all or groups.':
+		return t('deep_integration_immich', 'User scope mode must be all or groups.')
+	case 'User scope groups must be a JSON array of non-empty group IDs.':
+		return t('deep_integration_immich', 'User scope groups must be a JSON array of non-empty group IDs.')
+	case 'Value must be boolean.':
+		return t('deep_integration_immich', 'Value must be boolean.')
+	case 'Quota sync mode must be disabled, manual, or event_scheduled.':
+		return t('deep_integration_immich', 'Quota sync mode must be disabled, manual, or event_scheduled.')
+	case 'Initial password policy must be random or sso_oidc.':
+		return t('deep_integration_immich', 'Initial password policy must be random or sso_oidc.')
+	case 'Quota reserve bytes must be an integer greater than or equal to 0.':
+		return t('deep_integration_immich', 'Quota reserve bytes must be an integer greater than or equal to 0.')
+	case 'Delete/disable policy must be disable_suspend or delete_opt_in.':
+		return t('deep_integration_immich', 'Delete/disable policy must be disable_suspend or delete_opt_in.')
+	case 'Destructive delete policy requires explicit delete_opt_in confirmation.':
+		return t('deep_integration_immich', 'Destructive delete policy requires explicit delete_opt_in confirmation.')
+	case 'Template must not be empty.':
+		return t('deep_integration_immich', 'Template must not be empty.')
+	case 'Template must not contain NUL bytes.':
+		return t('deep_integration_immich', 'Template must not contain NUL bytes.')
+	case 'Template must not contain path traversal segments.':
+		return t('deep_integration_immich', 'Template must not contain path traversal segments.')
+	case 'Template contains an unsupported placeholder.':
+		return t('deep_integration_immich', 'Template contains an unsupported placeholder.')
+	case 'Template must contain visible characters besides placeholders and separators.':
+		return t('deep_integration_immich', 'Template must contain visible characters besides placeholders and separators.')
+	default:
+		return message
+	}
+}
+
+function labelForConfigField(field) {
+	switch (field) {
+	case 'immich_base_url': return t('deep_integration_immich', 'Immich server URL')
+	case 'admin_api_key': return t('deep_integration_immich', 'Admin API key')
+	case 'provisioning_enabled': return t('deep_integration_immich', 'Enable user provisioning')
+	case 'user_scope_mode': return t('deep_integration_immich', 'User scope')
+	case 'user_scope_groups': return t('deep_integration_immich', 'Selected groups')
+	case 'storage_label_template': return t('deep_integration_immich', 'Storage label template')
+	case 'email_template': return t('deep_integration_immich', 'Email fallback template')
+	case 'initial_password_policy': return t('deep_integration_immich', 'Initial password policy')
+	case 'mount_name_template': return t('deep_integration_immich', 'Mount name template')
+	case 'host_path_template': return t('deep_integration_immich', 'Host path template')
+	case 'nc_visible_path_template': return t('deep_integration_immich', 'Nextcloud-visible path template')
+	case 'mkdir_policy_enabled': return t('deep_integration_immich', 'Allow creating empty per-user directories')
+	case 'external_storage_auto_create': return t('deep_integration_immich', 'Auto-create external storage mounts')
+	case 'quota_sync_mode': return t('deep_integration_immich', 'Quota sync mode')
+	case 'quota_reserve_bytes': return t('deep_integration_immich', 'Safety reserve (MiB)')
+	case 'delete_disable_policy': return t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled')
+	case 'delete_opt_in_confirmed': return t('deep_integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted')
+	default: return field || t('deep_integration_immich', 'Unknown field')
+	}
+}
+
 function formatTimestamp(iso) {
 	if (!iso) return '—'
 	try {
@@ -1038,6 +1140,27 @@ function formatBytes(bytes) {
 	display: flex;
 	gap: 8px;
 	margin: 16px 0;
+}
+
+.connection-message-text {
+	margin: 0;
+}
+
+.validation-error-list {
+	margin: 8px 0 0;
+	padding-left: 20px;
+}
+
+.validation-error-list li + li {
+	margin-top: 4px;
+}
+
+.validation-error-field {
+	font-weight: bold;
+}
+
+.validation-error-message {
+	margin-left: 4px;
 }
 
 .actions-row {

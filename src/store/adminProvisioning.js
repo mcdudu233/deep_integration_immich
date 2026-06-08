@@ -17,33 +17,95 @@ import {
 	verifyMountHealth,
 } from '../services/api.js'
 
+function stringifyFieldMessage(value) {
+	if (value === null || value === undefined) {
+		return ''
+	}
+	if (typeof value === 'string') {
+		return value
+	}
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value)
+	}
+	if (typeof value === 'object') {
+		return value.message || value.detail || value.error || JSON.stringify(value)
+	}
+	return String(value)
+}
+
+function normaliseFieldErrors(fields) {
+	if (!fields || typeof fields !== 'object') {
+		return []
+	}
+	if (Array.isArray(fields)) {
+		return fields.map((entry, index) => {
+			if (entry && typeof entry === 'object') {
+				return {
+					field: String(entry.field || entry.name || entry.key || index + 1),
+					message: stringifyFieldMessage(entry.message || entry.detail || entry.error || entry),
+				}
+			}
+			return {
+				field: String(index + 1),
+				message: stringifyFieldMessage(entry),
+			}
+		}).filter(entry => entry.message || entry.field)
+	}
+	return Object.entries(fields).flatMap(([field, value]) => {
+		if (Array.isArray(value)) {
+			return value.map(message => ({
+				field,
+				message: stringifyFieldMessage(message),
+			}))
+		}
+		return [{
+			field,
+			message: stringifyFieldMessage(value),
+		}]
+	}).filter(entry => entry.message || entry.field)
+}
+
 /**
- * Normalise a backend or network error into a single user-visible string.
+ * Normalise a backend or network error into a user-visible string plus
+ * machine-readable metadata for validation UIs.
  *
  * Backend controllers return:
- *   { success: false, error: { code, message, details: { detail, ... } } }
- * We prefer the structured message, fall back to the detail field, then to
- * the Axios / native error message.
+ *   { success: false, error: { code, message, details: { detail, fields, ... } } }
  */
+function normaliseErrorDetails(e) {
+	const data = e.response?.data
+	const backendError = data?.error
+	const details = backendError?.details && typeof backendError.details === 'object'
+		? backendError.details
+		: {}
+	let message = ''
+	if (details.detail) {
+		message = String(details.detail)
+	} else if (backendError?.message) {
+		message = String(backendError.message)
+	} else if (backendError) {
+		message = String(backendError)
+	} else if (data?.detail) {
+		message = String(data.detail)
+	} else {
+		message = e.message || String(e)
+	}
+
+	return {
+		message,
+		code: backendError?.code ?? null,
+		details,
+		fields: normaliseFieldErrors(details.fields),
+	}
+}
+
 function normaliseError(e) {
-	if (e.response?.data?.error?.details?.detail) {
-		return e.response.data.error.details.detail
-	}
-	if (e.response?.data?.error?.message) {
-		return e.response.data.error.message
-	}
-	if (e.response?.data?.error) {
-		return String(e.response.data.error)
-	}
-	if (e.response?.data?.detail) {
-		return e.response.data.detail
-	}
-	return e.message || String(e)
+	return normaliseErrorDetails(e).message
 }
 
 export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 	state: () => ({
-		adminSettings: { loading: false, error: null, data: {} },
+		adminSettings: { loading: false, error: null, errorDetails: null, data: {} },
 		capabilities: { loading: false, error: null, data: {} },
 		dryRun: { loading: false, error: null, results: [] },
 		reconcile: { loading: false, error: null, status: {} },
@@ -58,11 +120,15 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 		async fetchAdminSettings() {
 			this.adminSettings.loading = true
 			this.adminSettings.error = null
+			this.adminSettings.errorDetails = null
 			try {
 				const response = await getAdminSettings()
 				this.adminSettings.data = response.data?.config ?? {}
+				this.adminSettings.errorDetails = null
 			} catch (e) {
-				this.adminSettings.error = normaliseError(e)
+				const errorDetails = normaliseErrorDetails(e)
+				this.adminSettings.error = errorDetails.message
+				this.adminSettings.errorDetails = errorDetails
 			} finally {
 				this.adminSettings.loading = false
 			}
@@ -77,6 +143,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 		async saveAdminSettings(config) {
 			this.adminSettings.loading = true
 			this.adminSettings.error = null
+			this.adminSettings.errorDetails = null
 			try {
 				const payload = { ...config }
 				for (const key of Object.keys(payload)) {
@@ -86,9 +153,12 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 				}
 				const response = await setAdminSettings(payload)
 				this.adminSettings.data = response.data?.config ?? {}
+				this.adminSettings.errorDetails = null
 				return response.data
 			} catch (e) {
-				this.adminSettings.error = normaliseError(e)
+				const errorDetails = normaliseErrorDetails(e)
+				this.adminSettings.error = errorDetails.message
+				this.adminSettings.errorDetails = errorDetails
 				throw e
 			} finally {
 				this.adminSettings.loading = false
@@ -98,6 +168,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 		async testConnection(serverUrl, apiKey) {
 			this.adminSettings.loading = true
 			this.adminSettings.error = null
+			this.adminSettings.errorDetails = null
 			try {
 				const payload = {}
 				if (serverUrl) payload.immich_base_url = serverUrl
@@ -106,9 +177,14 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 				return response.data
 			} catch (e) {
 				const data = e.response?.data
-				const errMsg = normaliseError(e)
+				const errorDetails = normaliseErrorDetails(e)
+				const errMsg = errorDetails.message
 				this.adminSettings.error = errMsg
+				this.adminSettings.errorDetails = errorDetails
 				throw Object.assign(new Error(errMsg), {
+					code: errorDetails.code,
+					details: errorDetails.details,
+					fields: errorDetails.fields,
 					responseData: data,
 					localAccessBlocked: data?.error?.details?.local_access_blocked === true,
 					validationDetails: data?.error?.details?.validation,
