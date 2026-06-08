@@ -21,6 +21,18 @@ const KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES = Object.freeze([
 	'invalid_boolean',
 ])
 
+const VALID_INITIAL_PASSWORD_POLICIES = Object.freeze(['random', 'sso_oidc'])
+const REDACTED_MARKERS = Object.freeze(['[redacted]'])
+
+class AdminConfigPayloadValidationError extends Error {
+	constructor(fieldError) {
+		super(fieldError.message || 'Admin configuration is invalid.')
+		this.name = 'AdminConfigPayloadValidationError'
+		this.code = 'admin_config_invalid'
+		this.fields = [fieldError]
+	}
+}
+
 function clonePlainValue(value) {
 	if (Array.isArray(value)) {
 		return value.map(clonePlainValue)
@@ -56,6 +68,32 @@ function hasNonBlankValue(value) {
 	return value !== null && value !== undefined && String(value).trim() !== ''
 }
 
+function normalizeInitialPasswordPolicy(value) {
+	if (value === null || value === undefined || String(value).trim() === '') {
+		return 'random'
+	}
+
+	const policy = String(value)
+	if (VALID_INITIAL_PASSWORD_POLICIES.includes(policy)) {
+		return policy
+	}
+
+	throw new AdminConfigPayloadValidationError({
+		field: 'initial_password_policy',
+		code: 'invalid_enum',
+		message: 'Initial password policy must be random or sso_oidc.',
+		params: {
+			allowed: VALID_INITIAL_PASSWORD_POLICIES.slice(),
+			redacted: REDACTED_MARKERS.includes(policy),
+		},
+	})
+}
+
+function isAdminConfigPayloadValidationError(error) {
+	return error instanceof AdminConfigPayloadValidationError
+		|| error?.name === 'AdminConfigPayloadValidationError'
+}
+
 function buildAdminConfigPayload(formState, options = {}) {
 	const payload = clonePlainValue(formState || {})
 
@@ -67,6 +105,8 @@ function buildAdminConfigPayload(formState, options = {}) {
 	if (!hasNonBlankValue(payload.admin_api_key)) {
 		delete payload.admin_api_key
 	}
+
+	payload.initial_password_policy = normalizeInitialPasswordPolicy(payload.initial_password_policy)
 
 	if (payload.provisioning_enabled !== true) {
 		payload.provisioning_enabled = false
@@ -97,8 +137,12 @@ function normalizeAdminConfigErrorCode(code, message = '') {
 
 module.exports = {
 	ADMIN_CONFIG_ERROR_CODE_ALIASES,
+	AdminConfigPayloadValidationError,
 	KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES,
 	LEGACY_ADMIN_CONFIG_ERROR_MESSAGES,
+	REDACTED_MARKERS,
+	VALID_INITIAL_PASSWORD_POLICIES,
 	buildAdminConfigPayload,
+	isAdminConfigPayloadValidationError,
 	normalizeAdminConfigErrorCode,
 }

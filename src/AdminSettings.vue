@@ -108,9 +108,8 @@
 			:description="t('deep_integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
 			<div class="immich-settings-form">
 				<div class="field" data-testid="provisioning-enabled">
-					<NcCheckboxRadioSwitch :checked="form.provisioning_enabled"
-						data-testid="provisioning-enabled-toggle"
-						@update:checked="form.provisioning_enabled = $event">
+					<NcCheckboxRadioSwitch v-model="form.provisioning_enabled"
+						data-testid="provisioning-enabled-toggle">
 						{{ t('deep_integration_immich', 'Enable user provisioning') }}
 					</NcCheckboxRadioSwitch>
 				</div>
@@ -118,20 +117,18 @@
 				<div class="field">
 					<label class="field-label">{{ t('deep_integration_immich', 'User scope') }}</label>
 					<div class="radio-group" data-testid="provisioning-scope-filter">
-						<NcCheckboxRadioSwitch :checked="form.user_scope_mode"
+						<NcCheckboxRadioSwitch v-model="form.user_scope_mode"
 							name="user_scope_mode"
 							value="all"
 							data-testid="provisioning-scope"
-							type="radio"
-							@update:checked="form.user_scope_mode = 'all'">
+							type="radio">
 							{{ t('deep_integration_immich', 'All Nextcloud users') }}
 						</NcCheckboxRadioSwitch>
-						<NcCheckboxRadioSwitch :checked="form.user_scope_mode"
+						<NcCheckboxRadioSwitch v-model="form.user_scope_mode"
 							name="user_scope_mode"
 							value="groups"
 							type="radio"
-							data-testid="provisioning-scope-groups"
-							@update:checked="form.user_scope_mode = 'groups'">
+							data-testid="provisioning-scope-groups">
 							{{ t('deep_integration_immich', 'Only users in selected groups') }}
 						</NcCheckboxRadioSwitch>
 					</div>
@@ -182,23 +179,26 @@
 				<div class="field" data-testid="password-policy-selector">
 					<label class="field-label">{{ t('deep_integration_immich', 'Initial password policy') }}</label>
 					<div class="radio-group">
-						<NcCheckboxRadioSwitch :checked="form.initial_password_policy"
+						<NcCheckboxRadioSwitch v-model="form.initial_password_policy"
 							name="initial_password_policy"
 							value="random"
 							type="radio"
-							data-testid="password-policy-random"
-							@update:checked="form.initial_password_policy = 'random'">
+							data-testid="password-policy-random">
 							{{ t('deep_integration_immich', 'Random generated password') }}
 						</NcCheckboxRadioSwitch>
-						<NcCheckboxRadioSwitch :checked="form.initial_password_policy"
+						<NcCheckboxRadioSwitch v-model="form.initial_password_policy"
 							name="initial_password_policy"
 							value="sso_oidc"
 							type="radio"
-							data-testid="password-policy-sso-oidc"
-							@update:checked="form.initial_password_policy = 'sso_oidc'">
+							data-testid="password-policy-sso-oidc">
 							{{ t('deep_integration_immich', 'SSO/OIDC mode') }}
 						</NcCheckboxRadioSwitch>
 					</div>
+					<p v-if="fieldErrorMessage('initial_password_policy')"
+						class="validation-error-inline"
+						data-testid="initial-password-policy-field-error">
+						{{ fieldErrorMessage('initial_password_policy') }}
+					</p>
 					<p class="hint">
 						{{ t('deep_integration_immich', 'Random mode creates an initial Immich password that is not shown after user creation. Use SSO/OIDC mode only when Immich and Nextcloud share authentication.') }}
 					</p>
@@ -251,9 +251,8 @@
 			:description="t('deep_integration_immich', 'Control directory creation and external storage mount provisioning')">
 			<div class="immich-settings-form">
 				<div class="field">
-					<NcCheckboxRadioSwitch :checked="form.mkdir_policy_enabled"
-						data-testid="mkdir-policy"
-						@update:checked="form.mkdir_policy_enabled = $event">
+					<NcCheckboxRadioSwitch v-model="form.mkdir_policy_enabled"
+						data-testid="mkdir-policy">
 						{{ t('deep_integration_immich', 'Allow creating empty per-user directories') }}
 					</NcCheckboxRadioSwitch>
 					<p class="hint">
@@ -262,9 +261,8 @@
 				</div>
 
 				<div class="field">
-					<NcCheckboxRadioSwitch :checked="form.external_storage_auto_create"
-						data-testid="auto-create-external-storage"
-						@update:checked="form.external_storage_auto_create = $event">
+					<NcCheckboxRadioSwitch v-model="form.external_storage_auto_create"
+						data-testid="auto-create-external-storage">
 						{{ t('deep_integration_immich', 'Auto-create external storage mounts') }}
 					</NcCheckboxRadioSwitch>
 					<p class="hint">
@@ -287,28 +285,25 @@
 				<div class="field">
 					<label class="field-label">{{ t('deep_integration_immich', 'Quota sync mode') }}</label>
 					<div class="radio-group" data-testid="quota-mode-selector">
-						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
+						<NcCheckboxRadioSwitch v-model="form.quota_sync_mode"
 							name="quota_sync_mode"
 							value="disabled"
 							type="radio"
-							data-testid="quota-sync-mode"
-							@update:checked="form.quota_sync_mode = 'disabled'">
+							data-testid="quota-sync-mode">
 							{{ t('deep_integration_immich', 'Disabled') }}
 						</NcCheckboxRadioSwitch>
-						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
+						<NcCheckboxRadioSwitch v-model="form.quota_sync_mode"
 							name="quota_sync_mode"
 							value="manual"
 							type="radio"
-							data-testid="quota-sync-mode-manual"
-							@update:checked="form.quota_sync_mode = 'manual'">
+							data-testid="quota-sync-mode-manual">
 							{{ t('deep_integration_immich', 'Manual only') }}
 						</NcCheckboxRadioSwitch>
-						<NcCheckboxRadioSwitch :checked="form.quota_sync_mode"
+						<NcCheckboxRadioSwitch v-model="form.quota_sync_mode"
 							name="quota_sync_mode"
 							value="event_scheduled"
 							type="radio"
-							data-testid="quota-sync-mode-event-scheduled"
-							@update:checked="form.quota_sync_mode = 'event_scheduled'">
+							data-testid="quota-sync-mode-event-scheduled">
 							{{ t('deep_integration_immich', 'Event + scheduled job') }}
 						</NcCheckboxRadioSwitch>
 					</div>
@@ -349,20 +344,18 @@
 				<div class="field">
 					<label class="field-label">{{ t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled') }}</label>
 					<div class="radio-group" data-testid="delete-disable-policy-selector">
-						<NcCheckboxRadioSwitch :checked="form.delete_disable_policy"
+						<NcCheckboxRadioSwitch v-model="form.delete_disable_policy"
 							name="delete_disable_policy"
 							value="disable_suspend"
 							type="radio"
-							data-testid="delete-disable-policy"
-							@update:checked="onDeletePolicyChange('disable_suspend')">
+							data-testid="delete-disable-policy">
 							{{ t('deep_integration_immich', 'Disable / suspend Immich user (recommended)') }}
 						</NcCheckboxRadioSwitch>
-						<NcCheckboxRadioSwitch :checked="form.delete_disable_policy"
+						<NcCheckboxRadioSwitch v-model="form.delete_disable_policy"
 							name="delete_disable_policy"
 							value="delete_opt_in"
 							type="radio"
-							data-testid="delete-disable-policy-delete"
-							@update:checked="onDeletePolicyChange('delete_opt_in')">
+							data-testid="delete-disable-policy-delete">
 							{{ t('deep_integration_immich', 'Delete Immich user and assets (destructive)') }}
 						</NcCheckboxRadioSwitch>
 					</div>
@@ -375,9 +368,8 @@
 				</NcNoteCard>
 
 				<div v-if="form.delete_disable_policy === 'delete_opt_in'" class="field">
-					<NcCheckboxRadioSwitch :checked="deleteOptInConfirmed"
-						data-testid="delete-opt-in-confirm"
-						@update:checked="deleteOptInConfirmed = $event">
+					<NcCheckboxRadioSwitch v-model="deleteOptInConfirmed"
+						data-testid="delete-opt-in-confirm">
 						{{ t('deep_integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted') }}
 					</NcCheckboxRadioSwitch>
 				</div>
@@ -661,7 +653,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import {
@@ -679,6 +671,7 @@ import { useAdminProvisioningStore } from './store/adminProvisioning.js'
 
 const {
 	buildAdminConfigPayload,
+	isAdminConfigPayloadValidationError,
 	normalizeAdminConfigErrorCode,
 } = adminSettingsPayloadHelpers
 
@@ -857,7 +850,9 @@ async function saveSettings() {
 		connectionMessageType.value = 'success'
 		saveFieldErrors.value = []
 	} catch (e) {
-		const errorDetails = store.adminSettings.errorDetails
+		const errorDetails = isAdminConfigPayloadValidationError(e)
+			? { code: e.code, fields: e.fields }
+			: store.adminSettings.errorDetails
 		saveFieldErrors.value = (errorDetails?.fields ?? []).map(formatSaveFieldError)
 		connectionMessage.value = localizeAdminConfigError(errorDetails, t('deep_integration_immich', 'Error saving settings'))
 		connectionMessageType.value = 'error'
@@ -897,12 +892,11 @@ async function testConnection() {
 }
 
 // ── Delete policy ─────────────────────────────────────────────────────
-function onDeletePolicyChange(value) {
-	form.delete_disable_policy = value
+watch(() => form.delete_disable_policy, (value) => {
 	if (value === 'disable_suspend') {
 		deleteOptInConfirmed.value = false
 	}
-}
+})
 
 // ── Group selector ────────────────────────────────────────────────────
 function onGroupCreated(newGroup) {
