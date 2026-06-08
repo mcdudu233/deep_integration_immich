@@ -16,8 +16,10 @@
         "verify:backend": "npm run verify:php-syntax && npm run verify:phpunit",
         "verify:php-syntax": "node scripts/verify-php-syntax.mjs",
         "verify:phpunit": "vendor/bin/phpunit -c tests/phpunit.xml",
-        "verify:safety": "npm run verify:safety:scan && npm run verify:safety:phpunit",
+        "verify:safety": "npm run verify:safety:scan && npm run verify:admin-settings-payload && npm run verify:localization && npm run verify:safety:phpunit",
         "verify:safety:scan": "node scripts/verify-safety-scan.mjs",
+        "verify:admin-settings-payload": "node scripts/verify-admin-settings-payload.mjs",
+        "verify:localization": "node scripts/verify-localization-guardrail.mjs",
         "verify:safety:phpunit": "vendor/bin/phpunit -c tests/phpunit.xml --filter SafetyGuardrailTest"
     },
     "dependencies": {

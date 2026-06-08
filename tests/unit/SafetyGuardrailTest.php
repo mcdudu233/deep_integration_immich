@@ -92,6 +92,91 @@ class SafetyGuardrailTest extends TestCase {
         );
     }
 
+    public function testAdminConfigValidationAndPayloadGuardrailsStayWired(): void {
+        $package = json_decode(
+            self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'package.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        $verifySafetyScript = (string)($package['scripts']['verify:safety'] ?? '');
+
+        $this->assertStringContainsString('verify:admin-settings-payload', $verifySafetyScript);
+        $this->assertStringContainsString('verify:localization', $verifySafetyScript);
+        $this->assertSame('node scripts/verify-admin-settings-payload.mjs', $package['scripts']['verify:admin-settings-payload'] ?? null);
+        $this->assertSame('node scripts/verify-localization-guardrail.mjs', $package['scripts']['verify:localization'] ?? null);
+
+        $payloadScript = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'verify-admin-settings-payload.mjs');
+        $this->assertStringContainsString('disabledProvisioningForcesStorageBooleansFalse', $payloadScript);
+        $this->assertStringContainsString('blankAdminApiKeyOmitted', $payloadScript);
+        $this->assertStringContainsString('pathTemplatesPreserved', $payloadScript);
+        $this->assertStringContainsString('nonBlankAdminApiKeyPreserved', $payloadScript);
+
+        $adminConfigSource = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'AdminConfigService.php');
+        $this->assertStringContainsString('$effectiveValues = $this->normaliseEffectivePathFeatureFlags($values);', $adminConfigSource);
+        $this->assertStringContainsString('$pathTemplatesRequired = $this->pathTemplatesRequired($effectiveValues);', $adminConfigSource);
+        $this->assertStringContainsString('#(^|[\\\\/])\\.\\.([\\\\/]|$)#', $adminConfigSource);
+        $this->assertStringContainsString("public const VALIDATION_INVALID_PATH_TEMPLATE = 'invalid_path_template';", $adminConfigSource);
+
+        $adminConfigTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'AdminConfigServiceTest.php');
+        $this->assertStringContainsString('testDisabledProvisioningIgnoresStalePathFeatureFlagsForBlankTemplates', $adminConfigTest);
+        $this->assertStringContainsString('testTemplateValidationRejectsTraversalAndUnsupportedPlaceholders', $adminConfigTest);
+        $this->assertStringContainsString('C:\\\\immich\\\\..\\\\library\\\\{storageLabel}', $adminConfigTest);
+    }
+
+    public function testStructuredErrorCodesAndSecretRedactionGuardrailsStayCovered(): void {
+        $adminSettingsController = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Controller' . DIRECTORY_SEPARATOR . 'AdminSettingsController.php');
+        foreach (['admin_config_invalid', 'admin_config_save_failed', 'connection_validation_failed'] as $code) {
+            $this->assertStringContainsString($code, $adminSettingsController);
+        }
+        $this->assertStringContainsString('fieldDetails', $adminSettingsController);
+        $this->assertStringContainsString('private function redact(mixed $value): mixed', $adminSettingsController);
+        $this->assertStringContainsString('private function isSecretKey(string $key): bool', $adminSettingsController);
+
+        $frontendInitialStateService = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'FrontendInitialStateService.php');
+        $this->assertStringContainsString('private function redactString(string $value): string', $frontendInitialStateService);
+        $this->assertStringContainsString('[?&](?:api[_-]?key|token|password|secret|authorization)=', $frontendInitialStateService);
+        $this->assertStringContainsString('"(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*"', $frontendInitialStateService);
+        $this->assertStringContainsString('\b(authorization)(\s*[=:]\s*)bearer\s+', $frontendInitialStateService);
+        $this->assertStringContainsString('\bbearer\s+', $frontendInitialStateService);
+        $this->assertStringContainsString('(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)', $frontendInitialStateService);
+
+        $adminSettingsControllerTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Controller' . DIRECTORY_SEPARATOR . 'AdminSettingsControllerTest.php');
+        $this->assertStringContainsString('testSetConfigReturnsStructuredValidationError', $adminSettingsControllerTest);
+        $this->assertStringContainsString('testSetConfigPersistenceFailureUsesSaveFailedCodeAndRedacts', $adminSettingsControllerTest);
+        $this->assertStringContainsString('testValidateConnectionFailureIsStructuredAndRedacted', $adminSettingsControllerTest);
+        $this->assertStringContainsString("assertStringNotContainsString('test-api-key-redacted'", $adminSettingsControllerTest);
+        $this->assertStringContainsString("assertStringNotContainsString('test-bearer-redacted'", $adminSettingsControllerTest);
+
+        $adminStateTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Settings' . DIRECTORY_SEPARATOR . 'AdminSettingsStateTest.php');
+        $pageStateTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Controller' . DIRECTORY_SEPARATOR . 'PageControllerStateTest.php');
+        $this->assertStringContainsString("assertStringNotContainsString('secret-admin-key'", $adminStateTest);
+        $this->assertStringContainsString("assertStringNotContainsString('test-bearer-redacted'", $adminStateTest);
+        $this->assertStringContainsString("assertStringNotContainsString('json-admin-key-redacted'", $adminStateTest);
+        $this->assertStringContainsString('Authorization: [redacted]', $adminStateTest);
+        $this->assertStringContainsString('Bearer [redacted]', $adminStateTest);
+        $this->assertStringContainsString("assertStringNotContainsString('secret-admin-key'", $pageStateTest);
+    }
+
+    public function testLocalizationGuardrailIsWiredToAuditAndRawExamples(): void {
+        $localizationScript = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'verify-localization-guardrail.mjs');
+        $this->assertStringContainsString('task-4-i18n-audit.md', $localizationScript);
+        $this->assertStringContainsString('knownRawEnglishExamples', $localizationScript);
+        foreach ([
+            'Invalid admin configuration.',
+            'Failed to save admin configuration.',
+            'Connection validation failed.',
+            'Immich mapping status is temporarily unavailable.',
+            'No active Nextcloud user context is available for Immich provisioning.',
+            'No Immich mapping exists for this Nextcloud user yet. Ask an administrator to run Immich provisioning.',
+            'Quota details are unavailable. Run quota sync from the admin settings for authoritative status.',
+            'Quota has not been synced yet; values may be stale until the next quota sync job runs.',
+            'Immich browsing is not configured for this account',
+        ] as $rawExample) {
+            $this->assertStringContainsString($rawExample, $localizationScript);
+        }
+    }
+
     public function testScannerCatchesForbiddenPatternInInlineControl(): void {
         $content = <<<'PHP'
 <?php

@@ -24,6 +24,9 @@ use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 class PeopleController extends Controller {
+    private const CODE_BROWSING_SETUP_NOT_CONFIGURED = 'browsing_setup_not_configured';
+    private const CODE_BROWSING_SETUP_PERSONAL_OR_ADMIN_PROXY = 'browsing_setup_personal_or_admin_proxy';
+
     public function __construct(
         IRequest $request,
         private IClientService $clientService,
@@ -134,13 +137,26 @@ class PeopleController extends Controller {
 
         $credentials = $this->browsingAuthService->resolveCredentials($this->userId);
         if (($credentials['mode'] ?? '') === BrowsingAuthService::MODE_UNAVAILABLE) {
-            return new JSONResponse([
-                'error' => 'Immich browsing is not configured for this account',
-                'setup' => 'Configure a personal Immich server URL and API key in personal settings, or ask an administrator to enable admin proxy browsing and provision your Immich user mapping.',
-            ], Http::STATUS_PRECONDITION_FAILED);
+            return $this->browsingSetupNotConfiguredResponse();
         }
 
         return $credentials;
+    }
+
+    private function browsingSetupNotConfiguredResponse(): JSONResponse {
+        return new JSONResponse([
+            'error' => 'Immich browsing is not configured for this account',
+            'code' => self::CODE_BROWSING_SETUP_NOT_CONFIGURED,
+            'errorCode' => self::CODE_BROWSING_SETUP_NOT_CONFIGURED,
+            'setup' => 'Configure a personal Immich server URL and API key in personal settings, or ask an administrator to enable admin proxy browsing and provision your Immich user mapping.',
+            'setupCode' => self::CODE_BROWSING_SETUP_PERSONAL_OR_ADMIN_PROXY,
+            'setupParams' => [],
+            'details' => [
+                'code' => self::CODE_BROWSING_SETUP_NOT_CONFIGURED,
+                'setupCode' => self::CODE_BROWSING_SETUP_PERSONAL_OR_ADMIN_PROXY,
+                'params' => [],
+            ],
+        ], Http::STATUS_PRECONDITION_FAILED);
     }
 
     /**

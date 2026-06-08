@@ -90,6 +90,7 @@ class PageControllerStateTest extends TestCase {
         $this->assertTrue($data['actions']['exportCopyEnabled']);
         $this->assertTrue($data['actions']['immichDeleteEnabled']);
         $this->assertSame(['/Immich Photos'], $data['actionCapabilities']['mirrorMountPaths']);
+        $this->assertSame([], $data['warningDetails']);
         $this->assertStringNotContainsString('secret-admin-key', json_encode($data, JSON_THROW_ON_ERROR));
     }
 
@@ -104,9 +105,13 @@ class PageControllerStateTest extends TestCase {
 
         $this->assertSame('missing', $data['mapping']['status']);
         $this->assertStringContainsString('run Immich provisioning', $data['mapping']['message']);
+        $this->assertSame('no_immich_mapping', $data['mapping']['messageCode']);
+        $this->assertSame([], $data['mapping']['messageParams']);
         $this->assertSame('unavailable', $data['mount']['status']);
         $this->assertSame('unavailable', $data['quota']['status']);
         $this->assertSame('Quota sync needs an Immich user mapping before quota details are available.', $data['quota']['warning']);
+        $this->assertSame('quota_needs_mapping', $data['quota']['warningCode']);
+        $this->assertSame([], $data['quota']['warningParams']);
         $this->assertArrayHasKey('actionCapabilities', $data);
         $this->assertFalse($data['actions']['exportCopyEnabled']);
         $this->assertStringNotContainsString('secret-admin-key', json_encode($data, JSON_THROW_ON_ERROR));

@@ -72,12 +72,12 @@ class ConfigControllerTest extends TestCase {
 	public function testSetConfigSavesUrlAndKey(): void {
 		$this->request->method('getParam')->willReturnMap([
 			['server_url', null, 'https://photos.example.com'],
-			['api_key', null, 'my-api-key'],
+			['api_key', null, 'test-api-key-redacted'],
 			['validate', false, false],
 		]);
 
 		$this->immichService->expects($this->once())->method('setServerUrl')->with('https://photos.example.com');
-		$this->immichService->expects($this->once())->method('setApiKey')->with('my-api-key');
+		$this->immichService->expects($this->once())->method('setApiKey')->with('test-api-key-redacted');
 
 		$response = $this->controller->setConfig();
 
@@ -105,12 +105,19 @@ class ConfigControllerTest extends TestCase {
 			['validate', false, true],
 		]);
 
-		$this->immichService->method('validateConnection')->willReturn(['success' => true, 'data' => []]);
+		$this->immichService->method('validateConnection')->willReturn([
+			'success' => true,
+			'data' => ['token' => 'raw-token-redacted'],
+		]);
 
 		$response = $this->controller->setConfig();
+		$data = $response->getData();
+		$encoded = json_encode($data, JSON_THROW_ON_ERROR);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertTrue($response->getData()['success']);
+		$this->assertTrue($data['success']);
+		$this->assertSame('[redacted]', $data['validation']['data']['token']);
+		$this->assertStringNotContainsString('raw-token-redacted', $encoded);
 	}
 
 	public function testSetConfigWithValidationFailed(): void {
@@ -120,11 +127,22 @@ class ConfigControllerTest extends TestCase {
 			['validate', false, true],
 		]);
 
-		$this->immichService->method('validateConnection')->willReturn(['success' => false, 'error' => 'Connection refused']);
+		$this->immichService->method('validateConnection')->willReturn([
+			'success' => false,
+			'error' => 'Connection refused with api_key=test-api-key-redacted',
+		]);
 
 		$response = $this->controller->setConfig();
+		$data = $response->getData();
+		$encoded = json_encode($data, JSON_THROW_ON_ERROR);
 
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-		$this->assertArrayHasKey('error', $response->getData());
+		$this->assertFalse($data['success']);
+		$this->assertSame('connection_validation_failed', $data['error']['code']);
+		$this->assertSame('Connection validation failed.', $data['error']['message']);
+		$this->assertSame('Connection refused with api_key=[redacted]', $data['error']['details']['detail']);
+		$this->assertSame('Connection refused with api_key=[redacted]', $data['detail']);
+		$this->assertStringNotContainsString('test-api-key-redacted', $encoded);
 	}
+
 }

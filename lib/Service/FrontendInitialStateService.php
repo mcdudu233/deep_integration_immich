@@ -13,6 +13,19 @@ use DateTimeInterface;
 use OCA\IntegrationImmich\Db\SyncState;
 
 class FrontendInitialStateService {
+    private const CODE_MAPPING_STATUS_UNAVAILABLE = 'mapping_status_unavailable';
+    private const CODE_NO_ACTIVE_NC_USER = 'no_active_nc_user';
+    private const CODE_NO_IMMICH_MAPPING = 'no_immich_mapping';
+    private const CODE_MOUNT_HEALTH_UNAVAILABLE = 'mount_health_unavailable';
+    private const CODE_MOUNT_HEALTH_STATUS = 'mount_health_status';
+    private const CODE_QUOTA_NEEDS_MAPPING = 'quota_needs_mapping';
+    private const CODE_QUOTA_UNAVAILABLE = 'quota_unavailable';
+    private const CODE_QUOTA_UNLIMITED = 'quota_unlimited';
+    private const CODE_QUOTA_STALE = 'quota_stale';
+    private const CODE_ACTION_CAPABILITIES_UNAVAILABLE = 'action_capabilities_unavailable';
+    private const CODE_SYNC_STATE_LIST_UNAVAILABLE = 'sync_state_list_unavailable';
+    private const CODE_CAPABILITY_DETECTION_UNAVAILABLE = 'capability_detection_unavailable';
+
     public function __construct(
         private AdminConfigService $adminConfigService,
         private SyncStateService $syncStateService,
@@ -42,7 +55,8 @@ class FrontendInitialStateService {
             'quota' => $this->quotaState($ncUid, $syncState, $config, $warnings),
             'actions' => $this->actionsFromCapabilities($actionCapabilities),
             'actionCapabilities' => $actionCapabilities,
-            'warnings' => array_values(array_unique($warnings)),
+            'warnings' => $this->warningMessages($warnings),
+            'warningDetails' => $this->warningDetails($warnings),
         ];
     }
 
@@ -55,7 +69,8 @@ class FrontendInitialStateService {
             'status' => $this->adminStatus($config),
             'syncStates' => $this->adminSyncStates($warnings),
             'capabilities' => $this->adminCapabilities($warnings),
-            'warnings' => array_values(array_unique($warnings)),
+            'warnings' => $this->warningMessages($warnings),
+            'warningDetails' => $this->warningDetails($warnings),
             // Legacy keys consumed by the current Vue settings form until T19-T21 switch to settings.*.
             'server_url' => (string)($config[AdminConfigService::KEY_IMMICH_BASE_URL] ?? ''),
             'api_key_set' => (bool)($config['admin_api_key_configured'] ?? false),
@@ -70,23 +85,29 @@ class FrontendInitialStateService {
         try {
             return $this->syncStateService->findByUid($ncUid);
         } catch (\Throwable) {
-            $warnings[] = 'Immich mapping status is temporarily unavailable.';
+            $this->addWarning($warnings, self::CODE_MAPPING_STATUS_UNAVAILABLE);
             return null;
         }
     }
 
     private function mappingState(?string $ncUid, ?SyncState $syncState): array {
         if ($ncUid === null || trim($ncUid) === '') {
+            $messageCode = self::CODE_NO_ACTIVE_NC_USER;
             return [
                 'status' => 'missing',
-                'message' => 'No active Nextcloud user context is available for Immich provisioning.',
+                'message' => $this->messageForCode($messageCode),
+                'messageCode' => $messageCode,
+                'messageParams' => [],
             ];
         }
 
         if ($syncState === null) {
+            $messageCode = self::CODE_NO_IMMICH_MAPPING;
             return [
                 'status' => 'missing',
-                'message' => 'No Immich mapping exists for this Nextcloud user yet. Ask an administrator to run Immich provisioning.',
+                'message' => $this->messageForCode($messageCode),
+                'messageCode' => $messageCode,
+                'messageParams' => [],
             ];
         }
 
@@ -120,6 +141,9 @@ class FrontendInitialStateService {
             'mountId' => null,
             'path' => null,
             'readOnly' => null,
+            'warning' => null,
+            'warningCode' => null,
+            'warningParams' => [],
         ];
 
         if ($ncUid === null || trim($ncUid) === '' || $syncState === null) {
@@ -129,7 +153,8 @@ class FrontendInitialStateService {
         try {
             $health = $this->externalStorageProvisioner->verifyMount($ncUid);
         } catch (\Throwable) {
-            $warnings[] = 'Immich mirror mount health is temporarily unavailable.';
+            $this->setWarningFields($summary, self::CODE_MOUNT_HEALTH_UNAVAILABLE);
+            $this->addWarning($warnings, self::CODE_MOUNT_HEALTH_UNAVAILABLE);
             return $summary;
         }
 
@@ -145,7 +170,8 @@ class FrontendInitialStateService {
         }
 
         if ($summary['status'] !== 'ok') {
-            $warnings[] = 'Immich mirror mount health is ' . $summary['status'] . '.';
+            $this->setWarningFields($summary, self::CODE_MOUNT_HEALTH_STATUS, ['status' => $summary['status']]);
+            $this->addWarning($warnings, self::CODE_MOUNT_HEALTH_STATUS, ['status' => $summary['status']]);
         }
 
         return $summary;
@@ -163,6 +189,8 @@ class FrontendInitialStateService {
             'reserve' => $this->reserveBytes($config),
             'stale' => true,
             'warning' => null,
+            'warningCode' => null,
+            'warningParams' => [],
             'lastSyncAt' => null,
         ];
 
@@ -177,7 +205,7 @@ class FrontendInitialStateService {
         }
 
         if ($ncUid === null || trim($ncUid) === '' || $syncState === null || trim((string)$syncState->getImmichUserId()) === '') {
-            $summary['warning'] = 'Quota sync needs an Immich user mapping before quota details are available.';
+            $this->setWarningFields($summary, self::CODE_QUOTA_NEEDS_MAPPING);
             return $summary;
         }
 
@@ -190,19 +218,19 @@ class FrontendInitialStateService {
 
         if ($this->quotaSyncService->getLastError() !== null) {
             $summary['status'] = 'failed';
-            $summary['warning'] = 'Quota details are unavailable. Run quota sync from the admin settings for authoritative status.';
-            $warnings[] = $summary['warning'];
+            $this->setWarningFields($summary, self::CODE_QUOTA_UNAVAILABLE);
+            $this->addWarning($warnings, self::CODE_QUOTA_UNAVAILABLE);
             return $summary;
         }
 
         if ($computedQuota === null && $this->quotaSyncService->wasLastQuotaUnlimited()) {
             $summary['status'] = 'unlimited';
-            $summary['warning'] = 'Nextcloud quota is unlimited; Immich quota sync will leave the Immich quota unlimited.';
+            $this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
             return $summary;
         }
 
         if ($summary['stale'] === true) {
-            $summary['warning'] = 'Quota has not been synced yet; values may be stale until the next quota sync job runs.';
+            $this->setWarningFields($summary, self::CODE_QUOTA_STALE);
         }
 
         return $summary;
@@ -212,7 +240,7 @@ class FrontendInitialStateService {
         try {
             $flags = $this->actionPolicyService->getCapabilityFlags($ncUid);
         } catch (\Throwable) {
-            $warnings[] = 'Immich action capabilities are temporarily unavailable.';
+            $this->addWarning($warnings, self::CODE_ACTION_CAPABILITIES_UNAVAILABLE);
             $flags = [];
         }
 
@@ -260,7 +288,7 @@ class FrontendInitialStateService {
         try {
             $states = $this->syncStateService->listStates(100, 0);
         } catch (\Throwable) {
-            $warnings[] = 'Immich sync-state list is temporarily unavailable.';
+            $this->addWarning($warnings, self::CODE_SYNC_STATE_LIST_UNAVAILABLE);
             return [];
         }
 
@@ -282,9 +310,73 @@ class FrontendInitialStateService {
         try {
             return $this->redact($this->capabilityService->getCapabilities());
         } catch (\Throwable) {
-            $warnings[] = 'Immich capability detection is temporarily unavailable.';
+            $this->addWarning($warnings, self::CODE_CAPABILITY_DETECTION_UNAVAILABLE);
             return [];
         }
+    }
+
+    private function addWarning(array &$warnings, string $code, array $params = []): void {
+        $safeParams = $this->safeParams($params);
+        $warnings[] = [
+            'code' => $code,
+            'message' => $this->messageForCode($code, $safeParams),
+            'params' => $safeParams,
+        ];
+    }
+
+    private function setWarningFields(array &$target, string $code, array $params = []): void {
+        $safeParams = $this->safeParams($params);
+        $target['warning'] = $this->messageForCode($code, $safeParams);
+        $target['warningCode'] = $code;
+        $target['warningParams'] = $safeParams;
+    }
+
+    private function warningMessages(array $warnings): array {
+        $messages = [];
+        foreach ($warnings as $warning) {
+            if (!is_array($warning) || !is_string($warning['message'] ?? null)) {
+                continue;
+            }
+            $messages[] = $warning['message'];
+        }
+
+        return array_values(array_unique($messages));
+    }
+
+    private function warningDetails(array $warnings): array {
+        $details = [];
+        foreach ($warnings as $warning) {
+            if (!is_array($warning) || !is_string($warning['code'] ?? null)) {
+                continue;
+            }
+            $params = is_array($warning['params'] ?? null) ? $warning['params'] : [];
+            $key = $warning['code'] . ':' . json_encode($params, JSON_THROW_ON_ERROR);
+            $details[$key] = [
+                'code' => $warning['code'],
+                'message' => is_string($warning['message'] ?? null) ? $warning['message'] : $this->messageForCode($warning['code'], $params),
+                'params' => $params,
+            ];
+        }
+
+        return array_values($details);
+    }
+
+    private function messageForCode(string $code, array $params = []): string {
+        return match ($code) {
+            self::CODE_MAPPING_STATUS_UNAVAILABLE => 'Immich mapping status is temporarily unavailable.',
+            self::CODE_NO_ACTIVE_NC_USER => 'No active Nextcloud user context is available for Immich provisioning.',
+            self::CODE_NO_IMMICH_MAPPING => 'No Immich mapping exists for this Nextcloud user yet. Ask an administrator to run Immich provisioning.',
+            self::CODE_MOUNT_HEALTH_UNAVAILABLE => 'Immich mirror mount health is temporarily unavailable.',
+            self::CODE_MOUNT_HEALTH_STATUS => 'Immich mirror mount health is ' . (string)($params['status'] ?? 'unknown') . '.',
+            self::CODE_QUOTA_NEEDS_MAPPING => 'Quota sync needs an Immich user mapping before quota details are available.',
+            self::CODE_QUOTA_UNAVAILABLE => 'Quota details are unavailable. Run quota sync from the admin settings for authoritative status.',
+            self::CODE_QUOTA_UNLIMITED => 'Nextcloud quota is unlimited; Immich quota sync will leave the Immich quota unlimited.',
+            self::CODE_QUOTA_STALE => 'Quota has not been synced yet; values may be stale until the next quota sync job runs.',
+            self::CODE_ACTION_CAPABILITIES_UNAVAILABLE => 'Immich action capabilities are temporarily unavailable.',
+            self::CODE_SYNC_STATE_LIST_UNAVAILABLE => 'Immich sync-state list is temporarily unavailable.',
+            self::CODE_CAPABILITY_DETECTION_UNAVAILABLE => 'Immich capability detection is temporarily unavailable.',
+            default => 'Immich status code: ' . $code,
+        };
     }
 
     private function provisioningState(array $config): array {
@@ -328,6 +420,26 @@ class FrontendInitialStateService {
         return 0;
     }
 
+    private function safeParams(array $params): array {
+        $safe = [];
+        foreach ($params as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            if (is_string($value)) {
+                $safe[$key] = $this->redactString($value);
+                continue;
+            }
+
+            if (is_int($value) || is_float($value) || is_bool($value) || $value === null) {
+                $safe[$key] = $value;
+            }
+        }
+
+        return $safe;
+    }
+
     private function redact(mixed $value): mixed {
         if (is_array($value)) {
             $redacted = [];
@@ -350,7 +462,11 @@ class FrontendInitialStateService {
     }
 
     private function redactString(string $value): string {
-        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/([?&](?:api[_-]?key|token|password|secret|authorization)=)[^&\s]+/i', '$1[redacted]', $value) ?? $value;
+        $value = preg_replace('/("(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*")[^"]+(")/i', '$1[redacted]$2', $value) ?? $value;
+        $value = preg_replace('/\b(authorization)(\s*[=:]\s*)bearer\s+[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/\bbearer\s+[^\s,;}]+/i', 'Bearer [redacted]', $value) ?? $value;
+        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;}&]+/i', '$1$2[redacted]', $value) ?? $value;
     }
 
     private function isSecretKey(string $key): bool {

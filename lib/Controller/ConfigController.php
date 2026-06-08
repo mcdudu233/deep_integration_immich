@@ -60,23 +60,27 @@ class ConfigController extends Controller {
         }
 
         if ($validate === true || $validate === 'true' || $validate === '1') {
-            $result = $this->immichService->validateConnection();
+            $result = $this->redact($this->immichService->validateConnection());
             if (!$result['success']) {
-                $errorMsg = $result['error'] ?? 'unknown';
+                $errorMsg = $this->redactString((string)($result['error'] ?? 'unknown'));
                 $this->logger->warning('Immich connection validation failed: ' . $errorMsg, [
                     'app' => Application::APP_ID,
                 ]);
 
-                // Detect Nextcloud's SSRF protection blocking local/private IPs
                 $isLocalAccessBlocked = str_contains($errorMsg, 'violates local access rules');
 
-                return new JSONResponse(
+                return $this->errorResponse(
+                    'connection_validation_failed',
+                    'Connection validation failed.',
+                    Http::STATUS_BAD_REQUEST,
                     [
-                        'error' => 'Connection validation failed',
                         'detail' => $errorMsg,
                         'local_access_blocked' => $isLocalAccessBlocked,
                     ],
-                    Http::STATUS_BAD_REQUEST
+                    [
+                        'detail' => $errorMsg,
+                        'local_access_blocked' => $isLocalAccessBlocked,
+                    ]
                 );
             }
 
@@ -95,5 +99,54 @@ class ConfigController extends Controller {
         }
 
         return new JSONResponse(['success' => true]);
+    }
+
+    private function errorResponse(string $code, string $message, int $status, array $details = [], array $legacy = []): JSONResponse {
+        return new JSONResponse(array_merge([
+            'success' => false,
+            'error' => array_filter([
+                'code' => $code,
+                'message' => $message,
+                'details' => $this->redact($details),
+            ], static fn(mixed $value): bool => $value !== [] && $value !== null),
+        ], $this->redact($legacy)), $status);
+    }
+
+    private function redact(mixed $value): mixed {
+        if (is_array($value)) {
+            $redacted = [];
+            foreach ($value as $key => $item) {
+                if (is_string($key) && $this->isSecretKey($key)) {
+                    $redacted[$key] = '[redacted]';
+                    continue;
+                }
+
+                $redacted[$key] = $this->redact($item);
+            }
+
+            return $redacted;
+        }
+
+        if (is_string($value)) {
+            return $this->redactString($value);
+        }
+
+        return $value;
+    }
+
+    private function redactString(string $value): string {
+        $value = preg_replace('/([?&](?:api[_-]?key|token|password|secret|authorization)=)[^&\s]+/i', '$1[redacted]', $value) ?? $value;
+        $value = preg_replace('/("(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*")[^"]+(")/i', '$1[redacted]$2', $value) ?? $value;
+        $value = preg_replace('/\b(authorization)(\s*[=:]\s*)bearer\s+[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/\bbearer\s+[^\s,;}]+/i', 'Bearer [redacted]', $value) ?? $value;
+        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
+    }
+
+    private function isSecretKey(string $key): bool {
+        if (preg_match('/(?:configured|_set)$/i', $key) === 1) {
+            return false;
+        }
+
+        return preg_match('/(^|[_-])(api[_-]?key|token|password|secret|authorization)($|[_-])/i', $key) === 1;
     }
 }

@@ -37,6 +37,17 @@ class AdminConfigService {
 
     public const DELETE_OPT_IN_CONFIRMATION_FLAG = 'delete_opt_in_confirmed';
 
+    public const VALIDATION_INVALID_URL = 'invalid_url';
+    public const VALIDATION_INVALID_ENUM = 'invalid_enum';
+    public const VALIDATION_INVALID_GROUP_LIST = 'invalid_group_list';
+    public const VALIDATION_INVALID_BOOLEAN = 'invalid_boolean';
+    public const VALIDATION_MISSING_PATH_TEMPLATE = 'missing_path_template';
+    public const VALIDATION_INVALID_PATH_TEMPLATE = 'invalid_path_template';
+    public const VALIDATION_INVALID_QUOTA_RESERVE = 'invalid_quota_reserve';
+    public const VALIDATION_DELETE_OPT_IN_CONFIRMATION_REQUIRED = 'delete_opt_in_confirmation_required';
+    public const VALIDATION_INVALID_TEMPLATE = 'invalid_template';
+    public const VALIDATION_UNSUPPORTED_TEMPLATE_PLACEHOLDER = 'unsupported_template_placeholder';
+
     private const DEFAULT_QUOTA_RESERVE_BYTES = 268435456;
 
     private const DEFAULTS = [
@@ -138,7 +149,8 @@ class AdminConfigService {
     }
 
     public function setAdminConfig(array $values): void {
-        $merged = $this->readConfigValues();
+        $current = $this->readConfigValues();
+        $merged = $current;
         foreach (array_keys(self::DEFAULTS) as $key) {
             if (array_key_exists($key, $values)) {
                 $merged[$key] = $values[$key];
@@ -148,7 +160,7 @@ class AdminConfigService {
             $merged[self::DELETE_OPT_IN_CONFIRMATION_FLAG] = $values[self::DELETE_OPT_IN_CONFIRMATION_FLAG];
         }
 
-        $errors = $this->validateAdminConfig($merged);
+        $errors = $this->validateAdminConfig($merged, $current);
         if ($errors !== []) {
             throw new \InvalidArgumentException('Invalid admin configuration: ' . implode('; ', $errors));
         }
@@ -169,8 +181,19 @@ class AdminConfigService {
         }
     }
 
-    public function validateAdminConfig(array $values): array {
+    public function validateAdminConfig(array $values, ?array $currentValues = null): array {
+        $messages = [];
+        foreach ($this->validateAdminConfigDetails($values, $currentValues) as $field => $detail) {
+            $messages[$field] = (string)$detail['message'];
+        }
+
+        return $messages;
+    }
+
+    public function validateAdminConfigDetails(array $values, ?array $currentValues = null): array {
+        $currentValues = array_merge(self::DEFAULTS, $currentValues ?? $this->readConfigValues());
         $values = array_merge(self::DEFAULTS, $values);
+        $effectiveValues = $this->normaliseEffectivePathFeatureFlags($values);
         $errors = [];
 
         $url = trim((string)$values[self::KEY_IMMICH_BASE_URL]);
@@ -179,26 +202,40 @@ class AdminConfigService {
             if ($parsedUrl === false
                 || !in_array(strtolower((string)($parsedUrl['scheme'] ?? '')), ['http', 'https'], true)
                 || empty($parsedUrl['host'])) {
-                $errors[self::KEY_IMMICH_BASE_URL] = 'Immich base URL must be a valid http or https URL with a host.';
+                $errors[self::KEY_IMMICH_BASE_URL] = $this->validationDetail(
+                    self::KEY_IMMICH_BASE_URL,
+                    self::VALIDATION_INVALID_URL,
+                    'Immich base URL must be a valid http or https URL with a host.',
+                    ['allowed_schemes' => ['http', 'https']]
+                );
             }
         }
 
         if (!in_array((string)$values[self::KEY_USER_SCOPE_MODE], self::VALID_USER_SCOPE_MODES, true)) {
-            $errors[self::KEY_USER_SCOPE_MODE] = 'User scope mode must be all or groups.';
+            $errors[self::KEY_USER_SCOPE_MODE] = $this->validationDetail(
+                self::KEY_USER_SCOPE_MODE,
+                self::VALIDATION_INVALID_ENUM,
+                'User scope mode must be all or groups.',
+                ['allowed_values' => self::VALID_USER_SCOPE_MODES]
+            );
         }
 
         if ($this->parseGroups($values[self::KEY_USER_SCOPE_GROUPS]) === null) {
-            $errors[self::KEY_USER_SCOPE_GROUPS] = 'User scope groups must be a JSON array of non-empty group IDs.';
+            $errors[self::KEY_USER_SCOPE_GROUPS] = $this->validationDetail(
+                self::KEY_USER_SCOPE_GROUPS,
+                self::VALIDATION_INVALID_GROUP_LIST,
+                'User scope groups must be a JSON array of non-empty group IDs.'
+            );
         }
 
-        $pathTemplatesRequired = $this->pathTemplatesRequired($values);
+        $pathTemplatesRequired = $this->pathTemplatesRequired($effectiveValues);
         foreach (self::TEMPLATE_KEYS as $key) {
-            $template = (string)$values[$key];
+            $template = (string)$effectiveValues[$key];
             if (!$pathTemplatesRequired && in_array($key, self::PATH_TEMPLATE_KEYS, true) && trim($template) === '') {
                 continue;
             }
 
-            $error = $this->validateTemplate($template);
+            $error = $this->validateTemplate($key, $template);
             if ($error !== null) {
                 $errors[$key] = $error;
             }
@@ -206,28 +243,60 @@ class AdminConfigService {
 
         foreach (self::BOOLEAN_KEYS as $key) {
             if ($this->parseBool($values[$key]) === null) {
-                $errors[$key] = 'Value must be boolean.';
+                $errors[$key] = $this->validationDetail(
+                    $key,
+                    self::VALIDATION_INVALID_BOOLEAN,
+                    'Value must be boolean.',
+                    ['accepted_values' => ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off']]
+                );
             }
         }
 
         if (!in_array((string)$values[self::KEY_QUOTA_SYNC_MODE], self::VALID_QUOTA_SYNC_MODES, true)) {
-            $errors[self::KEY_QUOTA_SYNC_MODE] = 'Quota sync mode must be disabled, manual, or event_scheduled.';
+            $errors[self::KEY_QUOTA_SYNC_MODE] = $this->validationDetail(
+                self::KEY_QUOTA_SYNC_MODE,
+                self::VALIDATION_INVALID_ENUM,
+                'Quota sync mode must be disabled, manual, or event_scheduled.',
+                ['allowed_values' => self::VALID_QUOTA_SYNC_MODES]
+            );
         }
 
         if (!in_array((string)$values[self::KEY_INITIAL_PASSWORD_POLICY], self::VALID_INITIAL_PASSWORD_POLICIES, true)) {
-            $errors[self::KEY_INITIAL_PASSWORD_POLICY] = 'Initial password policy must be random or sso_oidc.';
+            $errors[self::KEY_INITIAL_PASSWORD_POLICY] = $this->validationDetail(
+                self::KEY_INITIAL_PASSWORD_POLICY,
+                self::VALIDATION_INVALID_ENUM,
+                'Initial password policy must be random or sso_oidc.',
+                ['allowed_values' => self::VALID_INITIAL_PASSWORD_POLICIES]
+            );
         }
 
         $reserveBytes = $this->parseInt($values[self::KEY_QUOTA_RESERVE_BYTES]);
         if ($reserveBytes === null || $reserveBytes < 0) {
-            $errors[self::KEY_QUOTA_RESERVE_BYTES] = 'Quota reserve bytes must be an integer greater than or equal to 0.';
+            $errors[self::KEY_QUOTA_RESERVE_BYTES] = $this->validationDetail(
+                self::KEY_QUOTA_RESERVE_BYTES,
+                self::VALIDATION_INVALID_QUOTA_RESERVE,
+                'Quota reserve bytes must be an integer greater than or equal to 0.',
+                ['min' => 0]
+            );
         }
 
         $deletePolicy = (string)$values[self::KEY_DELETE_DISABLE_POLICY];
+        $previousDeletePolicy = (string)$currentValues[self::KEY_DELETE_DISABLE_POLICY];
+        $requiresDeleteOptInConfirmation = $deletePolicy === 'delete_opt_in' && $previousDeletePolicy !== 'delete_opt_in';
         if (!in_array($deletePolicy, self::VALID_DELETE_DISABLE_POLICIES, true)) {
-            $errors[self::KEY_DELETE_DISABLE_POLICY] = 'Delete/disable policy must be disable_suspend or delete_opt_in.';
-        } elseif ($deletePolicy === 'delete_opt_in' && $this->parseBool($values[self::DELETE_OPT_IN_CONFIRMATION_FLAG] ?? false) !== true) {
-            $errors[self::KEY_DELETE_DISABLE_POLICY] = 'Destructive delete policy requires explicit delete_opt_in confirmation.';
+            $errors[self::KEY_DELETE_DISABLE_POLICY] = $this->validationDetail(
+                self::KEY_DELETE_DISABLE_POLICY,
+                self::VALIDATION_INVALID_ENUM,
+                'Delete/disable policy must be disable_suspend or delete_opt_in.',
+                ['allowed_values' => self::VALID_DELETE_DISABLE_POLICIES]
+            );
+        } elseif ($requiresDeleteOptInConfirmation && $this->parseBool($values[self::DELETE_OPT_IN_CONFIRMATION_FLAG] ?? false) !== true) {
+            $errors[self::KEY_DELETE_DISABLE_POLICY] = $this->validationDetail(
+                self::KEY_DELETE_DISABLE_POLICY,
+                self::VALIDATION_DELETE_OPT_IN_CONFIRMATION_REQUIRED,
+                'Destructive delete policy requires explicit delete_opt_in confirmation.',
+                ['confirmation_flag' => self::DELETE_OPT_IN_CONFIRMATION_FLAG]
+            );
         }
 
         return $errors;
@@ -262,6 +331,8 @@ class AdminConfigService {
     }
 
     private function normaliseConfigValues(array $values): array {
+        $values = $this->normaliseEffectivePathFeatureFlags($values);
+
         return [
             self::KEY_IMMICH_BASE_URL => rtrim(trim((string)$values[self::KEY_IMMICH_BASE_URL]), '/'),
             self::KEY_PROVISIONING_ENABLED => $this->parseBool($values[self::KEY_PROVISIONING_ENABLED]) ?? false,
@@ -282,6 +353,15 @@ class AdminConfigService {
             self::KEY_IMPORT_TO_IMMICH_ENABLED => $this->parseBool($values[self::KEY_IMPORT_TO_IMMICH_ENABLED]) ?? false,
             self::KEY_IMMICH_DELETE_ENABLED => $this->parseBool($values[self::KEY_IMMICH_DELETE_ENABLED]) ?? false,
         ];
+    }
+
+    private function normaliseEffectivePathFeatureFlags(array $values): array {
+        if ($this->parseBool($values[self::KEY_PROVISIONING_ENABLED] ?? false) !== true) {
+            $values[self::KEY_MKDIR_POLICY_ENABLED] = false;
+            $values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;
+        }
+
+        return $values;
     }
 
     private function serialiseValue(string $key, mixed $value): string {
@@ -412,32 +492,65 @@ class AdminConfigService {
         return false;
     }
 
-    private function validateTemplate(string $template): ?string {
+    private function validateTemplate(string $field, string $template): ?array {
         $template = trim($template);
+        $isPathTemplate = in_array($field, self::PATH_TEMPLATE_KEYS, true);
         if ($template === '') {
-            return 'Template must not be empty.';
+            return $this->validationDetail(
+                $field,
+                $isPathTemplate ? self::VALIDATION_MISSING_PATH_TEMPLATE : self::VALIDATION_INVALID_TEMPLATE,
+                'Template must not be empty.'
+            );
         }
 
         if (preg_match('/\0/', $template) === 1) {
-            return 'Template must not contain NUL bytes.';
+            return $this->validationDetail(
+                $field,
+                $isPathTemplate ? self::VALIDATION_INVALID_PATH_TEMPLATE : self::VALIDATION_INVALID_TEMPLATE,
+                'Template must not contain NUL bytes.'
+            );
         }
 
         if (preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $template) === 1) {
-            return 'Template must not contain path traversal segments.';
+            return $this->validationDetail(
+                $field,
+                self::VALIDATION_INVALID_PATH_TEMPLATE,
+                'Template must not contain path traversal segments.'
+            );
         }
 
         preg_match_all('/\{([^{}]+)\}/', $template, $matches);
         foreach ($matches[1] as $placeholder) {
             if (!in_array($placeholder, self::VALID_PLACEHOLDERS, true)) {
-                return 'Template contains an unsupported placeholder.';
+                return $this->validationDetail(
+                    $field,
+                    self::VALIDATION_UNSUPPORTED_TEMPLATE_PLACEHOLDER,
+                    'Template contains an unsupported placeholder.',
+                    ['allowed_placeholders' => self::VALID_PLACEHOLDERS]
+                );
             }
         }
 
         $withoutValidPlaceholders = preg_replace('/\{(?:uid|storageLabel)\}/', '', $template);
         if ($withoutValidPlaceholders !== null && preg_match('/[{}]/', $withoutValidPlaceholders) === 1) {
-            return 'Template contains an unsupported placeholder.';
+            return $this->validationDetail(
+                $field,
+                self::VALIDATION_INVALID_TEMPLATE,
+                'Template contains an unsupported placeholder.',
+                ['allowed_placeholders' => self::VALID_PLACEHOLDERS]
+            );
         }
 
         return null;
     }
+
+    private function validationDetail(string $field, string $code, string $message, array $params = []): array {
+        return [
+            'field' => $field,
+            'code' => $code,
+            'message' => $message,
+            'params' => $params,
+        ];
+    }
+
 }

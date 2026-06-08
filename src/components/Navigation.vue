@@ -105,20 +105,20 @@
 				</div>
 
 				<!-- Quota stale warning -->
-				<NcNoteCard v-if="userQuota.stale"
+				<NcNoteCard v-if="quotaWarning"
 					type="warning"
 					class="immich-quota-note"
 					data-testid="quota-stale-warning-card">
-					{{ t('deep_integration_immich', 'Quota sync is stale — run "Recompute" from the admin settings.') }}
+					{{ quotaWarning }}
 				</NcNoteCard>
 
 				<!-- General warnings from initial state -->
-				<NcNoteCard v-for="(msg, i) in warnings"
+				<NcNoteCard v-for="(warning, i) in warnings"
 					:key="i"
 					type="warning"
 					class="immich-warning-note"
 					:data-testid="'general-warning-card-' + i">
-					{{ msg }}
+					{{ warning.text }}
 				</NcNoteCard>
 			</div>
 
@@ -168,7 +168,7 @@ const immichUrl = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') 
 const userMapping = userConfig?.mapping ?? { status: 'missing' }
 const userMount = userConfig?.mount ?? { status: 'unavailable' }
 const userQuota = userConfig?.quota ?? { stale: false }
-const warnings = Array.isArray(userConfig?.warnings) ? userConfig.warnings : []
+const warnings = normalizeWarnings(userConfig?.warningDetails, userConfig?.warnings)
 
 // Display labels
 const mappingLabel = computed(() => {
@@ -177,18 +177,75 @@ const mappingLabel = computed(() => {
 		case 'pending': return t('deep_integration_immich', 'Pending')
 		case 'missing': return t('deep_integration_immich', 'Missing')
 		case 'error': return t('deep_integration_immich', 'Error')
-		default: return userMapping.status.charAt(0).toUpperCase() + userMapping.status.slice(1)
+		case 'active': return t('deep_integration_immich', 'Active')
+		case 'failed': return t('deep_integration_immich', 'Failed')
+		default: return unknownStatusLabel(userMapping.status)
 	}
 })
 
 const mountLabel = computed(() => {
 	switch (userMount.status) {
+		case 'ok': return t('deep_integration_immich', 'OK')
 		case 'available': return t('deep_integration_immich', 'Available')
 		case 'unavailable': return t('deep_integration_immich', 'Unavailable')
 		case 'error': return t('deep_integration_immich', 'Mount error')
-		default: return userMount.status.charAt(0).toUpperCase() + userMount.status.slice(1)
+		default: return unknownStatusLabel(userMount.status)
 	}
 })
+
+const quotaWarning = computed(() => {
+	if (userQuota.warningCode) {
+		return localizeStatusCode(userQuota.warningCode, userQuota.warningParams, userQuota.warning)
+	}
+	if (userQuota.stale) {
+		return localizeStatusCode('quota_stale', {}, userQuota.warning)
+	}
+	return ''
+})
+
+function normalizeWarnings(details, legacyWarnings) {
+	if (Array.isArray(details) && details.length > 0) {
+		return details.map((warning) => ({
+			code: warning?.code,
+			text: localizeStatusCode(warning?.code, warning?.params, warning?.message),
+		}))
+	}
+
+	return Array.isArray(legacyWarnings)
+		? legacyWarnings.filter((warning) => typeof warning === 'string').map((warning) => ({ text: warning }))
+		: []
+}
+
+function unknownStatusLabel(status) {
+	return t('deep_integration_immich', 'Unknown status ({code})', { code: String(status || 'unknown') })
+}
+
+function localizeStatusCode(code, params = {}, legacyMessage = '') {
+	if (!code) {
+		return legacyMessage || t('deep_integration_immich', 'Immich status is unavailable.')
+	}
+
+	switch (code) {
+	case 'mapping_status_unavailable':
+		return t('deep_integration_immich', 'Immich mapping status is temporarily unavailable.')
+	case 'mount_health_unavailable':
+		return t('deep_integration_immich', 'Immich mirror mount health is temporarily unavailable.')
+	case 'mount_health_status':
+		return t('deep_integration_immich', 'Immich mirror mount health is {status}.', { status: params?.status ?? t('deep_integration_immich', 'unknown') })
+	case 'quota_needs_mapping':
+		return t('deep_integration_immich', 'Quota sync needs an Immich user mapping before quota details are available.')
+	case 'quota_unavailable':
+		return t('deep_integration_immich', 'Quota details are unavailable. Run quota sync from the admin settings for authoritative status.')
+	case 'quota_unlimited':
+		return t('deep_integration_immich', 'Nextcloud quota is unlimited; Immich quota sync will leave the Immich quota unlimited.')
+	case 'quota_stale':
+		return t('deep_integration_immich', 'Quota has not been synced yet; values may be stale until the next quota sync job runs.')
+	case 'action_capabilities_unavailable':
+		return t('deep_integration_immich', 'Immich action capabilities are temporarily unavailable.')
+	default:
+		return t('deep_integration_immich', 'Immich reported status code: {code}', { code: String(code) })
+	}
+}
 </script>
 
 <style scoped>

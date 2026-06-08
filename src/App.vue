@@ -269,12 +269,14 @@ const pageTitle = computed(() => pageTitles[route.name] ?? t('deep_integration_i
 const isPhotoView = computed(() => photoViews.has(route.name))
 const canExportCopy = computed(() => store.actionCapabilities.exportCopyEnabled === true)
 const canDeleteFromImmich = computed(() => store.actionCapabilities.immichDeleteEnabled === true)
-const mappingMissing = computed(() => store.mapping.status === 'missing')
+const mappingState = computed(() => ({ ...store.mapping, ...(initialConfig?.mapping ?? {}) }))
+const mappingMissing = computed(() => mappingState.value.status === 'missing')
 const mappingMissingMessage = computed(() => {
-	if (store.mapping.message) {
-		return store.mapping.message
-	}
-	return t('deep_integration_immich', 'No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.')
+	return localizeStatusCode(
+		mappingState.value.messageCode,
+		mappingState.value.messageParams,
+		mappingState.value.message,
+	)
 })
 
 // Clear selection when navigating to a different view
@@ -328,7 +330,7 @@ async function saveToNextcloud() {
 		}
 		store.clearSelection()
 	} catch (e) {
-		showError(t('deep_integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error exporting: {msg}', { msg: localizeApiError(e) }))
 	} finally {
 		saving.value = false
 	}
@@ -499,9 +501,46 @@ async function deleteSelectedAssets() {
 		ids.forEach(id => store.removeAssetFromAllCaches(id))
 		store.clearSelection()
 	} catch (e) {
-		showError(t('deep_integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('deep_integration_immich', 'Error deleting from Immich: {msg}', { msg: localizeApiError(e) }))
 	} finally {
 		deleting.value = false
+	}
+}
+
+function localizeApiError(error) {
+	const data = error?.response?.data ?? {}
+	const code = data.code || data.errorCode || data.details?.code
+	if (code) {
+		const message = localizeStatusCode(code, data.details?.params ?? data.setupParams ?? {}, '')
+		const setupCode = data.setupCode || data.details?.setupCode
+		if (setupCode && setupCode !== code) {
+			return t('deep_integration_immich', '{message} {setup}', {
+				message,
+				setup: localizeStatusCode(setupCode, data.setupParams ?? data.details?.params ?? {}, ''),
+			})
+		}
+		return message
+	}
+
+	return data.error || error?.message || t('deep_integration_immich', 'Unknown error')
+}
+
+function localizeStatusCode(code, params = {}, legacyMessage = '') {
+	if (!code) {
+		return legacyMessage || t('deep_integration_immich', 'Immich status is unavailable.')
+	}
+
+	switch (code) {
+	case 'no_active_nc_user':
+		return t('deep_integration_immich', 'No active Nextcloud user context is available for Immich provisioning.')
+	case 'no_immich_mapping':
+		return t('deep_integration_immich', 'No Immich mapping exists for this Nextcloud user yet. Ask an administrator to run Immich provisioning.')
+	case 'browsing_setup_not_configured':
+		return t('deep_integration_immich', 'Immich browsing is not configured for this account.')
+	case 'browsing_setup_personal_or_admin_proxy':
+		return t('deep_integration_immich', 'Configure a personal Immich server URL and API key in personal settings, or ask an administrator to enable admin proxy browsing and provision your Immich user mapping.')
+	default:
+		return t('deep_integration_immich', 'Immich reported status code: {code}', { code: String(code), ...params })
 	}
 }
 </script>

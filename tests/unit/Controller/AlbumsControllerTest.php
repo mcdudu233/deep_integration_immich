@@ -50,6 +50,10 @@ class AlbumsControllerTest extends TestCase {
         $response = $this->controller->index();
 
         $this->assertEquals(Http::STATUS_PRECONDITION_FAILED, $response->getStatus());
+        $data = $response->getData();
+        $this->assertSame('browsing_setup_not_configured', $data['code']);
+        $this->assertSame('browsing_setup_personal_or_admin_proxy', $data['setupCode']);
+        $this->assertSame('browsing_setup_not_configured', $data['details']['code']);
     }
 
     public function testIndexReturns400OnInvalidAssetId(): void {

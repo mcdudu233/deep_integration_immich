@@ -8,20 +8,30 @@
 		<NcSettingsSection :name="t('deep_integration_immich', 'Immich Connection')"
 			:description="t('deep_integration_immich', 'Configure the Immich server URL and admin credentials')">
 			<div class="immich-settings-form">
-				<div class="field">
+				<div class="field" data-testid="immich-admin-url">
 					<NcTextField id="immich-server-url"
 						v-model="form.immich_base_url"
 						:label="t('deep_integration_immich', 'Immich server URL')"
 						placeholder="https://immich.example.com"
-						data-testid="immich-admin-url" />
+						data-testid="immich-base-url-input" />
+					<p v-if="fieldErrorMessage('immich_base_url')"
+						class="validation-error-inline"
+						data-testid="immich-base-url-field-error">
+						{{ fieldErrorMessage('immich_base_url') }}
+					</p>
 				</div>
 
-				<div class="field">
+				<div class="field" data-testid="immich-admin-api-key">
 					<NcPasswordField id="immich-admin-api-key"
 						v-model="form.admin_api_key"
 						:label="t('deep_integration_immich', 'Admin API key')"
 						:placeholder="apiKeyConfigured ? t('deep_integration_immich', 'API key is set') : t('deep_integration_immich', 'Enter Immich admin API key')"
-						data-testid="immich-admin-api-key" />
+						data-testid="immich-admin-api-key-input" />
+					<p v-if="fieldErrorMessage('admin_api_key')"
+						class="validation-error-inline"
+						data-testid="immich-admin-api-key-field-error">
+						{{ fieldErrorMessage('admin_api_key') }}
+					</p>
 					<p v-if="apiKeyConfigured" class="hint">
 						{{ t('deep_integration_immich', 'An API key is already configured. Leave blank to keep the current key.') }}
 					</p>
@@ -38,21 +48,23 @@
 						{{ t('deep_integration_immich', 'Test connection') }}
 					</NcButton>
 
-					<NcButton type="primary"
-						:disabled="saving || !form.immich_base_url"
-						data-testid="save-admin-settings"
-						@click="saveSettings">
-						<template #icon>
-							<NcLoadingIcon v-if="saving" :size="20" />
-						</template>
-						{{ t('deep_integration_immich', 'Save') }}
-					</NcButton>
+					<span data-testid="save-admin-settings">
+						<NcButton type="primary"
+							:disabled="saving || !form.immich_base_url"
+							data-testid="admin-config-save-button"
+							@click="saveSettings">
+							<template #icon>
+								<NcLoadingIcon v-if="saving" :size="20" />
+							</template>
+							{{ t('deep_integration_immich', 'Save') }}
+						</NcButton>
+					</span>
 				</div>
 
 				<NcNoteCard v-if="connectionMessage"
 					:type="connectionMessageType"
-					data-testid="admin-connection-message">
-					<p class="connection-message-text">
+					data-testid="admin-config-error-summary">
+					<p class="connection-message-text" data-testid="admin-connection-message">
 						{{ connectionMessage }}
 					</p>
 					<ul v-if="saveFieldErrors.length > 0"
@@ -95,9 +107,9 @@
 		<NcSettingsSection :name="t('deep_integration_immich', 'User Provisioning')"
 			:description="t('deep_integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
 			<div class="immich-settings-form">
-				<div class="field">
+				<div class="field" data-testid="provisioning-enabled">
 					<NcCheckboxRadioSwitch :checked="form.provisioning_enabled"
-						data-testid="provisioning-enabled"
+						data-testid="provisioning-enabled-toggle"
 						@update:checked="form.provisioning_enabled = $event">
 						{{ t('deep_integration_immich', 'Enable user provisioning') }}
 					</NcCheckboxRadioSwitch>
@@ -202,21 +214,31 @@
 					</p>
 				</div>
 
-				<div class="field">
+				<div class="field" data-testid="host-path-template">
 					<NcTextField v-model="form.host_path_template"
 						:label="t('deep_integration_immich', 'Host path template')"
 						placeholder="/srv/immich/originals/library/{storageLabel}"
-						data-testid="host-path-template" />
+						data-testid="host-path-template-input" />
+					<p v-if="fieldErrorMessage('host_path_template')"
+						class="validation-error-inline"
+						data-testid="host-path-template-field-error">
+						{{ fieldErrorMessage('host_path_template') }}
+					</p>
 					<p class="hint">
 						{{ t('deep_integration_immich', 'The filesystem path on the host where Immich stores each user\'s library folder.') }}
 					</p>
 				</div>
 
-				<div class="field">
+				<div class="field" data-testid="nc-visible-path-template">
 					<NcTextField v-model="form.nc_visible_path_template"
 						:label="t('deep_integration_immich', 'Nextcloud-visible path template')"
 						placeholder="/mnt/immich-library/{storageLabel}"
-						data-testid="nc-visible-path-template" />
+						data-testid="nc-visible-path-template-input" />
+					<p v-if="fieldErrorMessage('nc_visible_path_template')"
+						class="validation-error-inline"
+						data-testid="nc-visible-path-template-field-error">
+						{{ fieldErrorMessage('nc_visible_path_template') }}
+					</p>
 					<p class="hint">
 						{{ t('deep_integration_immich', 'The path visible inside the Nextcloud container that maps to the host path. Must be outside Nextcloud\'s data directory.') }}
 					</p>
@@ -491,7 +513,7 @@
 						:key="'warn-' + idx"
 						type="warning"
 						:data-testid="'admin-general-warning-' + idx">
-						{{ warning }}
+						{{ warning.text }}
 					</NcNoteCard>
 				</div>
 
@@ -624,10 +646,10 @@
 									<span class="health-label">{{ t('deep_integration_immich', 'Last sync') }}</span>
 									<span>{{ formatTimestamp(card.lastSyncAt) }}</span>
 								</div>
-								<div v-if="card.warning"
+								<div v-if="card.warning || card.warningCode"
 									class="health-row warning-row"
 									data-testid="quota-warning-row">
-									{{ card.warning }}
+									{{ quotaWarningLabel(card) }}
 								</div>
 							</div>
 						</div>
@@ -652,7 +674,13 @@ import {
 	NcCheckboxRadioSwitch,
 	NcSelect,
 } from '@nextcloud/vue'
+import adminSettingsPayloadHelpers from './services/adminSettingsPayload.js'
 import { useAdminProvisioningStore } from './store/adminProvisioning.js'
+
+const {
+	buildAdminConfigPayload,
+	normalizeAdminConfigErrorCode,
+} = adminSettingsPayloadHelpers
 
 const store = useAdminProvisioningStore()
 
@@ -717,6 +745,15 @@ const quotaReserveDisplay = computed({
 	},
 })
 
+const saveFieldErrorsByField = computed(() => {
+	return saveFieldErrors.value.reduce((fields, error) => {
+		if (error.field && !fields[error.field]) {
+			fields[error.field] = error
+		}
+		return fields
+	}, {})
+})
+
 // ── Lifecycle ─────────────────────────────────────────────────────────
 onMounted(() => {
 	try {
@@ -748,9 +785,7 @@ function applyLoadedState(state) {
 	if (Array.isArray(state.syncStates)) {
 		syncStates.value = state.syncStates
 	}
-	if (Array.isArray(state.warnings)) {
-		warnings.value = state.warnings
-	}
+	warnings.value = normalizeWarnings(state.warningDetails, state.warnings)
 	if (state.status) {
 		applyAdminStatus(state.status)
 	}
@@ -789,39 +824,42 @@ function applyAdminStatus(status) {
 	}
 }
 
+function resolveSavedApiKeyConfigured(response, storedConfig, previousConfigured, submittedAdminApiKey) {
+	const responseConfig = response?.config
+	if (responseConfig && Object.prototype.hasOwnProperty.call(responseConfig, 'admin_api_key_configured')) {
+		return responseConfig.admin_api_key_configured === true
+	}
+	if (storedConfig && Object.prototype.hasOwnProperty.call(storedConfig, 'admin_api_key_configured')) {
+		return storedConfig.admin_api_key_configured === true
+	}
+	if (submittedAdminApiKey === true) {
+		return true
+	}
+	return previousConfigured === true
+}
+
 // ── Save ──────────────────────────────────────────────────────────────
 async function saveSettings() {
 	saving.value = true
 	connectionMessage.value = ''
 	saveFieldErrors.value = []
 	try {
-		const config = { ...form }
-		// Map selected groups back to plain array
-		config.user_scope_groups = selectedGroups.value.map(g => g.id || g.label || g)
-		// Only send API key if user entered a new one
-		if (!config.admin_api_key) {
-			delete config.admin_api_key
-		}
-		// Destructive policy confirmation
-		if (form.delete_disable_policy === 'delete_opt_in') {
-			config.delete_opt_in_confirmed = deleteOptInConfirmed.value
-		}
-		await store.saveAdminSettings(config)
+		const config = buildAdminConfigPayload(form, {
+			selectedGroups: selectedGroups.value,
+			deleteOptInConfirmed: deleteOptInConfirmed.value,
+		})
+		const adminApiKeySubmitted = Object.prototype.hasOwnProperty.call(config, 'admin_api_key')
+		const wasApiKeyConfigured = apiKeyConfigured.value
+		const response = await store.saveAdminSettings(config)
 		form.admin_api_key = ''
-		apiKeyConfigured.value = true
+		apiKeyConfigured.value = resolveSavedApiKeyConfigured(response, store.adminSettings.data, wasApiKeyConfigured, adminApiKeySubmitted)
 		connectionMessage.value = t('deep_integration_immich', 'Settings saved')
 		connectionMessageType.value = 'success'
 		saveFieldErrors.value = []
 	} catch (e) {
 		const errorDetails = store.adminSettings.errorDetails
 		saveFieldErrors.value = (errorDetails?.fields ?? []).map(formatSaveFieldError)
-		if (errorDetails?.code === 'invalid_admin_config') {
-			connectionMessage.value = t('deep_integration_immich', 'Admin configuration is invalid. Please check the fields below.')
-		} else if (errorDetails?.code === 'admin_config_save_failed') {
-			connectionMessage.value = t('deep_integration_immich', 'Error saving settings')
-		} else {
-			connectionMessage.value = store.adminSettings.error || t('deep_integration_immich', 'Error saving settings')
-		}
+		connectionMessage.value = localizeAdminConfigError(errorDetails, t('deep_integration_immich', 'Error saving settings'))
 		connectionMessageType.value = 'error'
 	} finally {
 		saving.value = false
@@ -850,7 +888,7 @@ async function testConnection() {
 		if (localAccessBlocked.value) {
 			connectionMessage.value = t('deep_integration_immich', 'Connection failed: local IP blocked by Nextcloud')
 		} else {
-			connectionMessage.value = e.message || store.adminSettings.error || t('deep_integration_immich', 'Connection failed')
+			connectionMessage.value = localizeAdminConfigError(e, t('deep_integration_immich', 'Connection failed'))
 		}
 		connectionMessageType.value = 'error'
 	} finally {
@@ -1016,8 +1054,59 @@ function statusLabel(status) {
 	case 'deleted': return t('deep_integration_immich', 'Deleted')
 	case 'warning': return t('deep_integration_immich', 'Warning')
 	case 'stale': return t('deep_integration_immich', 'Stale')
+	case 'unavailable': return t('deep_integration_immich', 'Unavailable')
+	case 'disabled': return t('deep_integration_immich', 'Disabled')
+	case 'unlimited': return t('deep_integration_immich', 'Unlimited')
 	case 'unknown': return t('deep_integration_immich', 'Unknown')
-	default: return String(status)
+	default: return t('deep_integration_immich', 'Unknown status ({code})', { code: String(status) })
+	}
+}
+
+function normalizeWarnings(details, legacyWarnings) {
+	if (Array.isArray(details) && details.length > 0) {
+		return details.map((warning) => ({
+			code: warning?.code,
+			text: localizeStatusCode(warning?.code, warning?.params, warning?.message),
+		}))
+	}
+
+	return Array.isArray(legacyWarnings)
+		? legacyWarnings.filter((warning) => typeof warning === 'string').map((warning) => ({ text: warning }))
+		: []
+}
+
+function quotaWarningLabel(card) {
+	return localizeStatusCode(card?.warningCode, card?.warningParams, card?.warning)
+}
+
+function localizeStatusCode(code, params = {}, legacyMessage = '') {
+	if (!code) {
+		return legacyMessage || t('deep_integration_immich', 'Immich status is unavailable.')
+	}
+
+	switch (code) {
+	case 'mapping_status_unavailable':
+		return t('deep_integration_immich', 'Immich mapping status is temporarily unavailable.')
+	case 'mount_health_unavailable':
+		return t('deep_integration_immich', 'Immich mirror mount health is temporarily unavailable.')
+	case 'mount_health_status':
+		return t('deep_integration_immich', 'Immich mirror mount health is {status}.', { status: params?.status ?? t('deep_integration_immich', 'unknown') })
+	case 'quota_needs_mapping':
+		return t('deep_integration_immich', 'Quota sync needs an Immich user mapping before quota details are available.')
+	case 'quota_unavailable':
+		return t('deep_integration_immich', 'Quota details are unavailable. Run quota sync from the admin settings for authoritative status.')
+	case 'quota_unlimited':
+		return t('deep_integration_immich', 'Nextcloud quota is unlimited; Immich quota sync will leave the Immich quota unlimited.')
+	case 'quota_stale':
+		return t('deep_integration_immich', 'Quota has not been synced yet; values may be stale until the next quota sync job runs.')
+	case 'action_capabilities_unavailable':
+		return t('deep_integration_immich', 'Immich action capabilities are temporarily unavailable.')
+	case 'sync_state_list_unavailable':
+		return t('deep_integration_immich', 'Immich sync-state list is temporarily unavailable.')
+	case 'capability_detection_unavailable':
+		return t('deep_integration_immich', 'Immich capability detection is temporarily unavailable.')
+	default:
+		return t('deep_integration_immich', 'Immich reported status code: {code}', { code: String(code) })
 	}
 }
 
@@ -1025,14 +1114,69 @@ function formatSaveFieldError(error) {
 	const fieldLabel = labelForConfigField(error.field)
 	return {
 		field: error.field,
+		code: error.code ?? null,
 		fieldLabel: error.field && fieldLabel !== error.field ? `${fieldLabel} (${error.field})` : fieldLabel,
-		message: localizeAdminConfigValidationMessage(error.message),
+		message: localizeAdminConfigFieldError(error),
+	}
+}
+
+function fieldErrorMessage(field) {
+	return saveFieldErrorsByField.value[field]?.message || ''
+}
+
+function localizeAdminConfigError(errorDetails, fallback) {
+	const code = normalizeAdminConfigErrorCode(errorDetails?.code, errorDetails?.message)
+	switch (code) {
+	case 'admin_config_invalid':
+		return t('deep_integration_immich', 'Admin configuration is invalid. Please check the fields below.')
+	case 'admin_config_save_failed':
+		return t('deep_integration_immich', 'Error saving settings')
+	case 'connection_validation_failed':
+		return t('deep_integration_immich', 'Connection validation failed.')
+	default:
+		if (code) {
+			return t('deep_integration_immich', 'Admin configuration failed with code: {code}', { code: String(code) })
+		}
+		return fallback || t('deep_integration_immich', 'Error saving settings')
+	}
+}
+
+function localizeAdminConfigFieldError(error) {
+	const code = error?.code ?? null
+	const legacyLabel = localizeAdminConfigValidationMessage(error?.message)
+
+	switch (code) {
+	case 'invalid_url':
+		return t('deep_integration_immich', 'Immich base URL must be a valid http or https URL with a host.')
+	case 'invalid_enum':
+		return legacyLabel || t('deep_integration_immich', 'Value is not one of the allowed options.')
+	case 'invalid_group_list':
+		return t('deep_integration_immich', 'User scope groups must be a JSON array of non-empty group IDs.')
+	case 'invalid_template':
+		return legacyLabel || t('deep_integration_immich', 'Template is invalid.')
+	case 'unsupported_template_placeholder':
+		return legacyLabel || t('deep_integration_immich', 'Template contains an unsupported placeholder.')
+	case 'invalid_path_template':
+		return legacyLabel || t('deep_integration_immich', 'Path template is invalid.')
+	case 'missing_path_template':
+		return t('deep_integration_immich', 'Template must not be empty.')
+	case 'delete_opt_in_confirmation_required':
+		return t('deep_integration_immich', 'Destructive delete policy requires explicit delete_opt_in confirmation.')
+	case 'invalid_quota_reserve':
+		return t('deep_integration_immich', 'Quota reserve bytes must be an integer greater than or equal to 0.')
+	case 'invalid_boolean':
+		return t('deep_integration_immich', 'Value must be boolean.')
+	default:
+		if (code) {
+			return t('deep_integration_immich', 'Unsupported validation code: {code}', { code: String(code) })
+		}
+		return legacyLabel || t('deep_integration_immich', 'Invalid value for this field.')
 	}
 }
 
 function localizeAdminConfigValidationMessage(message) {
 	if (!message) {
-		return message
+		return null
 	}
 	const unsupportedPlaceholdersPrefix = 'Template contains unsupported placeholder(s): '
 	if (message.startsWith(unsupportedPlaceholdersPrefix)) {
@@ -1070,7 +1214,7 @@ function localizeAdminConfigValidationMessage(message) {
 	case 'Template must contain visible characters besides placeholders and separators.':
 		return t('deep_integration_immich', 'Template must contain visible characters besides placeholders and separators.')
 	default:
-		return message
+		return null
 	}
 }
 
@@ -1161,6 +1305,12 @@ function formatBytes(bytes) {
 
 .validation-error-message {
 	margin-left: 4px;
+}
+
+.validation-error-inline {
+	color: var(--color-error, #e9322d);
+	font-size: var(--default-font-size-small, 13px);
+	margin: 4px 0 0;
 }
 
 .actions-row {

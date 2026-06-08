@@ -65,13 +65,13 @@ class AdminSettingsController extends Controller {
     public function setConfig(): JSONResponse {
         $values = $this->requestConfigValues();
         $mergedValues = array_merge($this->safeAdminConfig(), $values);
-        $errors = $this->adminConfigService->validateAdminConfig($mergedValues);
+        $errors = $this->adminConfigService->validateAdminConfigDetails($mergedValues);
         if ($errors !== []) {
             return $this->errorResponse(
-                'invalid_admin_config',
+                'admin_config_invalid',
                 'Invalid admin configuration.',
                 Http::STATUS_BAD_REQUEST,
-                ['fields' => $this->redact($errors)]
+                $this->validationErrorDetails($errors)
             );
         }
 
@@ -79,7 +79,7 @@ class AdminSettingsController extends Controller {
             $this->adminConfigService->setAdminConfig($values);
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse(
-                'invalid_admin_config',
+                'admin_config_invalid',
                 $this->redactString($e->getMessage()),
                 Http::STATUS_BAD_REQUEST
             );
@@ -135,6 +135,10 @@ class AdminSettingsController extends Controller {
         foreach (self::CONFIG_KEYS as $key) {
             $value = $this->request->getParam($key, null);
             if ($value !== null) {
+                if ($key === AdminConfigService::KEY_ADMIN_API_KEY && trim((string)$value) === '') {
+                    continue;
+                }
+
                 $values[$key] = $value;
             }
         }
@@ -180,6 +184,40 @@ class AdminSettingsController extends Controller {
         ], $status);
     }
 
+    private function validationErrorDetails(array $fieldDetails): array {
+        $fields = [];
+        $normalisedDetails = [];
+        foreach ($fieldDetails as $field => $detail) {
+            if (!is_array($detail)) {
+                $fieldName = (string)$field;
+                $message = (string)$detail;
+                $fields[$fieldName] = $message;
+                $normalisedDetails[] = [
+                    'field' => $fieldName,
+                    'code' => 'invalid_value',
+                    'message' => $message,
+                    'params' => [],
+                ];
+                continue;
+            }
+
+            $fieldName = (string)($detail['field'] ?? $field);
+            $message = (string)($detail['message'] ?? 'Invalid value.');
+            $fields[$fieldName] = $message;
+            $normalisedDetails[] = [
+                'field' => $fieldName,
+                'code' => (string)($detail['code'] ?? 'invalid_value'),
+                'message' => $message,
+                'params' => is_array($detail['params'] ?? null) ? $detail['params'] : [],
+            ];
+        }
+
+        return [
+            'fields' => $fields,
+            'fieldDetails' => $normalisedDetails,
+        ];
+    }
+
     private function redact(mixed $value): mixed {
         if (is_array($value)) {
             $redacted = [];
@@ -203,7 +241,11 @@ class AdminSettingsController extends Controller {
     }
 
     private function redactString(string $value): string {
-        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/([?&](?:api[_-]?key|token|password|secret|authorization)=)[^&\s]+/i', '$1[redacted]', $value) ?? $value;
+        $value = preg_replace('/("(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*")[^"]+(")/i', '$1[redacted]$2', $value) ?? $value;
+        $value = preg_replace('/\b(authorization)(\s*[=:]\s*)bearer\s+[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/\bbearer\s+[^\s,;}]+/i', 'Bearer [redacted]', $value) ?? $value;
+        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
     }
 
     private function isSecretKey(string $key): bool {

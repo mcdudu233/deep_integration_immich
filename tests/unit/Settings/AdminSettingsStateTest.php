@@ -57,8 +57,13 @@ class AdminSettingsStateTest extends TestCase {
         $this->capabilityService->method('getCapabilities')->willReturn([
             'safeProxyBrowsing' => [
                 'supported' => false,
-                'reason' => 'probe failed with api_key=secret-admin-key',
-                'remediation' => 'configure admin_api_key=secret-admin-key again',
+                'reason' => 'probe failed with https://photos.example.com/check?api_key=secret-admin-key&token=query-token-redacted Authorization: Bearer test-bearer-redacted',
+                'remediation' => 'configure payload {"authorization":"Bearer test-bearer-redacted","admin_api_key":"json-admin-key-redacted"}',
+                'genericBearer' => 'retry with Bearer generic-bearer-redacted and password=generic-password-redacted',
+                'nested' => [
+                    'authorization' => 'Bearer nested-bearer-redacted',
+                    'admin_api_key_configured' => true,
+                ],
             ],
         ]);
         $this->syncStateService->expects($this->once())->method('listStates')->with(100, 0)->willReturn([
@@ -86,10 +91,22 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertTrue($provided['status']['credentials']['admin_api_key_configured']);
         $this->assertTrue($provided['status']['actions']['exportCopyEnabled']);
         $this->assertSame('alice', $provided['syncStates'][0]['ncUid']);
-        $this->assertSame('sync failed with api_key=[redacted]', $provided['syncStates'][0]['lastError']);
-        $this->assertSame('probe failed with api_key=[redacted]', $provided['capabilities']['safeProxyBrowsing']['reason']);
-        $this->assertSame('configure admin_api_key=[redacted] again', $provided['capabilities']['safeProxyBrowsing']['remediation']);
-        $this->assertStringNotContainsString('secret-admin-key', json_encode($provided, JSON_THROW_ON_ERROR));
+        $this->assertSame('sync failed with api_key=[redacted] authorization=[redacted];json={"admin_api_key":"[redacted]"}', $provided['syncStates'][0]['lastError']);
+        $this->assertSame('probe failed with https://photos.example.com/check?api_key=[redacted]&token=[redacted] Authorization: [redacted]', $provided['capabilities']['safeProxyBrowsing']['reason']);
+        $this->assertSame('configure payload {"authorization":"[redacted]","admin_api_key":"[redacted]"}', $provided['capabilities']['safeProxyBrowsing']['remediation']);
+        $this->assertSame('retry with Bearer [redacted] and password=[redacted]', $provided['capabilities']['safeProxyBrowsing']['genericBearer']);
+        $this->assertSame('[redacted]', $provided['capabilities']['safeProxyBrowsing']['nested']['authorization']);
+        $this->assertTrue($provided['capabilities']['safeProxyBrowsing']['nested']['admin_api_key_configured']);
+        $this->assertSame([], $provided['warningDetails']);
+        $encoded = json_encode($provided, JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('[redacted]', $encoded);
+        $this->assertStringNotContainsString('secret-admin-key', $encoded);
+        $this->assertStringNotContainsString('test-bearer-redacted', $encoded);
+        $this->assertStringNotContainsString('json-admin-key-redacted', $encoded);
+        $this->assertStringNotContainsString('query-token-redacted', $encoded);
+        $this->assertStringNotContainsString('generic-bearer-redacted', $encoded);
+        $this->assertStringNotContainsString('generic-password-redacted', $encoded);
+        $this->assertStringNotContainsString('nested-bearer-redacted', $encoded);
     }
 
     private function stateService(): FrontendInitialStateService {
@@ -112,7 +129,7 @@ class AdminSettingsStateTest extends TestCase {
         $state->setNcMountId(42);
         $state->setScopeStatus(SyncStateService::STATUS_ACTIVE);
         $state->setLastSyncStatus(SyncStateService::STATUS_QUOTA_FAILED);
-        $state->setLastError('sync failed with api_key=secret-admin-key');
+        $state->setLastError('sync failed with api_key=secret-admin-key authorization=Bearer test-bearer-redacted;json={"admin_api_key":"json-admin-key-redacted"}');
         $state->setCreatedAt(new DateTimeImmutable('2026-01-01T00:00:00+00:00'));
         $state->setUpdatedAt(new DateTimeImmutable('2026-01-02T00:00:00+00:00'));
         $state->setLastQuotaSyncAt(new DateTimeImmutable('2026-01-03T00:00:00+00:00'));

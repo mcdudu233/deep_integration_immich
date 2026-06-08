@@ -61,15 +61,15 @@ class AdminSettingsControllerTest extends TestCase {
         $savedConfig['admin_api_key_configured'] = true;
         $this->adminConfigService->method('getAdminConfig')->willReturnOnConsecutiveCalls($currentConfig, $savedConfig);
         $this->adminConfigService->expects($this->once())
-            ->method('validateAdminConfig')
-            ->with($this->callback(static fn(array $values): bool => $values['admin_api_key'] === 'secret-admin-key'))
+            ->method('validateAdminConfigDetails')
+            ->with($this->callback(static fn(array $values): bool => $values['admin_api_key'] === 'test-api-key-redacted'))
             ->willReturn([]);
         $this->adminConfigService->expects($this->once())
             ->method('setAdminConfig')
-            ->with($this->callback(static fn(array $values): bool => $values['admin_api_key'] === 'secret-admin-key'));
+            ->with($this->callback(static fn(array $values): bool => $values['admin_api_key'] === 'test-api-key-redacted'));
         $this->request->method('getParam')->willReturnMap($this->requestMap([
             'immich_base_url' => 'https://photos.example.com',
-            'admin_api_key' => 'secret-admin-key',
+            'admin_api_key' => 'test-api-key-redacted',
             'provisioning_enabled' => true,
         ]));
 
@@ -78,15 +78,56 @@ class AdminSettingsControllerTest extends TestCase {
 
         $this->assertSame(Http::STATUS_OK, $response->getStatus());
         $this->assertTrue($response->getData()['success']);
-        $this->assertStringNotContainsString('secret-admin-key', $encoded);
+        $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
+        $this->assertArrayNotHasKey('admin_api_key', $response->getData()['config']);
+    }
+
+    public function testSetConfigIgnoresBlankAdminApiKeyWhenCredentialIsAlreadyConfigured(): void {
+        $currentConfig = $this->validConfig();
+        $currentConfig['admin_api_key_configured'] = true;
+        $savedConfig = $currentConfig;
+        $savedConfig['immich_base_url'] = 'https://photos-updated.example.com';
+        $this->adminConfigService->method('getAdminConfig')->willReturnOnConsecutiveCalls($currentConfig, $savedConfig);
+        $this->adminConfigService->expects($this->once())
+            ->method('validateAdminConfigDetails')
+            ->with($this->callback(static fn(array $values): bool => !array_key_exists('admin_api_key', $values)
+                && $values['immich_base_url'] === 'https://photos-updated.example.com'
+                && $values['admin_api_key_configured'] === true))
+            ->willReturn([]);
+        $this->adminConfigService->expects($this->once())
+            ->method('setAdminConfig')
+            ->with($this->callback(static fn(array $values): bool => !array_key_exists('admin_api_key', $values)
+                && $values['immich_base_url'] === 'https://photos-updated.example.com'));
+        $this->request->method('getParam')->willReturnMap($this->requestMap([
+            'immich_base_url' => 'https://photos-updated.example.com',
+            'admin_api_key' => " \t ",
+        ]));
+
+        $response = $this->controller->setConfig();
+        $encoded = json_encode($response->getData(), JSON_THROW_ON_ERROR);
+
+        $this->assertSame(Http::STATUS_OK, $response->getStatus());
+        $this->assertTrue($response->getData()['success']);
+        $this->assertStringNotContainsString('stored-api-key-redacted', $encoded);
         $this->assertArrayNotHasKey('admin_api_key', $response->getData()['config']);
     }
 
     public function testSetConfigReturnsStructuredValidationError(): void {
         $this->adminConfigService->method('getAdminConfig')->willReturn($this->validConfig());
         $this->adminConfigService->expects($this->once())
-            ->method('validateAdminConfig')
-            ->willReturn(['immich_base_url' => 'URL is invalid.']);
+            ->method('validateAdminConfigDetails')
+            ->willReturn([
+                'immich_base_url' => [
+                    'field' => 'immich_base_url',
+                    'code' => AdminConfigService::VALIDATION_INVALID_URL,
+                    'message' => 'Immich base URL must be a valid http or https URL with a host.',
+                    'params' => [
+                        'allowed_schemes' => ['http', 'https'],
+                        'admin_api_key' => 'test-api-key-redacted',
+                        'authorization' => 'Bearer test-bearer-redacted',
+                    ],
+                ],
+            ]);
         $this->adminConfigService->expects($this->never())->method('setAdminConfig');
         $this->request->method('getParam')->willReturnMap($this->requestMap([
             'immich_base_url' => 'not-a-url',
@@ -94,11 +135,47 @@ class AdminSettingsControllerTest extends TestCase {
 
         $response = $this->controller->setConfig();
         $data = $response->getData();
+        $encoded = json_encode($data, JSON_THROW_ON_ERROR);
 
         $this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
         $this->assertFalse($data['success']);
-        $this->assertSame('invalid_admin_config', $data['error']['code']);
-        $this->assertSame('URL is invalid.', $data['error']['details']['fields']['immich_base_url']);
+        $this->assertSame('admin_config_invalid', $data['error']['code']);
+        $this->assertSame('Invalid admin configuration.', $data['error']['message']);
+        $this->assertSame('Immich base URL must be a valid http or https URL with a host.', $data['error']['details']['fields']['immich_base_url']);
+        $this->assertSame('immich_base_url', $data['error']['details']['fieldDetails'][0]['field']);
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_URL, $data['error']['details']['fieldDetails'][0]['code']);
+        $this->assertSame(['http', 'https'], $data['error']['details']['fieldDetails'][0]['params']['allowed_schemes']);
+        $this->assertSame('[redacted]', $data['error']['details']['fieldDetails'][0]['params']['admin_api_key']);
+        $this->assertSame('[redacted]', $data['error']['details']['fieldDetails'][0]['params']['authorization']);
+        $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-bearer-redacted', $encoded);
+    }
+
+    public function testSetConfigPersistenceFailureUsesSaveFailedCodeAndRedacts(): void {
+        $this->adminConfigService->method('getAdminConfig')->willReturn($this->validConfig());
+        $this->adminConfigService->method('validateAdminConfigDetails')->willReturn([]);
+        $this->adminConfigService->expects($this->once())
+            ->method('setAdminConfig')
+            ->willThrowException(new \RuntimeException('write failed with admin_api_key=test-api-key-redacted'));
+        $this->logger->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('admin_api_key=[redacted]'),
+                $this->callback(static fn(array $context): bool => ($context['app'] ?? '') !== '')
+            );
+        $this->request->method('getParam')->willReturnMap($this->requestMap([
+            'immich_base_url' => 'https://photos.example.com',
+        ]));
+
+        $response = $this->controller->setConfig();
+        $data = $response->getData();
+        $encoded = json_encode($data, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+        $this->assertFalse($data['success']);
+        $this->assertSame('admin_config_save_failed', $data['error']['code']);
+        $this->assertSame('Failed to save admin configuration.', $data['error']['message']);
+        $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
     }
 
     public function testValidateConnectionReturnsRedactedSuccess(): void {
@@ -106,7 +183,7 @@ class AdminSettingsControllerTest extends TestCase {
             ->method('validateAdminConnection')
             ->willReturn([
                 'success' => true,
-                'data' => ['token' => 'raw-token'],
+                'data' => ['token' => 'raw-token-redacted'],
             ]);
 
         $response = $this->controller->validateConnection();
@@ -122,11 +199,11 @@ class AdminSettingsControllerTest extends TestCase {
             ['immich_base_url', null, null],
             ['server_url', null, 'https://candidate.example.com'],
             ['admin_api_key', null, null],
-            ['api_key', null, 'candidate-secret'],
+            ['api_key', null, 'candidate-api-key-redacted'],
         ]);
         $this->immichUserAdminService->expects($this->once())
             ->method('validateAdminConnection')
-            ->with('https://candidate.example.com', 'candidate-secret')
+            ->with('https://candidate.example.com', 'candidate-api-key-redacted')
             ->willReturn(['success' => true, 'data' => ['probe' => 'GET /api/admin/users']]);
 
         $response = $this->controller->validateConnection();
@@ -137,7 +214,7 @@ class AdminSettingsControllerTest extends TestCase {
     public function testValidateConnectionFailureIsStructuredAndRedacted(): void {
         $this->immichUserAdminService->method('validateAdminConnection')->willReturn([
             'success' => false,
-            'error' => 'Immich failed with api_key=secret-admin-key',
+            'error' => 'Immich failed with api_key=test-api-key-redacted',
         ]);
 
         $response = $this->controller->validateConnection();
@@ -145,7 +222,9 @@ class AdminSettingsControllerTest extends TestCase {
 
         $this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
         $this->assertSame('connection_validation_failed', $response->getData()['error']['code']);
-        $this->assertStringNotContainsString('secret-admin-key', $encoded);
+        $this->assertSame('Connection validation failed.', $response->getData()['error']['message']);
+        $this->assertSame('Immich failed with api_key=[redacted]', $response->getData()['error']['details']['detail']);
+        $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
         $this->assertStringContainsString('api_key=[redacted]', $encoded);
     }
 

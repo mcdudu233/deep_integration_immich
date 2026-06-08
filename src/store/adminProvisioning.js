@@ -17,6 +17,16 @@ import {
 	verifyMountHealth,
 } from '../services/api.js'
 
+const ADMIN_CONFIG_ERROR_CODE_ALIASES = Object.freeze({
+	invalid_admin_config: 'admin_config_invalid',
+})
+
+const LEGACY_ADMIN_CONFIG_ERROR_MESSAGES = Object.freeze({
+	'Invalid admin configuration.': 'admin_config_invalid',
+	'Failed to save admin configuration.': 'admin_config_save_failed',
+	'Connection validation failed.': 'connection_validation_failed',
+})
+
 function stringifyFieldMessage(value) {
 	if (value === null || value === undefined) {
 		return ''
@@ -33,36 +43,85 @@ function stringifyFieldMessage(value) {
 	return String(value)
 }
 
-function normaliseFieldErrors(fields) {
+function normaliseParams(params) {
+	if (!params || typeof params !== 'object' || Array.isArray(params)) {
+		return {}
+	}
+
+	return { ...params }
+}
+
+function normaliseFieldDetail(entry, index) {
+	if (entry && typeof entry === 'object') {
+		return {
+			field: String(entry.field || entry.name || entry.key || index + 1),
+			code: entry.code ? String(entry.code) : null,
+			message: stringifyFieldMessage(entry.message || entry.detail || entry.error),
+			params: normaliseParams(entry.params),
+		}
+	}
+
+	return {
+		field: String(index + 1),
+		code: null,
+		message: stringifyFieldMessage(entry),
+		params: {},
+	}
+}
+
+function normaliseLegacyFieldValue(field, value) {
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		return {
+			field,
+			code: value.code ? String(value.code) : null,
+			message: stringifyFieldMessage(value.message || value.detail || value.error || value),
+			params: normaliseParams(value.params),
+		}
+	}
+
+	return {
+		field,
+		code: null,
+		message: stringifyFieldMessage(value),
+		params: {},
+	}
+}
+
+function normaliseLegacyFields(fields) {
 	if (!fields || typeof fields !== 'object') {
 		return []
 	}
 	if (Array.isArray(fields)) {
-		return fields.map((entry, index) => {
-			if (entry && typeof entry === 'object') {
-				return {
-					field: String(entry.field || entry.name || entry.key || index + 1),
-					message: stringifyFieldMessage(entry.message || entry.detail || entry.error || entry),
-				}
-			}
-			return {
-				field: String(index + 1),
-				message: stringifyFieldMessage(entry),
-			}
-		}).filter(entry => entry.message || entry.field)
+		return fields.map(normaliseFieldDetail).filter(entry => entry.message || entry.field)
 	}
 	return Object.entries(fields).flatMap(([field, value]) => {
 		if (Array.isArray(value)) {
-			return value.map(message => ({
-				field,
-				message: stringifyFieldMessage(message),
-			}))
+			return value.map(message => normaliseLegacyFieldValue(field, message))
 		}
-		return [{
-			field,
-			message: stringifyFieldMessage(value),
-		}]
+		return [normaliseLegacyFieldValue(field, value)]
 	}).filter(entry => entry.message || entry.field)
+}
+
+function normaliseFieldErrors(details) {
+	if (!details || typeof details !== 'object') {
+		return []
+	}
+
+	const fieldDetails = Array.isArray(details.fieldDetails)
+		? details.fieldDetails.map(normaliseFieldDetail).filter(entry => entry.message || entry.field)
+		: []
+
+	return fieldDetails.length > 0 ? fieldDetails : normaliseLegacyFields(details.fields)
+}
+
+function normaliseAdminErrorCode(code, message = '') {
+	const normalizedCode = String(code || '').trim()
+	if (normalizedCode !== '') {
+		return ADMIN_CONFIG_ERROR_CODE_ALIASES[normalizedCode] ?? normalizedCode
+	}
+
+	const normalizedMessage = String(message || '').trim()
+	return LEGACY_ADMIN_CONFIG_ERROR_MESSAGES[normalizedMessage] ?? null
 }
 
 /**
@@ -78,11 +137,12 @@ function normaliseErrorDetails(e) {
 	const details = backendError?.details && typeof backendError.details === 'object'
 		? backendError.details
 		: {}
+	const backendMessage = backendError?.message ? String(backendError.message) : ''
 	let message = ''
 	if (details.detail) {
 		message = String(details.detail)
-	} else if (backendError?.message) {
-		message = String(backendError.message)
+	} else if (backendMessage) {
+		message = backendMessage
 	} else if (backendError) {
 		message = String(backendError)
 	} else if (data?.detail) {
@@ -93,9 +153,9 @@ function normaliseErrorDetails(e) {
 
 	return {
 		message,
-		code: backendError?.code ?? null,
+		code: normaliseAdminErrorCode(backendError?.code, backendMessage || message),
 		details,
-		fields: normaliseFieldErrors(details.fields),
+		fields: normaliseFieldErrors(details),
 	}
 }
 
@@ -147,7 +207,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 			try {
 				const payload = { ...config }
 				for (const key of Object.keys(payload)) {
-					if ((key === 'admin_api_key' || key === 'immich_admin_api_key') && !payload[key]) {
+					if ((key === 'admin_api_key' || key === 'immich_admin_api_key') && String(payload[key] ?? '').trim() === '') {
 						delete payload[key]
 					}
 				}
@@ -172,7 +232,7 @@ export const useAdminProvisioningStore = defineStore('adminProvisioning', {
 			try {
 				const payload = {}
 				if (serverUrl) payload.immich_base_url = serverUrl
-				if (apiKey) payload.admin_api_key = apiKey
+				if (String(apiKey ?? '').trim() !== '') payload.admin_api_key = apiKey
 				const response = await validateAdminConnection(payload)
 				return response.data
 			} catch (e) {
