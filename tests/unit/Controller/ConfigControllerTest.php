@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Controller;
 
 use OCA\IntegrationImmich\Controller\ConfigController;
+use OCA\IntegrationImmich\Service\ActionPolicyService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
@@ -16,6 +17,7 @@ class ConfigControllerTest extends TestCase {
 
 	private ConfigController $controller;
 	private ImmichService&MockObject $immichService;
+	private ActionPolicyService&MockObject $actionPolicyService;
 	private IRequest&MockObject $request;
 	private LoggerInterface&MockObject $logger;
 
@@ -23,12 +25,21 @@ class ConfigControllerTest extends TestCase {
 		parent::setUp();
 
 		$this->immichService = $this->createMock(ImmichService::class);
+		$this->actionPolicyService = $this->createMock(ActionPolicyService::class);
 		$this->request = $this->createMock(IRequest::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->actionPolicyService->method('getCapabilityFlags')->with('testuser')->willReturn([
+			'exportCopyEnabled' => false,
+			'importToImmichEnabled' => false,
+			'immichDeleteEnabled' => false,
+			'mirrorMountPaths' => [],
+		]);
 
 		$this->controller = new ConfigController(
 			$this->request,
 			$this->immichService,
+			$this->actionPolicyService,
+			'testuser',
 			$this->logger,
 		);
 	}
@@ -43,6 +54,7 @@ class ConfigControllerTest extends TestCase {
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
 		$this->assertEquals('https://photos.example.com', $data['server_url']);
 		$this->assertTrue($data['api_key_set']);
+		$this->assertSame(false, $data['actionCapabilities']['exportCopyEnabled']);
 		$this->assertArrayNotHasKey('api_key_masked', $data);
 	}
 

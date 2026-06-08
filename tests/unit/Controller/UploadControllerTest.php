@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Controller;
 
 use OCA\IntegrationImmich\Controller\UploadController;
+use OCA\IntegrationImmich\Service\ActionPolicyService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Http;
 use OCP\Files\File;
@@ -22,6 +23,7 @@ class UploadControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private IRootFolder&MockObject $rootFolder;
 	private LoggerInterface&MockObject $logger;
+	private ActionPolicyService&MockObject $actionPolicyService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -30,12 +32,16 @@ class UploadControllerTest extends TestCase {
 		$this->request = $this->createMock(IRequest::class);
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->actionPolicyService = $this->createMock(ActionPolicyService::class);
+		$this->actionPolicyService->method('isImportToImmichEnabled')->willReturn(true);
+		$this->actionPolicyService->method('isPathInsideMirrorMount')->willReturn(false);
 
 		$this->controller = new UploadController(
 			$this->request,
 			$this->immichService,
 			$this->rootFolder,
 			'testuser',
+			$this->actionPolicyService,
 			$this->logger,
 		);
 	}
@@ -92,7 +98,11 @@ class UploadControllerTest extends TestCase {
 		$this->request->method('getParam')->with('fileId')->willReturn('42');
 
 		$file = $this->createMock(File::class);
-		$file->method('getContent')->willReturn('binary-data');
+		$stream = fopen('php://memory', 'rb+');
+		fwrite($stream, 'binary-data');
+		rewind($stream);
+		$file->method('getPath')->willReturn('/testuser/files/Photos/photo.jpg');
+		$file->method('fopen')->with('rb')->willReturn($stream);
 		$file->method('getName')->willReturn('photo.jpg');
 		$file->method('getMimeType')->willReturn('image/jpeg');
 		$file->method('getCreationTime')->willReturn(0);

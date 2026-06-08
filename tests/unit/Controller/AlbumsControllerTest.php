@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Controller;
 
 use OCA\IntegrationImmich\Controller\AlbumsController;
-use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\BrowsingAuthService;
 use OCP\AppFramework\Http;
+use OCP\Http\Client\IClient;
+use OCP\Http\Client\IClientService;
+use OCP\Http\Client\IResponse;
 use OCP\IRequest;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LoggerInterface;
@@ -14,195 +17,230 @@ use Test\TestCase;
 
 class AlbumsControllerTest extends TestCase {
 
-	private AlbumsController $controller;
-	private ImmichService&MockObject $immichService;
-	private IRequest&MockObject $request;
-	private LoggerInterface&MockObject $logger;
+    private AlbumsController $controller;
+    private BrowsingAuthService&MockObject $browsingAuthService;
+    private IClientService&MockObject $clientService;
+    private IClient&MockObject $client;
+    private IRequest&MockObject $request;
 
-	private const VALID_UUID   = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-	private const INVALID_UUID = 'not-a-valid-uuid';
+    private const VALID_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+    private const INVALID_UUID = 'not-a-valid-uuid';
 
-	protected function setUp(): void {
-		parent::setUp();
+    protected function setUp(): void {
+        parent::setUp();
 
-		$this->immichService = $this->createMock(ImmichService::class);
-		$this->request = $this->createMock(IRequest::class);
-		$this->logger = $this->createMock(LoggerInterface::class);
+        $this->browsingAuthService = $this->createMock(BrowsingAuthService::class);
+        $this->clientService = $this->createMock(IClientService::class);
+        $this->client = $this->createMock(IClient::class);
+        $this->request = $this->createMock(IRequest::class);
 
-		$this->controller = new AlbumsController(
-			$this->request,
-			$this->immichService,
-			$this->logger,
-		);
-	}
+        $this->controller = new AlbumsController(
+            $this->request,
+            $this->clientService,
+            $this->browsingAuthService,
+            'testuser',
+            $this->createMock(LoggerInterface::class),
+        );
+    }
 
-	// --- index() ---
+    public function testIndexReturns412WhenNotConfigured(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->unavailableCredentials());
+        $this->clientService->expects($this->never())->method('newClient');
 
-	public function testIndexReturns412WhenNotConfigured(): void {
-		$this->immichService->method('isConfigured')->willReturn(false);
+        $response = $this->controller->index();
 
-		$response = $this->controller->index();
+        $this->assertEquals(Http::STATUS_PRECONDITION_FAILED, $response->getStatus());
+    }
 
-		$this->assertEquals(Http::STATUS_PRECONDITION_FAILED, $response->getStatus());
-	}
+    public function testIndexReturns400OnInvalidAssetId(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetId', '')->willReturn(self::INVALID_UUID);
 
-	public function testIndexReturns400OnInvalidAssetId(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetId', '')->willReturn(self::INVALID_UUID);
+        $response = $this->controller->index();
 
-		$response = $this->controller->index();
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+    public function testIndexReturnsAlbums(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetId', '')->willReturn('');
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('get')
+            ->willReturn($this->jsonResponse([['id' => self::VALID_UUID, 'albumName' => 'Test']]));
 
-	public function testIndexReturnsAlbums(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetId', '')->willReturn('');
-		$this->immichService->method('getAlbums')->willReturn([['id' => self::VALID_UUID, 'albumName' => 'Test']]);
+        $response = $this->controller->index();
 
-		$response = $this->controller->index();
+        $this->assertEquals(Http::STATUS_OK, $response->getStatus());
+        $this->assertCount(1, $response->getData());
+    }
 
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertCount(1, $response->getData());
-	}
+    public function testShowReturns400OnInvalidId(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
 
-	// --- show() ---
+        $response = $this->controller->show(self::INVALID_UUID);
 
-	public function testShowReturns400OnInvalidId(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-		$response = $this->controller->show(self::INVALID_UUID);
+    public function testShowReturnsAlbum(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('get')
+            ->willReturn($this->jsonResponse(['id' => self::VALID_UUID]));
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $response = $this->controller->show(self::VALID_UUID);
 
-	public function testShowReturnsAlbum(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->immichService->method('getAlbum')->willReturn(['id' => self::VALID_UUID]);
+        $this->assertEquals(Http::STATUS_OK, $response->getStatus());
+    }
 
-		$response = $this->controller->show(self::VALID_UUID);
+    public function testCreateReturns400WhenAlbumNameEmpty(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->willReturnMap([
+            ['albumName', '', '   '],
+            ['assetIds', [], []],
+        ]);
 
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-	}
+        $response = $this->controller->create();
 
-	// --- create() ---
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-	public function testCreateReturns400WhenAlbumNameEmpty(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->willReturnMap([
-			['albumName', '', '   '],
-			['assetIds', [], []],
-		]);
+    public function testCreateReturns400OnInvalidAssetId(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->willReturnMap([
+            ['albumName', '', 'My Album'],
+            ['assetIds', [], [self::INVALID_UUID]],
+        ]);
 
-		$response = $this->controller->create();
+        $response = $this->controller->create();
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-	public function testCreateReturns400OnInvalidAssetId(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->willReturnMap([
-			['albumName', '', 'My Album'],
-			['assetIds', [], [self::INVALID_UUID]],
-		]);
+    public function testCreateReturns201OnSuccess(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->willReturnMap([
+            ['albumName', '', 'My Album'],
+            ['assetIds', [], []],
+        ]);
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('post')
+            ->willReturn($this->jsonResponse(['id' => self::VALID_UUID]));
 
-		$response = $this->controller->create();
+        $response = $this->controller->create();
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $this->assertEquals(Http::STATUS_CREATED, $response->getStatus());
+    }
 
-	public function testCreateReturns201OnSuccess(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->willReturnMap([
-			['albumName', '', 'My Album'],
-			['assetIds', [], []],
-		]);
-		$this->immichService->method('createAlbum')->willReturn(['id' => self::VALID_UUID]);
+    public function testDeleteReturns400OnInvalidId(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
 
-		$response = $this->controller->create();
+        $response = $this->controller->delete(self::INVALID_UUID);
 
-		$this->assertEquals(Http::STATUS_CREATED, $response->getStatus());
-	}
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-	// --- delete() ---
+    public function testDeleteReturnsSuccess(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('delete')
+            ->willReturn($this->jsonResponse([]));
 
-	public function testDeleteReturns400OnInvalidId(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
+        $response = $this->controller->delete(self::VALID_UUID);
 
-		$response = $this->controller->delete(self::INVALID_UUID);
+        $this->assertEquals(Http::STATUS_OK, $response->getStatus());
+        $this->assertTrue($response->getData()['success']);
+    }
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+    public function testRenameReturns400WhenNameEmpty(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('albumName', '')->willReturn('');
 
-	public function testDeleteReturnsSuccess(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		// deleteAlbum returns void — no return value to mock
+        $response = $this->controller->rename(self::VALID_UUID);
 
-		$response = $this->controller->delete(self::VALID_UUID);
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertTrue($response->getData()['success']);
-	}
+    public function testRenameSucceeds(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('albumName', '')->willReturn('New Name');
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('patch')
+            ->willReturn($this->jsonResponse(['id' => self::VALID_UUID, 'albumName' => 'New Name']));
 
-	// --- rename() ---
+        $response = $this->controller->rename(self::VALID_UUID);
 
-	public function testRenameReturns400WhenNameEmpty(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('albumName', '')->willReturn('');
+        $this->assertEquals(Http::STATUS_OK, $response->getStatus());
+    }
 
-		$response = $this->controller->rename(self::VALID_UUID);
+    public function testRemoveAssetsReturns400WhenArrayEmpty(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetIds', [])->willReturn([]);
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $response = $this->controller->removeAssets(self::VALID_UUID);
 
-	public function testRenameSucceeds(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('albumName', '')->willReturn('New Name');
-		$this->immichService->method('renameAlbum')->willReturn(['id' => self::VALID_UUID, 'albumName' => 'New Name']);
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-		$response = $this->controller->rename(self::VALID_UUID);
+    public function testRemoveAssetsReturns400OnInvalidAssetId(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetIds', [])->willReturn([self::INVALID_UUID]);
 
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-	}
+        $response = $this->controller->removeAssets(self::VALID_UUID);
 
-	// --- removeAssets() ---
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-	public function testRemoveAssetsReturns400WhenArrayEmpty(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetIds', [])->willReturn([]);
+    public function testAddAssetsReturns400WhenArrayEmpty(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetIds', [])->willReturn([]);
 
-		$response = $this->controller->removeAssets(self::VALID_UUID);
+        $response = $this->controller->addAssets(self::VALID_UUID);
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+    }
 
-	public function testRemoveAssetsReturns400OnInvalidAssetId(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetIds', [])->willReturn([self::INVALID_UUID]);
+    public function testAddAssetsSucceeds(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->personalCredentials());
+        $this->request->method('getParam')->with('assetIds', [])->willReturn([self::VALID_UUID]);
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('put')
+            ->willReturn($this->jsonResponse([['success' => true]]));
 
-		$response = $this->controller->removeAssets(self::VALID_UUID);
+        $response = $this->controller->addAssets(self::VALID_UUID);
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
+        $this->assertEquals(Http::STATUS_OK, $response->getStatus());
+    }
 
-	// --- addAssets() ---
+    private function personalCredentials(): array {
+        return [
+            'mode' => BrowsingAuthService::MODE_PERSONAL,
+            'url' => 'https://photos.example.com',
+            'apiKey' => 'personal-key',
+            'immichUserId' => null,
+        ];
+    }
 
-	public function testAddAssetsReturns400WhenArrayEmpty(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetIds', [])->willReturn([]);
+    private function unavailableCredentials(): array {
+        return [
+            'mode' => BrowsingAuthService::MODE_UNAVAILABLE,
+            'url' => '',
+            'apiKey' => null,
+            'immichUserId' => null,
+        ];
+    }
 
-		$response = $this->controller->addAssets(self::VALID_UUID);
-
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-	}
-
-	public function testAddAssetsSucceeds(): void {
-		$this->immichService->method('isConfigured')->willReturn(true);
-		$this->request->method('getParam')->with('assetIds', [])->willReturn([self::VALID_UUID]);
-		$this->immichService->method('addAssetsToAlbum')->willReturn([['success' => true]]);
-
-		$response = $this->controller->addAssets(self::VALID_UUID);
-
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-	}
+    private function jsonResponse(array $body): IResponse&MockObject {
+        $response = $this->createMock(IResponse::class);
+        $response->method('getStatusCode')->willReturn(200);
+        $response->method('getBody')->willReturn(json_encode($body, JSON_THROW_ON_ERROR));
+        $response->method('getHeader')->willReturn('');
+        return $response;
+    }
 }

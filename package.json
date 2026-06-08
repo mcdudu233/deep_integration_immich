@@ -6,10 +6,19 @@
     "private": true,
     "scripts": {
         "build": "node build-l10n.mjs && webpack --mode production --progress",
+        "build-l10n": "node build-l10n.mjs",
         "dev": "node build-l10n.mjs && webpack --mode development --progress",
         "watch": "node build-l10n.mjs && webpack --mode development --watch --progress",
         "serve": "node build-l10n.mjs && webpack --mode development serve --progress",
-        "l10n": "node build-l10n.mjs"
+        "l10n": "npm run build-l10n",
+        "verify": "npm run verify:backend && npm run verify:safety",
+        "verify:ci": "npm run verify:backend && npm run build && npm run verify:safety",
+        "verify:backend": "npm run verify:php-syntax && npm run verify:phpunit",
+        "verify:php-syntax": "node scripts/verify-php-syntax.mjs",
+        "verify:phpunit": "vendor/bin/phpunit -c tests/phpunit.xml",
+        "verify:safety": "npm run verify:safety:scan && npm run verify:safety:phpunit",
+        "verify:safety:scan": "node scripts/verify-safety-scan.mjs",
+        "verify:safety:phpunit": "vendor/bin/phpunit -c tests/phpunit.xml --filter SafetyGuardrailTest"
     },
     "dependencies": {
         "@nextcloud/axios": "^2.6.0",

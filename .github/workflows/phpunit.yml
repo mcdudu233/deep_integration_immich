@@ -7,8 +7,13 @@ on:
       - appinfo/**
       - composer.*
       - lib/**
+      - package*.json
+      - scripts/**
+      - src/**
       - templates/**
       - tests/**
+      - webpack.config.js
+      - build-l10n.mjs
   push:
     branches:
       - master
@@ -18,8 +23,13 @@ on:
       - appinfo/**
       - composer.*
       - lib/**
+      - package*.json
+      - scripts/**
+      - src/**
       - templates/**
       - tests/**
+      - webpack.config.js
+      - build-l10n.mjs
 
 env:
   APP_NAME: integration_immich
@@ -81,7 +91,7 @@ jobs:
 
       - name: Set up PHPUnit
         working-directory: apps/${{ env.APP_NAME }}
-        run: composer i
+        run: composer install --no-interaction --prefer-dist
 
       - name: Set up Nextcloud
         run: |
@@ -96,4 +106,34 @@ jobs:
 
       - name: PHPUnit
         working-directory: apps/${{ env.APP_NAME }}
-        run: ./vendor/phpunit/phpunit/phpunit -c tests/phpunit.xml
+        run: vendor/bin/phpunit -c tests/phpunit.xml
+
+      - name: Safety guardrail PHPUnit
+        working-directory: apps/${{ env.APP_NAME }}
+        run: vendor/bin/phpunit -c tests/phpunit.xml --filter SafetyGuardrailTest
+
+  frontend:
+    runs-on: ubuntu-latest
+    name: npm-build
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build localization bundle
+        run: npm run build-l10n
+
+      - name: Build production JS
+        run: npm run build
+
+      - name: Forbidden-operation scan
+        run: npm run verify:safety:scan
