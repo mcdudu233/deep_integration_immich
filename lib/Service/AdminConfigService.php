@@ -77,6 +77,17 @@ class AdminConfigService {
         self::KEY_MOUNT_NAME_TEMPLATE,
     ];
 
+    private const PATH_TEMPLATE_KEYS = [
+        self::KEY_HOST_PATH_TEMPLATE,
+        self::KEY_NC_VISIBLE_PATH_TEMPLATE,
+    ];
+
+    private const PATH_DEPENDENT_KEYS = [
+        self::KEY_PROVISIONING_ENABLED,
+        self::KEY_MKDIR_POLICY_ENABLED,
+        self::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
+    ];
+
     private const VALID_USER_SCOPE_MODES = ['all', 'groups'];
     private const VALID_QUOTA_SYNC_MODES = ['disabled', 'manual', 'event_scheduled'];
     private const VALID_DELETE_DISABLE_POLICIES = ['disable_suspend', 'delete_opt_in'];
@@ -180,8 +191,14 @@ class AdminConfigService {
             $errors[self::KEY_USER_SCOPE_GROUPS] = 'User scope groups must be a JSON array of non-empty group IDs.';
         }
 
+        $pathTemplatesRequired = $this->pathTemplatesRequired($values);
         foreach (self::TEMPLATE_KEYS as $key) {
-            $error = $this->validateTemplate((string)$values[$key]);
+            $template = (string)$values[$key];
+            if (!$pathTemplatesRequired && in_array($key, self::PATH_TEMPLATE_KEYS, true) && trim($template) === '') {
+                continue;
+            }
+
+            $error = $this->validateTemplate($template);
             if ($error !== null) {
                 $errors[$key] = $error;
             }
@@ -383,6 +400,16 @@ class AdminConfigService {
         }
 
         return $groups;
+    }
+
+    private function pathTemplatesRequired(array $values): bool {
+        foreach (self::PATH_DEPENDENT_KEYS as $key) {
+            if ($this->parseBool($values[$key] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function validateTemplate(string $template): ?string {

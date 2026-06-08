@@ -96,6 +96,35 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertTrue($this->service->isConfigured());
     }
 
+    public function testConnectionOnlySaveAllowsEmptyPathTemplatesWhenPathFeaturesAreDisabled(): void {
+        $this->service->setAdminConfig([
+            'immich_base_url' => 'https://photos.example.com',
+            'admin_api_key' => 'secret-admin-key',
+        ]);
+
+        $config = $this->service->getAdminConfig();
+
+        $this->assertSame('https://photos.example.com', $config['immich_base_url']);
+        $this->assertSame('', $config['host_path_template']);
+        $this->assertSame('', $config['nc_visible_path_template']);
+        $this->assertTrue($config['admin_api_key_configured']);
+        $this->assertTrue($this->service->isConfigured());
+        $this->assertSame('encrypted:secret-admin-key', $this->appValues['admin_api_key']);
+    }
+
+    public function testPathTemplatesAreRequiredWhenPathDependentFeaturesAreEnabled(): void {
+        foreach (['provisioning_enabled', 'mkdir_policy_enabled', 'external_storage_auto_create'] as $flag) {
+            $errors = $this->service->validateAdminConfig([
+                $flag => true,
+                'host_path_template' => '',
+                'nc_visible_path_template' => '',
+            ]);
+
+            $this->assertArrayHasKey('host_path_template', $errors, $flag);
+            $this->assertArrayHasKey('nc_visible_path_template', $errors, $flag);
+        }
+    }
+
     public function testGetAdminConfigMasksAdminApiKey(): void {
         $this->appValues['immich_base_url'] = 'https://photos.example.com';
         $this->appValues['admin_api_key'] = 'encrypted:secret-admin-key';
