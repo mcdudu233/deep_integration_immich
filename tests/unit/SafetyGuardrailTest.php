@@ -111,6 +111,10 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString('blankAdminApiKeyOmitted', $payloadScript);
         $this->assertStringContainsString('pathTemplatesPreserved', $payloadScript);
         $this->assertStringContainsString('nonBlankAdminApiKeyPreserved', $payloadScript);
+        $this->assertStringContainsString("adminSettingsSource.includes('@update:checked')", $payloadScript);
+        $this->assertStringContainsString('assertRadioGroupBindings(adminSettingsSource', $payloadScript);
+        $this->assertStringContainsString("{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] }", $payloadScript);
+        $this->assertStringContainsString("assertInitialPasswordPolicyValidation('[redacted]', 'invalid_enum')", $payloadScript);
 
         $adminConfigSource = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'AdminConfigService.php');
         $this->assertStringContainsString('$effectiveValues = $this->normaliseEffectivePathFeatureFlags($values);', $adminConfigSource);
@@ -132,9 +136,11 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString('fieldDetails', $adminSettingsController);
         $this->assertStringContainsString('private function redact(mixed $value): mixed', $adminSettingsController);
         $this->assertStringContainsString('private function isSecretKey(string $key): bool', $adminSettingsController);
+        self::assertInitialPasswordPolicyIsSafeConfigKey($adminSettingsController, 'AdminSettingsController');
 
         $frontendInitialStateService = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'FrontendInitialStateService.php');
         $this->assertStringContainsString('private function redactString(string $value): string', $frontendInitialStateService);
+        self::assertInitialPasswordPolicyIsSafeConfigKey($frontendInitialStateService, 'FrontendInitialStateService');
         $this->assertStringContainsString('[?&](?:api[_-]?key|token|password|secret|authorization)=', $frontendInitialStateService);
         $this->assertStringContainsString('"(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*"', $frontendInitialStateService);
         $this->assertStringContainsString('\b(authorization)(\s*[=:]\s*)bearer\s+', $frontendInitialStateService);
@@ -145,11 +151,15 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString('testSetConfigReturnsStructuredValidationError', $adminSettingsControllerTest);
         $this->assertStringContainsString('testSetConfigPersistenceFailureUsesSaveFailedCodeAndRedacts', $adminSettingsControllerTest);
         $this->assertStringContainsString('testValidateConnectionFailureIsStructuredAndRedacted', $adminSettingsControllerTest);
+        $this->assertStringContainsString('testGetConfigPreservesSsoOidcPasswordPolicyAndRedactsCredentialFields', $adminSettingsControllerTest);
+        $this->assertStringContainsString('$this->assertSame(\'sso_oidc\', $config[\'initial_password_policy\']);', $adminSettingsControllerTest);
         $this->assertStringContainsString("assertStringNotContainsString('test-api-key-redacted'", $adminSettingsControllerTest);
         $this->assertStringContainsString("assertStringNotContainsString('test-bearer-redacted'", $adminSettingsControllerTest);
 
         $adminStateTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Settings' . DIRECTORY_SEPARATOR . 'AdminSettingsStateTest.php');
         $pageStateTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Controller' . DIRECTORY_SEPARATOR . 'PageControllerStateTest.php');
+        $this->assertStringContainsString('testAdminInitialStatePreservesRandomPasswordPolicyAndRedactsConfigSecrets', $adminStateTest);
+        $this->assertStringContainsString('$this->assertSame(\'random\', $settings[AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);', $adminStateTest);
         $this->assertStringContainsString("assertStringNotContainsString('secret-admin-key'", $adminStateTest);
         $this->assertStringContainsString("assertStringNotContainsString('test-bearer-redacted'", $adminStateTest);
         $this->assertStringContainsString("assertStringNotContainsString('json-admin-key-redacted'", $adminStateTest);
@@ -470,6 +480,28 @@ PHP;
         }
 
         return strtolower($controllerName);
+    }
+
+    private static function assertInitialPasswordPolicyIsSafeConfigKey(string $source, string $label): void {
+        $safeKeysIndex = strpos($source, 'private const SAFE_CONFIG_KEYS = [');
+        $policyKeyIndex = strpos($source, 'AdminConfigService::KEY_INITIAL_PASSWORD_POLICY', $safeKeysIndex === false ? 0 : $safeKeysIndex);
+        $secretKeysIndex = strpos($source, 'private const SECRET_CONFIG_KEYS = [');
+        if ($safeKeysIndex === false || $policyKeyIndex === false || $secretKeysIndex === false) {
+            self::fail($label . ' must classify initial_password_policy in SAFE_CONFIG_KEYS before SECRET_CONFIG_KEYS.');
+        }
+        self::assertLessThan($policyKeyIndex, $safeKeysIndex, $label . ' SAFE_CONFIG_KEYS must be defined before initial_password_policy.');
+        self::assertLessThan($secretKeysIndex, $policyKeyIndex, $label . ' initial_password_policy must be in SAFE_CONFIG_KEYS, not SECRET_CONFIG_KEYS.');
+
+        $isSecretKeyIndex = strpos($source, 'private function isSecretKey');
+        if ($isSecretKeyIndex === false) {
+            self::fail($label . ' must define isSecretKey.');
+        }
+        $safeCheckIndex = strpos($source, 'in_array($normalisedKey, self::SAFE_CONFIG_KEYS, true)', $isSecretKeyIndex);
+        $secretCheckIndex = strpos($source, 'in_array($normalisedKey, self::SECRET_CONFIG_KEYS, true)', $isSecretKeyIndex);
+        if ($safeCheckIndex === false || $secretCheckIndex === false) {
+            self::fail($label . ' must check SAFE_CONFIG_KEYS and SECRET_CONFIG_KEYS in isSecretKey.');
+        }
+        self::assertLessThan($secretCheckIndex, $safeCheckIndex, $label . ' must check SAFE_CONFIG_KEYS before SECRET_CONFIG_KEYS.');
     }
 
     private static function projectRoot(): string {

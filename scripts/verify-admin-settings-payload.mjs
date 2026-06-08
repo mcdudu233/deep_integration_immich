@@ -11,9 +11,27 @@ const evidenceDir = join(workspaceRoot, '.omo', 'evidence')
 const helperModule = await import(pathToFileURL(join(appRoot, 'src', 'services', 'adminSettingsPayload.js')).href)
 const {
 	KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES,
+	REDACTED_MARKERS,
+	VALID_INITIAL_PASSWORD_POLICIES,
 	buildAdminConfigPayload,
+	isAdminConfigPayloadValidationError,
 	normalizeAdminConfigErrorCode,
 } = helperModule.default ?? helperModule
+
+function assertInitialPasswordPolicyValidation(value, expectedCode) {
+	assert.throws(
+		() => buildAdminConfigPayload({ ...disabledForm, initial_password_policy: value }),
+		(error) => {
+			assert.equal(isAdminConfigPayloadValidationError(error), true)
+			assert.equal(error.code, 'admin_config_invalid')
+			assert.equal(error.fields?.[0]?.field, 'initial_password_policy')
+			assert.equal(error.fields?.[0]?.code, expectedCode)
+			assert.equal(error.fields?.[0]?.message, 'Initial password policy must be random or sso_oidc.')
+			assert.deepEqual(error.fields?.[0]?.params?.allowed, VALID_INITIAL_PASSWORD_POLICIES)
+			return true
+		},
+	)
+}
 
 function extractNamedFunction(source, functionName) {
 	const start = source.indexOf(`function ${functionName}(`)
@@ -35,6 +53,43 @@ function extractNamedFunction(source, functionName) {
 	}
 
 	assert.fail(`Could not extract ${functionName}`)
+}
+
+function escapeRegExp(value) {
+	return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function extractNcCheckboxRadioSwitchTags(source) {
+	return source.match(/<NcCheckboxRadioSwitch\b[\s\S]*?>/g) ?? []
+}
+
+function hasStaticAttribute(tag, attribute, value) {
+	return new RegExp(`\\b${escapeRegExp(attribute)}\\s*=\\s*["']${escapeRegExp(value)}["']`).test(tag)
+}
+
+function hasFormVModel(tag, field) {
+	return new RegExp(`\\bv-model\\s*=\\s*["']form\\.${escapeRegExp(field)}["']`).test(tag)
+}
+
+function staticAttributeValue(tag, attribute) {
+	const match = tag.match(new RegExp(`\\b${escapeRegExp(attribute)}\\s*=\\s*["']([^"']+)["']`))
+	return match?.[1] ?? null
+}
+
+function assertRadioGroupBindings(source, group) {
+	const matchingTags = extractNcCheckboxRadioSwitchTags(source).filter(tag => hasFormVModel(tag, group.field)
+		&& hasStaticAttribute(tag, 'name', group.field)
+		&& hasStaticAttribute(tag, 'type', 'radio'))
+	const actualValues = matchingTags
+		.map(tag => staticAttributeValue(tag, 'value'))
+		.filter(value => value !== null)
+		.sort()
+
+	assert.deepEqual(
+		actualValues,
+		group.values.slice().sort(),
+		`${group.field} radio controls must use v-model="form.${group.field}", name="${group.field}", type="radio", and the expected values`,
+	)
 }
 
 const disabledForm = {
@@ -89,6 +144,24 @@ assert.equal(enabledPayload.external_storage_auto_create, true)
 assert.deepEqual(enabledPayload.user_scope_groups, ['family', 'mobile-uploaders'])
 assert.equal(enabledPayload.delete_opt_in_confirmed, true)
 
+assert.deepEqual(VALID_INITIAL_PASSWORD_POLICIES, ['random', 'sso_oidc'])
+assert.deepEqual(REDACTED_MARKERS, ['[redacted]'])
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: 'random' }).initial_password_policy, 'random')
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: 'sso_oidc' }).initial_password_policy, 'sso_oidc')
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: undefined }).initial_password_policy, 'random')
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: null }).initial_password_policy, 'random')
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: '   ' }).initial_password_policy, 'random')
+assertInitialPasswordPolicyValidation('[redacted]', 'invalid_enum')
+assertInitialPasswordPolicyValidation('passwordless', 'invalid_enum')
+
+const blankApiKeyPolicyPayload = buildAdminConfigPayload({
+	...disabledForm,
+	admin_api_key: '',
+	initial_password_policy: 'sso_oidc',
+})
+assert.equal(blankApiKeyPolicyPayload.initial_password_policy, 'sso_oidc')
+assert.equal(Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key'), false)
+
 assert.equal(normalizeAdminConfigErrorCode('invalid_admin_config'), 'admin_config_invalid')
 assert.equal(normalizeAdminConfigErrorCode(null, 'Invalid admin configuration.'), 'admin_config_invalid')
 assert.equal(normalizeAdminConfigErrorCode(null, 'Failed to save admin configuration.'), 'admin_config_save_failed')
@@ -110,6 +183,19 @@ const requiredFieldCodes = [
 assert.deepEqual(KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES, requiredFieldCodes)
 
 const adminSettingsSource = readFileSync(join(appRoot, 'src', 'AdminSettings.vue'), 'utf8')
+assert.equal(adminSettingsSource.includes('@update:checked'), false, 'AdminSettings.vue must not use @update:checked; use v-model/modelValue semantics for NcCheckboxRadioSwitch controls')
+
+const requiredRadioGroups = [
+	{ field: 'user_scope_mode', values: ['all', 'groups'] },
+	{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] },
+	{ field: 'quota_sync_mode', values: ['disabled', 'manual', 'event_scheduled'] },
+	{ field: 'delete_disable_policy', values: ['disable_suspend', 'delete_opt_in'] },
+]
+
+for (const group of requiredRadioGroups) {
+	assertRadioGroupBindings(adminSettingsSource, group)
+}
+
 const resolveSavedApiKeyConfigured = new Function(`${extractNamedFunction(adminSettingsSource, 'resolveSavedApiKeyConfigured')}; return resolveSavedApiKeyConfigured`)()
 const postSaveApiKeyConfiguredAssertions = {
 	blankNoExistingRemainsFalse: resolveSavedApiKeyConfigured({}, {}, false, false) === false,
@@ -127,6 +213,9 @@ for (const [name, passed] of Object.entries(postSaveApiKeyConfiguredAssertions))
 }
 assert.ok(adminSettingsSource.includes('apiKeyConfigured.value = resolveSavedApiKeyConfigured('), 'Save flow must use resolved API key configured state')
 assert.ok(adminSettingsSource.includes("Object.prototype.hasOwnProperty.call(config, 'admin_api_key')"), 'Save flow must derive submitted API key state from the normalized payload')
+assert.ok(adminSettingsSource.includes('isAdminConfigPayloadValidationError(e)'), 'Save flow must handle local payload validation errors')
+assert.ok(adminSettingsSource.includes("data-testid=\"initial-password-policy-field-error\""), 'Initial password policy must render an inline field error')
+assert.ok(adminSettingsSource.indexOf('const config = buildAdminConfigPayload(') < adminSettingsSource.indexOf('await store.saveAdminSettings(config)'), 'Payload validation must run before the store save call')
 
 const requiredSelectors = [
 	'immich-base-url-input',
@@ -136,6 +225,7 @@ const requiredSelectors = [
 	'nc-visible-path-template-input',
 	'admin-config-save-button',
 	'admin-config-error-summary',
+	'initial-password-policy-field-error',
 ]
 
 for (const selector of requiredSelectors) {
@@ -155,10 +245,13 @@ const evidence = {
 		disabledProvisioningForcesStorageBooleansFalse: disabledPayload.mkdir_policy_enabled === false
 			&& disabledPayload.external_storage_auto_create === false,
 		blankAdminApiKeyOmitted: Object.hasOwn(disabledPayload, 'admin_api_key') === false,
+		blankApiKeyStillOmittedWithSsoPolicy: Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key') === false,
 		pathTemplatesPreserved: disabledPayload.host_path_template === disabledForm.host_path_template
 			&& disabledPayload.nc_visible_path_template === disabledForm.nc_visible_path_template,
 		selectedGroupsNormalized: disabledPayload.user_scope_groups,
 		nonBlankAdminApiKeyPreserved: enabledPayload.admin_api_key === 'test-api-key-redacted',
+		validInitialPasswordPolicies: VALID_INITIAL_PASSWORD_POLICIES,
+		redactedMarkers: REDACTED_MARKERS,
 	},
 	errorCodeAssertions: {
 		legacyInvalidMessage: normalizeAdminConfigErrorCode(null, 'Invalid admin configuration.'),
@@ -168,6 +261,7 @@ const evidence = {
 	postSaveApiKeyConfiguredAssertions,
 	requiredSelectors,
 	requiredFieldCodes,
+	radioGroupAssertions: Object.fromEntries(requiredRadioGroups.map(group => [group.field, group.values])),
 }
 
 writeFileSync(
@@ -182,12 +276,28 @@ writeFileSync(
 		'Admin settings field-error source verification: PASS',
 		`Required selectors found: ${requiredSelectors.join(', ')}`,
 		`Field-code t() switch cases found: ${requiredFieldCodes.join(', ')}`,
+		'No @update:checked bindings found in src/AdminSettings.vue.',
+		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
 		'Post-save API key configured state guardrail verified blank/no-existing false, blank/existing preservation, nonblank fallback, and response/store-confirmed states.',
-		'Inline field error renderers verified for immich_base_url, admin_api_key, host_path_template, and nc_visible_path_template.',
+		'Initial password policy payload guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Inline field error renderers verified for immich_base_url, admin_api_key, initial_password_policy, host_path_template, and nc_visible_path_template.',
 		'No local Nextcloud + Immich runtime was available to drive the browser; this file records source-level fallback evidence only.',
 		'',
 	].join('\n'),
 	'utf8',
 )
 
-console.log(`Admin settings payload verification passed (${requiredSelectors.length} selectors, ${requiredFieldCodes.length} field codes, ${Object.keys(postSaveApiKeyConfiguredAssertions).length} post-save key-state checks).`)
+writeFileSync(
+	join(evidenceDir, 'admin-controls-redaction-fix-task-4-control-guardrail.txt'),
+	[
+		'Admin settings control/payload guardrail: PASS',
+		'No @update:checked bindings found in src/AdminSettings.vue.',
+		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
+		'Initial password policy enum guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Blank admin API key omission verified, including with sso_oidc policy.',
+		'',
+	].join('\n'),
+	'utf8',
+)
+
+console.log(`Admin settings payload verification passed (${requiredSelectors.length} selectors, ${requiredFieldCodes.length} field codes, ${Object.keys(postSaveApiKeyConfiguredAssertions).length} post-save key-state checks, ${requiredRadioGroups.length} radio groups, initial password policy enum guard).`)
