@@ -19,7 +19,9 @@
 		<template v-else-if="store.currentAlbum">
 			<!-- Sticky Header -->
 			<div class="album-detail__header">
-				<NcButton variant="tertiary" @click="goBack">
+				<NcButton variant="tertiary"
+					data-testid="album-detail-back-button"
+					@click="goBack">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
 					</template>
@@ -34,7 +36,9 @@
 
 				<!-- Desktop: Buttons direkt sichtbar -->
 				<div class="album-detail__actions-desktop">
-					<NcButton variant="tertiary" @click="startRename">
+					<NcButton variant="tertiary"
+						data-testid="album-detail-rename-button"
+						@click="startRename">
 						<template #icon>
 							<PencilIcon :size="20" />
 						</template>
@@ -42,6 +46,7 @@
 					</NcButton>
 					<NcButton v-if="store.currentAlbum.assets && store.currentAlbum.assets.length > 0"
 						variant="secondary"
+						data-testid="album-detail-add-photos-button"
 						@click="showPicker = true">
 						<template #icon>
 							<ImagePlusIcon :size="20" />
@@ -52,16 +57,22 @@
 
 				<!-- Mobile: kebab menu -->
 				<div class="album-detail__actions-mobile">
-					<button class="album-detail__kebab" @click.stop="headerMenuOpen = !headerMenuOpen" :aria-label="t('integration_immich', 'More actions')">
+					<button class="album-detail__kebab"
+						data-testid="album-detail-more-actions-button"
+						:aria-label="t('integration_immich', 'More actions')"
+						@click.stop="headerMenuOpen = !headerMenuOpen">
 						<DotsVerticalIcon :size="20" />
 					</button>
 					<div v-if="headerMenuOpen" class="album-detail__kebab-menu" @click="headerMenuOpen = false">
-						<button class="album-detail__kebab-item" @click="startRename">
+						<button class="album-detail__kebab-item"
+							data-testid="album-detail-rename-mobile"
+							@click="startRename">
 							<PencilIcon :size="18" />
 							{{ t('integration_immich', 'Rename') }}
 						</button>
 						<button v-if="store.currentAlbum.assets && store.currentAlbum.assets.length > 0"
 							class="album-detail__kebab-item"
+							data-testid="album-detail-add-photos-mobile"
 							@click="showPicker = true">
 							<ImagePlusIcon :size="18" />
 							{{ t('integration_immich', 'Add photos') }}
@@ -78,14 +89,18 @@
 					<NcTextField
 						:label="t('integration_immich', 'New album name')"
 						v-model="renameValue"
+						data-testid="album-detail-rename-input"
 						@keyup.enter="confirmRename" />
 				</div>
 				<template #actions>
-					<NcButton variant="tertiary" @click="showRenameDialog = false">
+					<NcButton variant="tertiary"
+						data-testid="album-detail-rename-cancel-button"
+						@click="showRenameDialog = false">
 						{{ t('integration_immich', 'Cancel') }}
 					</NcButton>
 					<NcButton variant="primary"
 						:disabled="!renameValue.trim() || renaming"
+						data-testid="album-detail-rename-save-button"
 						@click="confirmRename">
 						<template #icon>
 							<NcLoadingIcon v-if="renaming" :size="20" />
@@ -105,7 +120,9 @@
 						<ImageIcon :size="64" />
 					</template>
 					<template #action>
-						<NcButton variant="primary" @click="showPicker = true">
+						<NcButton variant="primary"
+							data-testid="album-detail-empty-add-photos-button"
+							@click="showPicker = true">
 							<template #icon>
 								<ImagePlusIcon :size="20" />
 							</template>

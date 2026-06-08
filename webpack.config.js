@@ -4,6 +4,7 @@ const webpackConfig = require('@nextcloud/webpack-vue-config')
 webpackConfig.entry = {
     main: path.join(__dirname, 'src', 'main.js'),
     adminSettings: path.join(__dirname, 'src', 'adminSettings.js'),
+    personalSettings: path.join(__dirname, 'src', 'personalSettings.js'),
     fileAction: path.join(__dirname, 'src', 'fileAction.js'),
     'fileAction-nc32': path.join(__dirname, 'src', 'fileAction-nc32.js'),
 }

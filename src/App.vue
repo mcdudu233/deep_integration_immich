@@ -15,6 +15,7 @@
 						<NcButton v-if="isPhotoView"
 							variant="tertiary"
 							class="view-toolbar__select-btn"
+							data-testid="toolbar-select-button"
 							@click="store.enterSelectionMode()">
 							<template #icon>
 								<CheckboxMultipleOutlineIcon :size="20" />
@@ -25,25 +26,28 @@
 
 					<!-- Selection mode: count + action buttons -->
 					<template v-else>
-						<span class="view-toolbar__selection-count">
+						<span class="view-toolbar__selection-count" data-testid="selection-count">
 							{{ t('integration_immich', '{count} selected', { count: store.selectedAssetIds.size }) }}
 						</span>
 						<div class="view-toolbar__selection-actions">
 							<!-- Primary action: always visible -->
-							<NcButton variant="primary"
+							<NcButton v-if="canExportCopy"
+								variant="primary"
 								:disabled="store.selectedAssetIds.size === 0 || saving"
+								data-testid="selection-export-button"
 								@click="saveToNextcloud">
 								<template #icon>
 									<NcLoadingIcon v-if="saving" :size="20" />
 									<ContentSaveIcon v-else :size="20" />
 								</template>
-								<span class="selection-btn-label">{{ t('integration_immich', 'Save to Nextcloud') }}</span>
+								<span class="selection-btn-label">{{ t('integration_immich', 'Export copy to Nextcloud') }}</span>
 							</NcButton>
 
 							<!-- Secondary actions: visible on desktop, collapsed on mobile -->
 							<div class="selection-actions-desktop">
 								<NcButton variant="secondary"
 									:disabled="store.selectedAssetIds.size === 0 || downloading"
+									data-testid="selection-download-button"
 									@click="downloadSelected">
 									<template #icon>
 										<NcLoadingIcon v-if="downloading" :size="20" />
@@ -55,13 +59,17 @@
 
 							<!-- 3-Punkte-Menü für weitere Aktionen -->
 							<div class="selection-actions-desktop">
-								<button class="selection-kebab" @click.stop="mobileMenuOpen = !mobileMenuOpen" :aria-label="t('integration_immich', 'More actions')">
+								<button class="selection-kebab"
+									data-testid="selection-more-actions-desktop"
+									:aria-label="t('integration_immich', 'More actions')"
+									@click.stop="mobileMenuOpen = !mobileMenuOpen">
 									<DotsVerticalIcon :size="20" />
 								</button>
 								<div v-if="mobileMenuOpen" class="selection-kebab-menu" @click="mobileMenuOpen = false">
 									<button v-if="isAlbumDetailView"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
 										:disabled="store.selectedAssetIds.size === 0 || removingFromAlbum"
+										data-testid="selection-remove-from-album-desktop"
 										@click="removeFromCurrentAlbum">
 										<FolderRemoveIcon :size="18" />
 										{{ t('integration_immich', 'Remove from album') }}
@@ -69,12 +77,14 @@
 									<button v-else
 										class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || addingToAlbum"
+										data-testid="selection-add-to-album-desktop"
 										@click="showAlbumPicker = true">
 										<FolderPlusIcon :size="18" />
 										{{ t('integration_immich', 'Add to album') }}
 									</button>
 									<button class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || togglingFavorite"
+										data-testid="selection-toggle-favorite-desktop"
 										@click="toggleFavoritesSelection">
 										<HeartIcon v-if="selectedAllFavorited" :size="18" />
 										<HeartOutlineIcon v-else :size="18" />
@@ -82,24 +92,29 @@
 											? t('integration_immich', 'Remove from favorites')
 											: t('integration_immich', 'Add to favorites') }}
 									</button>
-									<button v-if="!isAlbumDetailView"
+									<button v-if="!isAlbumDetailView && canDeleteFromImmich"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
 										:disabled="store.selectedAssetIds.size === 0 || deleting"
+										data-testid="selection-delete-from-immich-desktop"
 										@click="deleteSelectedAssets">
 										<DeleteIcon :size="18" />
-										{{ t('integration_immich', 'Delete') }}
+										{{ t('integration_immich', 'Delete from Immich') }}
 									</button>
 								</div>
 							</div>
 
 							<!-- Mobile: nur 3-Punkte-Menü -->
 							<div class="selection-actions-mobile" :class="{ 'selection-actions-mobile--open': mobileMenuOpen }">
-								<button class="selection-kebab" @click.stop="mobileMenuOpen = !mobileMenuOpen" :aria-label="t('integration_immich', 'More actions')">
+								<button class="selection-kebab"
+									data-testid="selection-more-actions-mobile"
+									:aria-label="t('integration_immich', 'More actions')"
+									@click.stop="mobileMenuOpen = !mobileMenuOpen">
 									<DotsVerticalIcon :size="20" />
 								</button>
 								<div v-if="mobileMenuOpen" class="selection-kebab-menu" @click="mobileMenuOpen = false">
 									<button class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || downloading"
+										data-testid="selection-download-mobile"
 										@click="downloadSelected">
 										<DownloadIcon :size="18" />
 										{{ t('integration_immich', 'Download') }}
@@ -107,6 +122,7 @@
 									<button v-if="isAlbumDetailView"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
 										:disabled="store.selectedAssetIds.size === 0 || removingFromAlbum"
+										data-testid="selection-remove-from-album-mobile"
 										@click="removeFromCurrentAlbum">
 										<FolderRemoveIcon :size="18" />
 										{{ t('integration_immich', 'Remove from album') }}
@@ -114,12 +130,14 @@
 									<button v-else
 										class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || addingToAlbum"
+										data-testid="selection-add-to-album-mobile"
 										@click="showAlbumPicker = true">
 										<FolderPlusIcon :size="18" />
 										{{ t('integration_immich', 'Add to album') }}
 									</button>
 									<button class="selection-kebab-menu__item"
 										:disabled="store.selectedAssetIds.size === 0 || togglingFavorite"
+										data-testid="selection-toggle-favorite-mobile"
 										@click="toggleFavoritesSelection">
 										<HeartIcon v-if="selectedAllFavorited" :size="18" />
 										<HeartOutlineIcon v-else :size="18" />
@@ -127,21 +145,28 @@
 											? t('integration_immich', 'Remove from favorites')
 											: t('integration_immich', 'Add to favorites') }}
 									</button>
-									<button v-if="!isAlbumDetailView"
+									<button v-if="!isAlbumDetailView && canDeleteFromImmich"
 										class="selection-kebab-menu__item selection-kebab-menu__item--danger"
 										:disabled="store.selectedAssetIds.size === 0 || deleting"
+										data-testid="selection-delete-from-immich-mobile"
 										@click="deleteSelectedAssets">
 										<DeleteIcon :size="18" />
-										{{ t('integration_immich', 'Delete') }}
+										{{ t('integration_immich', 'Delete from Immich') }}
 									</button>
 								</div>
 							</div>
 
-							<NcButton variant="tertiary" @click="store.clearSelection()">
+							<NcButton variant="tertiary"
+								data-testid="selection-cancel-button"
+								@click="store.clearSelection()">
 								{{ t('integration_immich', 'Cancel') }}
 							</NcButton>
 						</div>
 					</template>
+				</div>
+				<div v-if="mappingMissing" class="provisioning-status-warning" data-testid="provisioning-status-warning">
+					<AlertOutlineIcon :size="18" class="provisioning-status-warning__icon" />
+					<span>{{ mappingMissingMessage }}</span>
 				</div>
 				<div class="view-page">
 					<router-view />
@@ -152,8 +177,9 @@
 	<LightboxView />
 	<NcDialog v-if="showAlbumPicker"
 		:name="t('integration_immich', 'Select album')"
+		data-testid="selection-album-picker-dialog"
 		@closing="showAlbumPicker = false">
-		<div class="album-picker">
+		<div class="album-picker" data-testid="selection-album-picker">
 			<NcLoadingIcon v-if="loadingAlbums" :size="32" class="album-picker__loading" />
 			<template v-else>
 				<div v-if="albums.length === 0" class="album-picker__empty">
@@ -162,6 +188,7 @@
 				<div v-for="album in albums"
 					:key="album.id"
 					class="album-picker__item"
+					:data-testid="'selection-album-option-' + album.id"
 					@click="addToAlbum(album.id)">
 					{{ album.albumName }}
 				</div>
@@ -173,6 +200,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { loadState } from '@nextcloud/initial-state'
 import { NcContent, NcAppContent, NcButton, NcLoadingIcon, NcDialog } from '@nextcloud/vue'
 import { translate as t } from '@nextcloud/l10n'
 import { showSuccess, showError, getFilePickerBuilder, FilePickerClosed } from '@nextcloud/dialogs'
@@ -189,9 +217,12 @@ import HeartOutlineIcon from 'vue-material-design-icons/HeartOutline.vue'
 import HeartIcon from 'vue-material-design-icons/Heart.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import DotsVerticalIcon from 'vue-material-design-icons/DotsVertical.vue'
+import AlertOutlineIcon from 'vue-material-design-icons/AlertOutline.vue'
 
 const store = useImmichStore()
 const route = useRoute()
+const initialConfig = loadState('integration_immich', 'user-config', {})
+store.setUserState(initialConfig ?? {})
 const saving = ref(false)
 const downloading = ref(false)
 const addingToAlbum = ref(false)
@@ -234,8 +265,17 @@ const pageTitles = {
 // Views that contain individual selectable assets (photos/videos)
 const photoViews = new Set(['timeline', 'photos', 'videos', 'favorites', 'album-detail', 'person-detail', 'place-detail'])
 
-const pageTitle = computed(() => pageTitles[route.name] ?? 'Immich')
+const pageTitle = computed(() => pageTitles[route.name] ?? t('integration_immich', 'Immich'))
 const isPhotoView = computed(() => photoViews.has(route.name))
+const canExportCopy = computed(() => store.actionCapabilities.exportCopyEnabled === true)
+const canDeleteFromImmich = computed(() => store.actionCapabilities.immichDeleteEnabled === true)
+const mappingMissing = computed(() => store.mapping.status === 'missing')
+const mappingMissingMessage = computed(() => {
+	if (store.mapping.message) {
+		return store.mapping.message
+	}
+	return t('integration_immich', 'No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.')
+})
 
 // Clear selection when navigating to a different view
 watch(() => route.name, () => {
@@ -246,11 +286,16 @@ watch(() => route.name, () => {
 })
 
 async function saveToNextcloud() {
-	const picker = getFilePickerBuilder(t('integration_immich', 'Choose save location in Nextcloud'))
+	if (!canExportCopy.value) {
+		showError(t('integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
+		return
+	}
+
+	const picker = getFilePickerBuilder(t('integration_immich', 'Choose export location in Nextcloud'))
 		.setMultiSelect(false)
 		.allowDirectories(true)
 		.addButton({
-			label: t('integration_immich', 'Save here'),
+			label: t('integration_immich', 'Export copy here'),
 			type: 'primary',
 			callback: () => {},
 		})
@@ -275,15 +320,15 @@ async function saveToNextcloud() {
 		const { saved, failed } = response.data
 
 		if (failed === 0) {
-			showSuccess(t('integration_immich', '{count} file(s) saved to Nextcloud', { count: saved }))
+			showSuccess(t('integration_immich', '{count} file(s) exported to Nextcloud', { count: saved }))
 		} else if (saved > 0) {
-			showError(t('integration_immich', '{saved} saved, {failed} failed', { saved, failed }))
+			showError(t('integration_immich', '{saved} exported, {failed} failed', { saved, failed }))
 		} else {
-			showError(t('integration_immich', 'Save failed'))
+			showError(t('integration_immich', 'Export failed'))
 		}
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error saving: {msg}', { msg: e.message }))
+		showError(t('integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		saving.value = false
 	}
@@ -424,11 +469,15 @@ async function toggleFavoritesSelection() {
 
 async function deleteSelectedAssets() {
 	if (store.selectedAssetIds.size === 0 || deleting.value) return
+	if (!canDeleteFromImmich.value) {
+		showError(t('integration_immich', 'Delete from Immich is disabled by the administrator'))
+		return
+	}
 
 	const confirmed = await new Promise((resolve) => {
 		OC.dialogs.confirm(
-			t('integration_immich', 'Are you sure you want to delete {count} file(s)? If trash is enabled in Immich, they will be moved to trash, otherwise they will be permanently deleted.', { count: store.selectedAssetIds.size }),
-			t('integration_immich', 'Delete files'),
+			t('integration_immich', 'Are you sure you want to delete {count} file(s) from Immich? If trash is enabled in Immich, they will be moved to trash; otherwise they will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.', { count: store.selectedAssetIds.size }),
+			t('integration_immich', 'Delete from Immich'),
 			(result) => resolve(result),
 			true
 		)
@@ -445,12 +494,12 @@ async function deleteSelectedAssets() {
 	const ids = Array.from(store.selectedAssetIds)
 	try {
 		await deleteAssets(ids)
-		showSuccess(t('integration_immich', '{count} file(s) deleted', { count: ids.length }))
+		showSuccess(t('integration_immich', '{count} file(s) deleted from Immich', { count: ids.length }))
 		// Remove from all caches
 		ids.forEach(id => store.removeAssetFromAllCaches(id))
 		store.clearSelection()
 	} catch (e) {
-		showError(t('integration_immich', 'Error deleting files: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		deleting.value = false
 	}

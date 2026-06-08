@@ -28,6 +28,7 @@
 			<div v-for="person in visiblePeople"
 				:key="person.id"
 				class="people-view__item"
+				:data-testid="'person-card-' + person.id"
 				@click="openPerson(person.id)">
 				<div class="people-view__face">
 					<img :src="getPersonThumbnailUrl(person.id)"

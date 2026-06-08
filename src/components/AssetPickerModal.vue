@@ -4,8 +4,10 @@
 -->
 <template>
 	<Teleport to="body">
-		<div class="asset-picker-overlay" @click.self="$emit('cancel')">
-		<div class="asset-picker-modal">
+		<div class="asset-picker-overlay"
+			data-testid="asset-picker-overlay"
+			@click.self="$emit('cancel')">
+		<div class="asset-picker-modal" data-testid="asset-picker-modal">
 			<!-- Header -->
 			<div class="asset-picker-modal__header">
 				<h3 class="asset-picker-modal__title">
@@ -48,6 +50,7 @@
 								<div v-for="asset in assetsCache[buckets[index].timeBucket]"
 									:key="asset.id"
 									class="asset-picker-modal__item"
+									:data-testid="'asset-picker-item-' + asset.id"
 									:class="{
 										'asset-picker-modal__item--selected': selectedIds.has(asset.id),
 										'asset-picker-modal__item--existing': existingAssetIds.has(asset.id),
@@ -83,11 +86,14 @@
 
 			<!-- Footer -->
 			<div class="asset-picker-modal__footer">
-				<NcButton variant="tertiary" @click="$emit('cancel')">
+				<NcButton variant="tertiary"
+					data-testid="asset-picker-cancel-button"
+					@click="$emit('cancel')">
 					{{ t('integration_immich', 'Cancel') }}
 				</NcButton>
 				<NcButton variant="primary"
 					:disabled="creating || selectedIds.size === 0"
+					data-testid="asset-picker-confirm-button"
 					@click="$emit('confirm', [...selectedIds])">
 					<template #icon>
 						<NcLoadingIcon v-if="creating" :size="20" />

@@ -6,6 +6,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
 const baseUrl = generateUrl('/apps/integration_immich/api/v1')
+const adminBaseUrl = generateUrl('/apps/integration_immich/api/v1/admin')
 
 export function getTimeline(params = {}, signal = null) {
 	return axios.get(`${baseUrl}/timeline`, { params, signal, timeout: 65000 })
@@ -109,4 +110,50 @@ export function getConfig() {
 
 export function setConfig(config) {
 	return axios.put(`${baseUrl}/config`, config)
+}
+
+// ─── Admin Orchestration ────────────────────────────────────────────────
+
+export function getAdminSettings() {
+	return axios.get(`${adminBaseUrl}/config`)
+}
+
+export function setAdminSettings(config) {
+	return axios.put(`${adminBaseUrl}/config`, config)
+}
+
+export function validateAdminConnection(payload = {}) {
+	return axios.post(`${adminBaseUrl}/config/validate-connection`, payload)
+}
+
+export function dryRunOne(ncUid) {
+	return axios.get(`${adminBaseUrl}/provisioning/dry-run/${encodeURIComponent(ncUid)}`)
+}
+
+export function dryRunAll() {
+	return axios.get(`${adminBaseUrl}/provisioning/dry-run`)
+}
+
+export function reconcileOne(ncUid) {
+	return axios.post(`${adminBaseUrl}/provisioning/reconcile/${encodeURIComponent(ncUid)}`)
+}
+
+export function reconcileAll() {
+	return axios.post(`${adminBaseUrl}/provisioning/reconcile`)
+}
+
+export function recomputeQuotaOne(ncUid) {
+	return axios.post(`${adminBaseUrl}/provisioning/quota/${encodeURIComponent(ncUid)}`)
+}
+
+export function recomputeQuotaAll() {
+	return axios.post(`${adminBaseUrl}/provisioning/quota`)
+}
+
+export function listSyncState(params = {}) {
+	return axios.get(`${adminBaseUrl}/provisioning/sync-state`, { params })
+}
+
+export function verifyMountHealth(ncUid) {
+	return axios.post(`${adminBaseUrl}/provisioning/health/${encodeURIComponent(ncUid)}`)
 }

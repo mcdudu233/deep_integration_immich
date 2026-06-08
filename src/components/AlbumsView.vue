@@ -19,7 +19,9 @@
 		<template v-else>
 			<!-- Toolbar with create button -->
 			<div class="albums-view__toolbar">
-				<NcButton variant="primary" @click="showCreateDialog = true">
+				<NcButton variant="primary"
+					data-testid="albums-create-button"
+					@click="showCreateDialog = true">
 					<template #icon>
 						<PlusIcon :size="20" />
 					</template>
@@ -39,6 +41,7 @@
 				<div v-for="album in store.albums"
 					:key="album.id"
 					class="albums-view__item"
+					:data-testid="'album-card-' + album.id"
 					@click="openAlbum(album.id)">
 					<div class="albums-view__cover">
 						<img v-if="album.albumThumbnailAssetId"
@@ -60,6 +63,7 @@
 					</div>
 					<button class="albums-view__delete-btn"
 						:title="t('integration_immich', 'Delete album')"
+						:data-testid="'album-delete-button-' + album.id"
 						@click.stop="confirmDelete(album)">
 						<TrashIcon :size="18" />
 					</button>
@@ -75,14 +79,18 @@
 				<NcTextField :label="t('integration_immich', 'Album name')"
 					v-model="newAlbumName"
 					:placeholder="t('integration_immich', 'My album')"
+					data-testid="album-name-input"
 					@keyup.enter="createAlbum" />
 			</div>
 			<template #actions>
-				<NcButton variant="tertiary" @click="showCreateDialog = false">
+				<NcButton variant="tertiary"
+					data-testid="album-create-cancel-button"
+					@click="showCreateDialog = false">
 					{{ t('integration_immich', 'Cancel') }}
 				</NcButton>
 				<NcButton variant="secondary"
 					:disabled="!newAlbumName.trim() || creating"
+					data-testid="album-select-photos-button"
 					@click="openAssetPicker">
 					<template #icon>
 						<ImagePlusIcon :size="20" />
@@ -91,6 +99,7 @@
 				</NcButton>
 				<NcButton variant="primary"
 					:disabled="!newAlbumName.trim() || creating"
+					data-testid="album-create-confirm-button"
 					@click="createAlbum()">
 					<template #icon>
 						<NcLoadingIcon v-if="creating" :size="20" />
@@ -116,17 +125,20 @@
 				{{ t('integration_immich', 'Really delete album "{name}"?', { name: albumToDelete.albumName }) }}
 			</p>
 			<template #actions>
-				<NcButton variant="tertiary" @click="albumToDelete = null">
+				<NcButton variant="tertiary"
+					data-testid="album-delete-cancel-button"
+					@click="albumToDelete = null">
 					{{ t('integration_immich', 'Cancel') }}
 				</NcButton>
 				<NcButton variant="error"
 					:disabled="deleting"
+					data-testid="album-delete-confirm-button"
 					@click="deleteAlbumConfirmed">
 					<template #icon>
 						<NcLoadingIcon v-if="deleting" :size="20" />
 						<TrashIcon v-else :size="20" />
 					</template>
-					{{ t('integration_immich', 'Delete') }}
+					{{ t('integration_immich', 'Delete album') }}
 				</NcButton>
 			</template>
 		</NcDialog>

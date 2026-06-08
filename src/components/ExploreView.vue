@@ -33,6 +33,7 @@
 					<div v-for="item in section.items"
 						:key="item.value"
 						class="explore-view__item"
+						:data-testid="'explore-item-' + section.fieldName + '-' + item.value"
 						@click="openPlace(section, item)">
 						<div class="explore-view__cover">
 							<img :src="getThumbnailUrl(item.data.id)"

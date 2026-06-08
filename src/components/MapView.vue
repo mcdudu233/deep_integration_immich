@@ -24,7 +24,10 @@
 			</template>
 		</NcEmptyContent>
 
-		<div v-else ref="mapContainer" class="map-view__map" />
+		<div v-else
+			ref="mapContainer"
+			class="map-view__map"
+			data-testid="map-view-map" />
 
 		<div v-if="store.mapMarkers.length > 0" class="map-view__info">
 			{{ infoText }}
@@ -96,7 +99,7 @@ async function initMap() {
 	leafletMap = L.map(mapContainer.value, { renderer: canvasRenderer })
 
 	L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+		attribution: t('integration_immich', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'),
 		maxZoom: 19,
 		crossOrigin: '',
 		referrerPolicy: 'no-referrer-when-downgrade',

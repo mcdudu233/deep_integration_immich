@@ -8,6 +8,7 @@
 			v-if="store.lightbox.visible"
 			class="ic-lb"
 			:class="{ 'ic-lb--info': showInfo, 'ic-lb--hidden': pickerOpen }"
+			data-testid="lightbox-overlay"
 			ref="overlayEl"
 			tabindex="-1"
 			@keydown="onKey"
@@ -18,11 +19,12 @@
 				<span class="ic-lb-counter">{{ currentIndex + 1 }}&thinsp;/&thinsp;{{ assets.length }}</span>
 				<div class="ic-lb-bar-end">
 					<button
-						v-if="currentAsset"
+						v-if="currentAsset && canExportCopy"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--loading': savingToNc }"
-						:title="t('integration_immich', 'Save to Nextcloud')"
+						:title="t('integration_immich', 'Export copy to Nextcloud')"
 						:disabled="savingToNc"
+						data-testid="lightbox-export-button"
 						@click.stop="saveCurrentToNextcloud"
 					>
 						<svg v-if="!savingToNc" viewBox="0 0 24 24" aria-hidden="true">
@@ -38,6 +40,7 @@
 						:class="{ 'ic-lb-btn--loading': downloadingAsset }"
 						:title="t('integration_immich', 'Download')"
 						:disabled="downloadingAsset"
+						data-testid="lightbox-download-button"
 						@click.stop="downloadCurrent"
 					>
 						<svg v-if="!downloadingAsset" viewBox="0 0 24 24" aria-hidden="true">
@@ -53,6 +56,7 @@
 						:class="{ 'ic-lb-btn--active': isFavorite }"
 						:title="isFavorite ? t('integration_immich', 'Remove from favorites') : t('integration_immich', 'Add to favorites')"
 						:disabled="togglingFavorite"
+						data-testid="lightbox-favorite-button"
 						@click.stop="toggleFavorite"
 					>
 						<svg v-if="!togglingFavorite" viewBox="0 0 24 24" aria-hidden="true">
@@ -69,6 +73,7 @@
 						:class="{ 'ic-lb-btn--active': showAlbumPanel }"
 						:title="t('integration_immich', 'Add to album')"
 						:disabled="addingToAlbum"
+						data-testid="lightbox-add-to-album-button"
 						@click.stop="toggleAlbumPanel()"
 					>
 						<svg v-if="!addingToAlbum" viewBox="0 0 24 24" aria-hidden="true">
@@ -79,11 +84,12 @@
 						</svg>
 					</button>
 					<button
-						v-if="currentAsset"
+						v-if="currentAsset && canDeleteFromImmich"
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--loading': deletingAsset }"
-						:title="t('integration_immich', 'Delete')"
+						:title="t('integration_immich', 'Delete from Immich')"
 						:disabled="deletingAsset"
+						data-testid="lightbox-delete-button"
 						@click.stop="deleteCurrent"
 					>
 						<svg v-if="!deletingAsset" viewBox="0 0 24 24" aria-hidden="true">
@@ -97,13 +103,17 @@
 						class="ic-lb-btn"
 						:class="{ 'ic-lb-btn--active': showInfo }"
 						:title="t('integration_immich', 'Info')"
+						data-testid="lightbox-info-button"
 						@click.stop="showAlbumPanel = false; showInfo = !showInfo"
 					>
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z" />
 						</svg>
 					</button>
-					<button class="ic-lb-btn" :title="t('integration_immich', 'Close')" @click.stop="close">
+					<button class="ic-lb-btn"
+						:title="t('integration_immich', 'Close')"
+						data-testid="lightbox-close-button"
+						@click.stop="close">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
 						</svg>
@@ -116,6 +126,7 @@
 				v-if="currentIndex > 0"
 				class="ic-lb-arrow ic-lb-arrow--prev"
 				:title="t('integration_immich', 'Previous')"
+				data-testid="lightbox-previous-button"
 				@click.stop="navigate(-1)"
 			>
 				<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -160,6 +171,7 @@
 				v-if="currentIndex < assets.length - 1"
 				class="ic-lb-arrow ic-lb-arrow--next"
 				:title="t('integration_immich', 'Next')"
+				data-testid="lightbox-next-button"
 				@click.stop="navigate(1)"
 			>
 				<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -176,7 +188,10 @@
 			<!-- Info panel -->
 			<Transition name="ic-lb-slide">
 				<div v-if="showInfo" class="ic-lb-info" @click.stop>
-					<button class="ic-lb-panel-close" :title="t('integration_immich', 'Close')" @click.stop="showInfo = false">
+					<button class="ic-lb-panel-close"
+						:title="t('integration_immich', 'Close')"
+						data-testid="lightbox-info-close-button"
+						@click.stop="showInfo = false">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
 						</svg>
@@ -200,7 +215,10 @@
 			<!-- Album picker panel -->
 			<Transition name="ic-lb-slide">
 				<div v-if="showAlbumPanel" class="ic-lb-info ic-lb-album-panel" @click.stop>
-					<button class="ic-lb-panel-close" :title="t('integration_immich', 'Close')" @click.stop="showAlbumPanel = false">
+					<button class="ic-lb-panel-close"
+						:title="t('integration_immich', 'Close')"
+						data-testid="lightbox-album-close-button"
+						@click.stop="showAlbumPanel = false">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
 						</svg>
@@ -215,6 +233,7 @@
 						<!-- Neues Album erstellen -->
 						<div v-if="!creatingAlbum"
 							class="ic-lb-album-panel__item ic-lb-album-panel__item--new"
+							data-testid="lightbox-new-album-button"
 							@click.stop="creatingAlbum = true">
 							<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;flex-shrink:0" aria-hidden="true">
 								<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z" />
@@ -227,11 +246,13 @@
 								v-model="newAlbumName"
 								class="ic-lb-album-panel__new-input"
 								:placeholder="t('integration_immich', 'Album name …')"
+								data-testid="lightbox-new-album-name-input"
 								@keyup.enter="createAndAdd"
 								@keyup.escape="creatingAlbum = false"
 							>
 							<button class="ic-lb-album-panel__new-btn"
 								:disabled="!newAlbumName.trim() || creatingNewAlbum"
+								data-testid="lightbox-create-album-button"
 								@click.stop="createAndAdd">
 								<svg v-if="!creatingNewAlbum" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor" aria-hidden="true">
 									<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
@@ -247,6 +268,7 @@
 							class="ic-lb-album-panel__item"
 							:class="{ 'ic-lb-album-panel__item--in-album': currentAssetAlbumIds.has(album.id) }"
 							:title="currentAssetAlbumIds.has(album.id) ? t('integration_immich', 'Already in this album') : ''"
+							:data-testid="'lightbox-album-option-' + album.id"
 							@click.stop="currentAssetAlbumIds.has(album.id) ? null : addCurrentToAlbum(album.id)">
 							<svg v-if="currentAssetAlbumIds.has(album.id)"
 								viewBox="0 0 24 24"
@@ -400,6 +422,8 @@ function navigate(dir) {
 }
 
 const isFavorite = computed(() => currentAsset.value?.isFavorite === true)
+const canExportCopy = computed(() => store.actionCapabilities.exportCopyEnabled === true)
+const canDeleteFromImmich = computed(() => store.actionCapabilities.immichDeleteEnabled === true)
 
 const assets = computed(() => store.lightbox.assets ?? [])
 const currentIndex = computed(() => store.lightbox.currentIndex ?? 0)
@@ -490,12 +514,16 @@ async function downloadCurrent() {
 
 async function saveCurrentToNextcloud() {
 	if (!currentAsset.value || savingToNc.value) return
+	if (!canExportCopy.value) {
+		showError(t('integration_immich', 'Export copy to Nextcloud is disabled by the administrator'))
+		return
+	}
 
-	const picker = getFilePickerBuilder(t('integration_immich', 'Choose save location in Nextcloud'))
+	const picker = getFilePickerBuilder(t('integration_immich', 'Choose export location in Nextcloud'))
 		.setMultiSelect(false)
 		.allowDirectories(true)
 		.addButton({
-			label: t('integration_immich', 'Save here'),
+			label: t('integration_immich', 'Export copy here'),
 			type: 'primary',
 			callback: () => {},
 		})
@@ -521,12 +549,12 @@ async function saveCurrentToNextcloud() {
 		const response = await saveAssetsToNextcloud([currentAsset.value.id], path)
 		const { saved, failed } = response.data
 		if (failed === 0) {
-			showSuccess(t('integration_immich', 'File saved to Nextcloud'))
+			showSuccess(t('integration_immich', 'File copy exported to Nextcloud'))
 		} else {
-			showError(t('integration_immich', 'Save failed'))
+			showError(t('integration_immich', 'Export failed'))
 		}
 	} catch (e) {
-		showError(t('integration_immich', 'Error saving: {msg}', { msg: e.message }))
+		showError(t('integration_immich', 'Error exporting: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		savingToNc.value = false
 	}
@@ -551,12 +579,16 @@ async function toggleFavorite() {
 
 async function deleteCurrent() {
 	if (!currentAsset.value || deletingAsset.value) return
+	if (!canDeleteFromImmich.value) {
+		showError(t('integration_immich', 'Delete from Immich is disabled by the administrator'))
+		return
+	}
 
 	// Show confirmation dialog
 	const confirmed = await new Promise((resolve) => {
 		OC.dialogs.confirm(
-			t('integration_immich', 'Are you sure you want to delete this file? If trash is enabled in Immich, it will be moved to trash, otherwise it will be permanently deleted.'),
-			t('integration_immich', 'Delete file'),
+			t('integration_immich', 'Are you sure you want to delete this file from Immich? If trash is enabled in Immich, it will be moved to trash; otherwise it will be permanently deleted. The Nextcloud mirror updates after its external storage cache refreshes.'),
+			t('integration_immich', 'Delete from Immich'),
 			(result) => resolve(result),
 			true
 		)
@@ -576,14 +608,14 @@ async function deleteCurrent() {
 	try {
 		await deleteAssets([assetId])
 		store.removeAssetFromLightbox(assetId)
-		showSuccess(t('integration_immich', 'File deleted'))
+		showSuccess(t('integration_immich', 'File deleted from Immich'))
 
 		// If this was the last asset, close the lightbox
 		if (wasLastAsset) {
 			close()
 		}
 	} catch (e) {
-		showError(t('integration_immich', 'Error deleting file: {msg}', { msg: e.response?.data?.error || e.message }))
+		showError(t('integration_immich', 'Error deleting from Immich: {msg}', { msg: e.response?.data?.error || e.message }))
 	} finally {
 		deletingAsset.value = false
 	}

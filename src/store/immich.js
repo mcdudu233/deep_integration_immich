@@ -42,9 +42,122 @@ export const useImmichStore = defineStore('immich', {
 		// Selection
 		selectedAssetIds: new Set(),
 		isSelectionMode: false,
+		actionCapabilities: {
+			exportCopyEnabled: false,
+			importToImmichEnabled: false,
+			immichDeleteEnabled: false,
+			mirrorMountPaths: [],
+		},
+		// User-facing provisioning status (from FrontendInitialStateService)
+		immichUrl: '',
+		provisioning: {
+			enabled: false,
+			scope: 'all',
+			scopedGroups: [],
+			status: '',
+		},
+		mapping: {
+			status: 'missing',
+			immichUserId: null,
+			storageLabel: null,
+			lastSyncAt: null,
+			message: '',
+		},
+		mount: {
+			status: 'unavailable',
+			mountId: null,
+			path: null,
+			readOnly: null,
+		},
+		quota: {
+			status: 'disabled',
+			mode: 'disabled',
+			ncQuota: null,
+			ncUsed: null,
+			immichUsage: null,
+			computedImmichQuota: null,
+			reserve: 0,
+			stale: false,
+			warning: null,
+			lastSyncAt: null,
+		},
+		warnings: [],
 	}),
 
 	actions: {
+		setActionCapabilities(capabilities = {}) {
+			this.actionCapabilities = {
+				exportCopyEnabled: capabilities.exportCopyEnabled === true,
+				importToImmichEnabled: capabilities.importToImmichEnabled === true,
+				immichDeleteEnabled: capabilities.immichDeleteEnabled === true,
+				mirrorMountPaths: Array.isArray(capabilities.mirrorMountPaths) ? capabilities.mirrorMountPaths : [],
+			}
+		},
+
+		setUserState(state = {}) {
+			// Immich URL for "Open in Immich" link
+			if (typeof state.immich_url === 'string') {
+				this.immichUrl = state.immich_url
+			}
+
+			// Provisioning status
+			if (state.provisioning && typeof state.provisioning === 'object') {
+				this.provisioning = {
+					enabled: state.provisioning.enabled === true,
+					scope: typeof state.provisioning.scope === 'string' ? state.provisioning.scope : 'all',
+					scopedGroups: Array.isArray(state.provisioning.scopedGroups) ? state.provisioning.scopedGroups : [],
+					status: typeof state.provisioning.status === 'string' ? state.provisioning.status : '',
+				}
+			}
+
+			// Mapping status
+			if (state.mapping && typeof state.mapping === 'object') {
+				this.mapping = {
+					status: typeof state.mapping.status === 'string' ? state.mapping.status : 'missing',
+					immichUserId: state.mapping.immichUserId ?? null,
+					storageLabel: state.mapping.storageLabel ?? null,
+					lastSyncAt: state.mapping.lastSyncAt ?? null,
+					message: typeof state.mapping.message === 'string' ? state.mapping.message : '',
+				}
+			}
+
+			// Mount health
+			if (state.mount && typeof state.mount === 'object') {
+				this.mount = {
+					status: typeof state.mount.status === 'string' ? state.mount.status : 'unavailable',
+					mountId: state.mount.mountId ?? null,
+					path: state.mount.path ?? null,
+					readOnly: state.mount.readOnly ?? null,
+				}
+			}
+
+			// Quota sync status
+			if (state.quota && typeof state.quota === 'object') {
+				this.quota = {
+					status: typeof state.quota.status === 'string' ? state.quota.status : 'disabled',
+					mode: typeof state.quota.mode === 'string' ? state.quota.mode : 'disabled',
+					ncQuota: state.quota.ncQuota ?? null,
+					ncUsed: state.quota.ncUsed ?? null,
+					immichUsage: state.quota.immichUsage ?? null,
+					computedImmichQuota: state.quota.computedImmichQuota ?? null,
+					reserve: typeof state.quota.reserve === 'number' ? state.quota.reserve : 0,
+					stale: state.quota.stale === true,
+					warning: state.quota.warning ?? null,
+					lastSyncAt: state.quota.lastSyncAt ?? null,
+				}
+			}
+
+			// Action capabilities (preferred source)
+			if (state.actionCapabilities && typeof state.actionCapabilities === 'object') {
+				this.setActionCapabilities(state.actionCapabilities)
+			}
+
+			// Warnings
+			if (Array.isArray(state.warnings)) {
+				this.warnings = state.warnings.filter(w => typeof w === 'string')
+			}
+		},
+
 		// ---- Timeline ----
 
 		async fetchTimelineBuckets() {

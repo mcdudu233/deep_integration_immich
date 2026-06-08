@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
 import AdminSettings from './AdminSettings.vue'
 
 const app = createApp(AdminSettings)
-app.use(createPinia())
-app.mount('#immich-admin-settings')
+app.mount('#immich-personal-settings')

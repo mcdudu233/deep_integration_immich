@@ -7,6 +7,7 @@
 		<div v-for="(asset, index) in assets"
 			:key="asset.id"
 			class="photo-grid__item"
+			:data-testid="'photo-grid-item-' + asset.id"
 			:class="{
 				'photo-grid__item--selected': selectable && store.selectedAssetIds.has(asset.id),
 				'photo-grid__item--selection-mode': selectable && store.isSelectionMode,
@@ -33,7 +34,7 @@
 			<!-- Video badge — pill bottom-right -->
 			<div v-if="asset.isImage === false" class="photo-grid__video-badge">
 				<VideoIcon :size="12" />
-				<span>Video</span>
+				<span>{{ t('integration_immich', 'Video') }}</span>
 			</div>
 
 			<!-- Favorite heart — bottom-left -->
@@ -45,6 +46,7 @@
 			<div v-if="selectable"
 				class="photo-grid__checkbox"
 				:class="{ 'photo-grid__checkbox--checked': store.selectedAssetIds.has(asset.id) }"
+				:data-testid="'photo-grid-select-' + asset.id"
 				@click.stop="onCheckboxClick(asset)">
 				<CheckIcon v-if="store.selectedAssetIds.has(asset.id)" :size="13" />
 			</div>
@@ -55,6 +57,7 @@
 <script setup>
 import { getThumbnailUrl } from '../services/api.js'
 import { useImmichStore } from '../store/immich.js'
+import { translate as t } from '@nextcloud/l10n'
 import VideoIcon from 'vue-material-design-icons/Play.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import HeartIcon from 'vue-material-design-icons/Heart.vue'

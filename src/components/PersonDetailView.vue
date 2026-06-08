@@ -20,7 +20,9 @@
 		<template v-else>
 			<!-- Sticky header with back button + person info -->
 			<div class="person-detail__header">
-				<NcButton variant="tertiary" @click="goBack">
+				<NcButton variant="tertiary"
+					data-testid="person-detail-back-button"
+					@click="goBack">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
 					</template>
