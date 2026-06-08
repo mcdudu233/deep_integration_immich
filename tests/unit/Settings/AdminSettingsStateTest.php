@@ -44,6 +44,7 @@ class AdminSettingsStateTest extends TestCase {
         $this->adminConfigService->method('getAdminConfig')->willReturn([
             AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
             AdminConfigService::KEY_ADMIN_API_KEY => 'secret-admin-key',
+            AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'sso_oidc',
             'admin_api_key_configured' => true,
             AdminConfigService::KEY_PROVISIONING_ENABLED => true,
             AdminConfigService::KEY_USER_SCOPE_MODE => 'groups',
@@ -85,6 +86,7 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertSame('https://photos.example.com', $provided['server_url']);
         $this->assertTrue($provided['api_key_set']);
         $this->assertSame('https://photos.example.com', $provided['settings'][AdminConfigService::KEY_IMMICH_BASE_URL]);
+        $this->assertSame('sso_oidc', $provided['settings'][AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);
         $this->assertTrue($provided['settings']['admin_api_key_configured']);
         $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $provided['settings']);
         $this->assertSame(['enabled' => true, 'scope' => 'groups', 'scopedGroups' => ['photos']], $provided['status']['provisioning']);
@@ -107,6 +109,62 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertStringNotContainsString('generic-bearer-redacted', $encoded);
         $this->assertStringNotContainsString('generic-password-redacted', $encoded);
         $this->assertStringNotContainsString('nested-bearer-redacted', $encoded);
+    }
+
+    public function testAdminInitialStatePreservesRandomPasswordPolicyAndRedactsConfigSecrets(): void {
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
+            AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'random',
+            AdminConfigService::KEY_ADMIN_API_KEY => 'test-admin-api-key-redacted',
+            'immich_admin_api_key' => 'test-immich-admin-api-key-redacted',
+            'api_key' => 'test-api-key-redacted',
+            'x-api-key' => 'test-x-api-key-redacted',
+            'token' => 'test-token-redacted',
+            'secret' => 'test-secret-redacted',
+            'authorization' => 'Bearer test-bearer-redacted',
+            'password' => 'test-password-redacted',
+            'backup_password' => 'test-backup-password-redacted',
+            'admin_api_key_configured' => true,
+            'api_key_set' => true,
+        ]);
+        $this->capabilityService->method('getCapabilities')->willReturn([]);
+        $this->syncStateService->method('listStates')->willReturn([]);
+
+        $provided = null;
+        $this->initialState->expects($this->once())
+            ->method('provideInitialState')
+            ->willReturnCallback(static function (string $key, array $data) use (&$provided): void {
+                self::assertSame('admin-config', $key);
+                $provided = $data;
+            });
+
+        $response = new AdminSettings($this->stateService(), $this->initialState)->getForm();
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        $this->assertIsArray($provided);
+
+        $settings = $provided['settings'];
+        $encoded = json_encode($provided, JSON_THROW_ON_ERROR);
+        $this->assertSame('random', $settings[AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);
+        $this->assertTrue($settings['admin_api_key_configured']);
+        $this->assertTrue($settings['api_key_set']);
+        $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $settings);
+        $this->assertSame('[redacted]', $settings['immich_admin_api_key']);
+        $this->assertSame('[redacted]', $settings['api_key']);
+        $this->assertSame('[redacted]', $settings['x-api-key']);
+        $this->assertSame('[redacted]', $settings['token']);
+        $this->assertSame('[redacted]', $settings['secret']);
+        $this->assertSame('[redacted]', $settings['authorization']);
+        $this->assertSame('[redacted]', $settings['password']);
+        $this->assertSame('[redacted]', $settings['backup_password']);
+        $this->assertStringNotContainsString('test-admin-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-immich-admin-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-x-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-token-redacted', $encoded);
+        $this->assertStringNotContainsString('test-secret-redacted', $encoded);
+        $this->assertStringNotContainsString('test-bearer-redacted', $encoded);
+        $this->assertStringNotContainsString('test-password-redacted', $encoded);
+        $this->assertStringNotContainsString('test-backup-password-redacted', $encoded);
     }
 
     private function stateService(): FrontendInitialStateService {

@@ -26,6 +26,36 @@ class FrontendInitialStateService {
     private const CODE_SYNC_STATE_LIST_UNAVAILABLE = 'sync_state_list_unavailable';
     private const CODE_CAPABILITY_DETECTION_UNAVAILABLE = 'capability_detection_unavailable';
 
+    private const SAFE_CONFIG_KEYS = [
+        AdminConfigService::KEY_INITIAL_PASSWORD_POLICY,
+        AdminConfigService::KEY_DELETE_DISABLE_POLICY,
+        AdminConfigService::KEY_QUOTA_SYNC_MODE,
+        AdminConfigService::KEY_USER_SCOPE_MODE,
+        AdminConfigService::KEY_STORAGE_LABEL_TEMPLATE,
+        AdminConfigService::KEY_EMAIL_TEMPLATE,
+        AdminConfigService::KEY_MOUNT_NAME_TEMPLATE,
+        AdminConfigService::KEY_HOST_PATH_TEMPLATE,
+        AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE,
+        AdminConfigService::KEY_PROVISIONING_ENABLED,
+        AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
+        AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
+        AdminConfigService::KEY_QUOTA_RESERVE_BYTES,
+        'admin_api_key_configured',
+        'api_key_set',
+    ];
+
+    private const SECRET_CONFIG_KEYS = [
+        AdminConfigService::KEY_ADMIN_API_KEY,
+        'immich_admin_api_key',
+        'api_key',
+        'apikey',
+        'x_api_key',
+        'token',
+        'secret',
+        'authorization',
+        'password',
+    ];
+
     public function __construct(
         private AdminConfigService $adminConfigService,
         private SyncStateService $syncStateService,
@@ -470,11 +500,26 @@ class FrontendInitialStateService {
     }
 
     private function isSecretKey(string $key): bool {
-        if (preg_match('/(?:configured|_set)$/i', $key) === 1) {
+        $normalisedKey = $this->normaliseConfigKey($key);
+        if (in_array($normalisedKey, self::SAFE_CONFIG_KEYS, true)) {
             return false;
         }
 
-        return preg_match('/(^|[_-])(api[_-]?key|token|password|secret|authorization)($|[_-])/i', $key) === 1;
+        if (in_array($normalisedKey, self::SECRET_CONFIG_KEYS, true)) {
+            return true;
+        }
+
+        if (str_ends_with($normalisedKey, '_password')) {
+            return true;
+        }
+
+        return preg_match('/(^|_)(api_key|apikey|token|secret|authorization)($|_)/', $normalisedKey) === 1;
+    }
+
+    private function normaliseConfigKey(string $key): string {
+        $key = str_replace('-', '_', $key);
+        $key = preg_replace('/(?<=[a-z0-9])([A-Z])/', '_$1', $key) ?? $key;
+        return strtolower($key);
     }
 
     private function formatDateTime(?DateTimeInterface $dateTime): ?string {
