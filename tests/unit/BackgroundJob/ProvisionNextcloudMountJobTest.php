@@ -8,6 +8,7 @@ use OCA\IntegrationImmich\BackgroundJob\ProvisionNextcloudMountJob;
 use OCA\IntegrationImmich\Service\ExternalStorageProvisioner;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use PHPUnit\Framework\MockObject\MockObject;
+use OCP\AppFramework\Utility\ITimeFactory;
 use Psr\Log\LoggerInterface;
 use Test\TestCase;
 
@@ -54,12 +55,8 @@ class ProvisionNextcloudMountJobTest extends TestCase {
 	}
 
 	private function job(): TestableProvisionNextcloudMountJob {
-		$timeFactory = interface_exists('OCP\\AppFramework\\Utility\\ITimeFactory')
-			? $this->createMock('OCP\\AppFramework\\Utility\\ITimeFactory')
-			: new \stdClass();
-
 		return new TestableProvisionNextcloudMountJob(
-			$timeFactory,
+			$this->createMock(ITimeFactory::class),
 			$this->provisioner,
 			$this->syncStateService,
 			$this->createMock(LoggerInterface::class),

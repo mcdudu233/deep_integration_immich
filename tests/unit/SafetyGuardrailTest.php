@@ -113,6 +113,10 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString('nonBlankAdminApiKeyPreserved', $payloadScript);
         $this->assertStringContainsString("adminSettingsSource.includes('@update:checked')", $payloadScript);
         $this->assertStringContainsString('assertRadioGroupBindings(adminSettingsSource', $payloadScript);
+        $this->assertStringContainsString('assertVisibleSwitchHitTargets(adminSettingsSource)', $payloadScript);
+        $this->assertStringContainsString('control-hit-target', $payloadScript);
+        $this->assertStringContainsString('@click.capture.stop.prevent', $payloadScript);
+        $this->assertStringContainsString('must not rely on wrapperElement', $payloadScript);
         $this->assertStringContainsString("{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] }", $payloadScript);
         $this->assertStringContainsString("assertInitialPasswordPolicyValidation('[redacted]', 'invalid_enum')", $payloadScript);
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\Tests\Unit\Service;
 
+use DateTime;
+use DateTimeImmutable;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use OCA\IntegrationImmich\Db\SyncState;
 use OCA\IntegrationImmich\Db\SyncStateMapper;
@@ -89,6 +91,19 @@ class SyncStateServiceTest extends TestCase {
         $this->assertSame(42, $state->getNcMountId());
         $this->assertSame($state, $this->service->findByImmichUserId('immich-alice'));
         $this->assertSame($state, $this->service->findByStorageLabel('alice.photos'));
+    }
+
+    public function testSyncStateAcceptsImmutableAndHydratedDatetimeValues(): void {
+        $state = new SyncState();
+        $now = new DateTimeImmutable('2026-01-01T00:00:00+00:00');
+
+        $state->setLastQuotaSyncAt($now);
+        $this->assertInstanceOf(DateTime::class, $state->getLastQuotaSyncAt());
+        $this->assertSame($now->format(\DateTimeInterface::ATOM), $state->getLastQuotaSyncAt()?->format(\DateTimeInterface::ATOM));
+
+        $state->setCreatedAt('2026-01-02T00:00:00+00:00');
+        $this->assertInstanceOf(DateTime::class, $state->getCreatedAt());
+        $this->assertSame('2026-01-02T00:00:00+00:00', $state->getCreatedAt()->format(\DateTimeInterface::ATOM));
     }
 
     /**

@@ -92,6 +92,30 @@ function assertRadioGroupBindings(source, group) {
 	)
 }
 
+function assertVisibleSwitchHitTargets(source) {
+	const controlTags = extractNcCheckboxRadioSwitchTags(source)
+	assert.ok(controlTags.length > 0, 'AdminSettings.vue must render NcCheckboxRadioSwitch controls')
+	const labelMatches = source.match(/<label\s+class="control-hit-target"\s+@click\.capture\.stop\.prevent="[^"]+">/g) ?? []
+	assert.equal(
+		labelMatches.length,
+		controlTags.length,
+		'Every NcCheckboxRadioSwitch control must be wrapped in a native <label class="control-hit-target" @click.capture.stop.prevent="..."> so visible text/icon clicks update Vue state directly',
+	)
+
+	for (const tag of controlTags) {
+		assert.equal(
+			hasStaticAttribute(tag, 'wrapper-element', 'label'),
+			false,
+			`NcCheckboxRadioSwitch controls must not use kebab-case wrapper-element because this @nextcloud/vue build does not make visible text/icon clicks toggle reliably: ${tag}`,
+		)
+		assert.equal(
+			hasStaticAttribute(tag, 'wrapperElement', 'label'),
+			false,
+			`NcCheckboxRadioSwitch controls must not rely on wrapperElement because live QA showed the component still rendered a span wrapper: ${tag}`,
+		)
+	}
+}
+
 const disabledForm = {
 	immich_base_url: 'https://immich.test.local',
 	admin_api_key: '   ',
@@ -184,6 +208,7 @@ assert.deepEqual(KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES, requiredFieldCodes)
 
 const adminSettingsSource = readFileSync(join(appRoot, 'src', 'AdminSettings.vue'), 'utf8')
 assert.equal(adminSettingsSource.includes('@update:checked'), false, 'AdminSettings.vue must not use @update:checked; use v-model/modelValue semantics for NcCheckboxRadioSwitch controls')
+assertVisibleSwitchHitTargets(adminSettingsSource)
 
 const requiredRadioGroups = [
 	{ field: 'user_scope_mode', values: ['all', 'groups'] },

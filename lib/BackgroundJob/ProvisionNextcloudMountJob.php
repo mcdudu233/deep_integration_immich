@@ -12,23 +12,13 @@ namespace OCA\IntegrationImmich\BackgroundJob;
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Service\ExternalStorageProvisioner;
 use OCA\IntegrationImmich\Service\SyncStateService;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\QueuedJob;
 use Psr\Log\LoggerInterface;
 
-if (class_exists('OCP\\BackgroundJob\\QueuedJob')) {
-	abstract class ProvisionNextcloudMountJobBase extends \OCP\BackgroundJob\QueuedJob {
-	}
-} else {
-	abstract class ProvisionNextcloudMountJobBase {
-		public function __construct(?object $timeFactory = null) {
-		}
-
-		abstract protected function run($argument): void;
-	}
-}
-
-class ProvisionNextcloudMountJob extends ProvisionNextcloudMountJobBase {
+class ProvisionNextcloudMountJob extends QueuedJob {
 	public function __construct(
-		object $timeFactory,
+		ITimeFactory $timeFactory,
 		private ExternalStorageProvisioner $externalStorageProvisioner,
 		private SyncStateService $syncStateService,
 		private LoggerInterface $logger,

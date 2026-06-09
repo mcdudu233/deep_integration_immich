@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\Db;
 
+use DateTime;
 use DateTimeInterface;
 use JsonSerializable;
 use OCP\AppFramework\Db\Entity;
@@ -30,12 +31,6 @@ use OCP\AppFramework\Db\Entity;
  * @method void setLastSyncStatus(string $lastSyncStatus)
  * @method string|null getLastError()
  * @method void setLastError(?string $lastError)
- * @method DateTimeInterface|null getLastQuotaSyncAt()
- * @method void setLastQuotaSyncAt(?DateTimeInterface $lastQuotaSyncAt)
- * @method DateTimeInterface getCreatedAt()
- * @method void setCreatedAt(DateTimeInterface $createdAt)
- * @method DateTimeInterface getUpdatedAt()
- * @method void setUpdatedAt(DateTimeInterface $updatedAt)
  */
 class SyncState extends Entity implements JsonSerializable {
     protected string $ncUid = '';
@@ -64,9 +59,48 @@ class SyncState extends Entity implements JsonSerializable {
         $this->addType('createdAt', 'datetime');
         $this->addType('updatedAt', 'datetime');
 
-        $now = new \DateTimeImmutable();
+        $now = new DateTime();
         $this->createdAt = $now;
         $this->updatedAt = $now;
+    }
+
+    public function getLastQuotaSyncAt(): ?DateTimeInterface {
+        return $this->lastQuotaSyncAt;
+    }
+
+    public function setLastQuotaSyncAt(mixed $lastQuotaSyncAt): void {
+        if ($this->lastQuotaSyncAt === $lastQuotaSyncAt) {
+            return;
+        }
+
+        $this->markFieldUpdated('lastQuotaSyncAt');
+        $this->lastQuotaSyncAt = $lastQuotaSyncAt === null ? null : $this->asMutableDateTime($lastQuotaSyncAt);
+    }
+
+    public function getCreatedAt(): DateTimeInterface {
+        return $this->createdAt;
+    }
+
+    public function setCreatedAt(mixed $createdAt): void {
+        if ($this->createdAt === $createdAt) {
+            return;
+        }
+
+        $this->markFieldUpdated('createdAt');
+        $this->createdAt = $this->asMutableDateTime($createdAt);
+    }
+
+    public function getUpdatedAt(): DateTimeInterface {
+        return $this->updatedAt;
+    }
+
+    public function setUpdatedAt(mixed $updatedAt): void {
+        if ($this->updatedAt === $updatedAt) {
+            return;
+        }
+
+        $this->markFieldUpdated('updatedAt');
+        $this->updatedAt = $this->asMutableDateTime($updatedAt);
     }
 
     public function jsonSerialize(): array {
@@ -88,5 +122,17 @@ class SyncState extends Entity implements JsonSerializable {
 
     private function formatDateTime(?DateTimeInterface $dateTime): ?string {
         return $dateTime?->format(DateTimeInterface::ATOM);
+    }
+
+    private function asMutableDateTime(mixed $dateTime): DateTime {
+        if ($dateTime instanceof DateTime) {
+            return $dateTime;
+        }
+
+        if (!$dateTime instanceof DateTimeInterface && !is_string($dateTime)) {
+            throw new \InvalidArgumentException('Sync state timestamp values must be DateTimeInterface instances or datetime strings.');
+        }
+
+        return new DateTime($dateTime instanceof DateTimeInterface ? $dateTime->format(DateTimeInterface::ATOM) : $dateTime);
     }
 }
