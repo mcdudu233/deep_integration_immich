@@ -42,7 +42,8 @@ class PersonalSettings implements ISettings {
     }
 
     public function getSection(): string {
-        if (($this->adminConfigService->getAdminConfig()[AdminConfigService::KEY_PROVISIONING_ENABLED] ?? false) === true) {
+        $config = $this->adminConfigService->getAdminConfig();
+        if (($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) === AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) {
             return self::HIDDEN_SECTION_ID;
         }
 

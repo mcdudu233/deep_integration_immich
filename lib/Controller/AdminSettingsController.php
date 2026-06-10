@@ -24,6 +24,7 @@ class AdminSettingsController extends Controller {
     private const CONFIG_KEYS = [
         AdminConfigService::KEY_IMMICH_BASE_URL,
         AdminConfigService::KEY_ADMIN_API_KEY,
+        AdminConfigService::KEY_IMMICH_BROWSING_MODE,
         AdminConfigService::KEY_PROVISIONING_ENABLED,
         AdminConfigService::KEY_USER_SCOPE_MODE,
         AdminConfigService::KEY_USER_SCOPE_GROUPS,
@@ -54,6 +55,7 @@ class AdminSettingsController extends Controller {
         AdminConfigService::KEY_MOUNT_NAME_TEMPLATE,
         AdminConfigService::KEY_HOST_PATH_TEMPLATE,
         AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE,
+        AdminConfigService::KEY_IMMICH_BROWSING_MODE,
         AdminConfigService::KEY_PROVISIONING_ENABLED,
         AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
         AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,

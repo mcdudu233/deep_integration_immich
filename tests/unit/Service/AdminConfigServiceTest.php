@@ -60,6 +60,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->service->setAdminConfig([
             'immich_base_url' => 'https://photos.example.com/',
             'admin_api_key' => 'test-api-key-redacted',
+            'immich_browsing_mode' => 'personal',
             'provisioning_enabled' => true,
             'user_scope_mode' => 'groups',
             'user_scope_groups' => ['staff', 'family'],
@@ -81,6 +82,7 @@ class AdminConfigServiceTest extends TestCase {
         $config = $this->service->getAdminConfig();
 
         $this->assertSame('https://photos.example.com', $config['immich_base_url']);
+        $this->assertSame('personal', $config['immich_browsing_mode']);
         $this->assertTrue($config['provisioning_enabled']);
         $this->assertSame('groups', $config['user_scope_mode']);
         $this->assertSame(['staff', 'family'], $config['user_scope_groups']);
@@ -94,6 +96,32 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertTrue($config['external_storage_auto_create']);
         $this->assertTrue($config['admin_api_key_configured']);
         $this->assertTrue($this->service->isConfigured());
+    }
+
+    public function testDefaultBrowsingModeIsAdminManaged(): void {
+        $config = $this->service->getAdminConfig();
+
+        $this->assertSame(AdminConfigService::BROWSING_MODE_ADMIN_MANAGED, $config[AdminConfigService::KEY_IMMICH_BROWSING_MODE]);
+    }
+
+    public function testPersonalBrowsingModeDisablesCentralProvisioningFeatures(): void {
+        $this->service->setAdminConfig([
+            'immich_browsing_mode' => AdminConfigService::BROWSING_MODE_PERSONAL,
+            'provisioning_enabled' => true,
+            'mkdir_policy_enabled' => true,
+            'external_storage_auto_create' => true,
+            'quota_sync_mode' => 'event_scheduled',
+            'host_path_template' => '',
+            'nc_visible_path_template' => '',
+        ]);
+
+        $config = $this->service->getAdminConfig();
+
+        $this->assertSame(AdminConfigService::BROWSING_MODE_PERSONAL, $config[AdminConfigService::KEY_IMMICH_BROWSING_MODE]);
+        $this->assertFalse($config['provisioning_enabled']);
+        $this->assertFalse($config['mkdir_policy_enabled']);
+        $this->assertFalse($config['external_storage_auto_create']);
+        $this->assertSame('disabled', $config['quota_sync_mode']);
     }
 
     public function testConnectionOnlySaveAllowsEmptyPathTemplatesWhenPathFeaturesAreDisabled(): void {
@@ -211,6 +239,7 @@ class AdminConfigServiceTest extends TestCase {
     public function testValidationDetailsExposeStableCodesAndLegacyMessages(): void {
         $details = $this->service->validateAdminConfigDetails([
             'immich_base_url' => 'ftp://photos.example.com',
+            'immich_browsing_mode' => 'team_shared',
             'user_scope_mode' => 'department',
             'user_scope_groups' => ['staff', ''],
             'storage_label_template' => '{uid',
@@ -228,6 +257,7 @@ class AdminConfigServiceTest extends TestCase {
         ]);
         $messages = $this->service->validateAdminConfig([
             'immich_base_url' => 'ftp://photos.example.com',
+            'immich_browsing_mode' => 'team_shared',
             'user_scope_mode' => 'department',
             'user_scope_groups' => ['staff', ''],
             'provisioning_enabled' => true,
@@ -240,6 +270,7 @@ class AdminConfigServiceTest extends TestCase {
         $encodedDetails = json_encode($details, JSON_THROW_ON_ERROR);
 
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_URL, $details['immich_base_url']['code']);
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_ENUM, $details['immich_browsing_mode']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_ENUM, $details['user_scope_mode']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_GROUP_LIST, $details['user_scope_groups']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_TEMPLATE, $details['storage_label_template']['code']);
@@ -255,6 +286,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('Immich base URL must be a valid http or https URL with a host.', $details['immich_base_url']['message']);
         $this->assertSame(['http', 'https'], $details['immich_base_url']['params']['allowed_schemes']);
         $this->assertSame('Immich base URL must be a valid http or https URL with a host.', $messages['immich_base_url']);
+        $this->assertSame('Immich browsing mode must be personal or admin_managed.', $messages['immich_browsing_mode']);
         $this->assertIsString($messages['host_path_template']);
         $this->assertStringNotContainsString('test-api-key-redacted', $encodedDetails);
     }

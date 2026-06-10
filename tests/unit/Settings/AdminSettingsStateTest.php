@@ -45,6 +45,7 @@ class AdminSettingsStateTest extends TestCase {
             AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
             AdminConfigService::KEY_ADMIN_API_KEY => 'secret-admin-key',
             AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'sso_oidc',
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
             'admin_api_key_configured' => true,
             AdminConfigService::KEY_PROVISIONING_ENABLED => true,
             AdminConfigService::KEY_USER_SCOPE_MODE => 'groups',
@@ -87,6 +88,7 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertTrue($provided['api_key_set']);
         $this->assertSame('https://photos.example.com', $provided['settings'][AdminConfigService::KEY_IMMICH_BASE_URL]);
         $this->assertSame('sso_oidc', $provided['settings'][AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);
+        $this->assertSame(AdminConfigService::BROWSING_MODE_ADMIN_MANAGED, $provided['settings'][AdminConfigService::KEY_IMMICH_BROWSING_MODE]);
         $this->assertTrue($provided['settings']['admin_api_key_configured']);
         $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $provided['settings']);
         $this->assertSame(['enabled' => true, 'scope' => 'groups', 'scopedGroups' => ['photos']], $provided['status']['provisioning']);

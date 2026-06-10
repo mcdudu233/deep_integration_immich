@@ -80,8 +80,7 @@ const saving = ref(false)
 const validating = ref(false)
 const message = ref('')
 const messageType = ref('success')
-const adminManagedBrowsing = computed(() => initialState.browsingReadiness?.adminManaged === true
-	|| (initialState.provisioning?.enabled === true && initialState.provisioning?.status !== 'personal_unconfigured'))
+const adminManagedBrowsing = computed(() => initialState.browsingReadiness?.adminManaged === true)
 const sectionDescription = computed(() => t('deep_integration_immich', 'Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.'))
 
 onMounted(async () => {

@@ -12,6 +12,7 @@ const helperModule = await import(pathToFileURL(join(appRoot, 'src', 'services',
 const {
 	KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES,
 	REDACTED_MARKERS,
+	VALID_IMMICH_BROWSING_MODES,
 	VALID_INITIAL_PASSWORD_POLICIES,
 	buildAdminConfigPayload,
 	isAdminConfigPayloadValidationError,
@@ -119,6 +120,7 @@ function assertVisibleSwitchHitTargets(source) {
 const disabledForm = {
 	immich_base_url: 'https://immich.test.local',
 	admin_api_key: '   ',
+	immich_browsing_mode: 'admin_managed',
 	provisioning_enabled: false,
 	user_scope_mode: 'groups',
 	user_scope_groups: [' stale-group '],
@@ -186,6 +188,32 @@ const blankApiKeyPolicyPayload = buildAdminConfigPayload({
 assert.equal(blankApiKeyPolicyPayload.initial_password_policy, 'sso_oidc')
 assert.equal(Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key'), false)
 
+const personalModePayload = buildAdminConfigPayload({
+	...disabledForm,
+	immich_browsing_mode: 'personal',
+	provisioning_enabled: true,
+	mkdir_policy_enabled: true,
+	external_storage_auto_create: true,
+	quota_sync_mode: 'event_scheduled',
+})
+
+assert.deepEqual(VALID_IMMICH_BROWSING_MODES, ['personal', 'admin_managed'])
+assert.equal(personalModePayload.immich_browsing_mode, 'personal')
+assert.equal(personalModePayload.provisioning_enabled, false)
+assert.equal(personalModePayload.mkdir_policy_enabled, false)
+assert.equal(personalModePayload.external_storage_auto_create, false)
+assert.equal(personalModePayload.quota_sync_mode, 'disabled')
+
+assert.throws(
+	() => buildAdminConfigPayload({ ...disabledForm, immich_browsing_mode: 'team_shared' }),
+	(error) => {
+		assert.equal(isAdminConfigPayloadValidationError(error), true)
+		assert.equal(error.fields?.[0]?.field, 'immich_browsing_mode')
+		assert.equal(error.fields?.[0]?.code, 'invalid_enum')
+		return true
+	},
+)
+
 assert.equal(normalizeAdminConfigErrorCode('invalid_admin_config'), 'admin_config_invalid')
 assert.equal(normalizeAdminConfigErrorCode(null, 'Invalid admin configuration.'), 'admin_config_invalid')
 assert.equal(normalizeAdminConfigErrorCode(null, 'Failed to save admin configuration.'), 'admin_config_save_failed')
@@ -212,6 +240,7 @@ assertVisibleSwitchHitTargets(adminSettingsSource)
 
 const requiredRadioGroups = [
 	{ field: 'user_scope_mode', values: ['all', 'groups'] },
+	{ field: 'immich_browsing_mode', values: ['personal', 'admin_managed'] },
 	{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] },
 	{ field: 'quota_sync_mode', values: ['disabled', 'manual', 'event_scheduled'] },
 	{ field: 'delete_disable_policy', values: ['disable_suspend', 'delete_opt_in'] },
@@ -244,6 +273,8 @@ assert.ok(adminSettingsSource.indexOf('const config = buildAdminConfigPayload(')
 
 const requiredSelectors = [
 	'immich-base-url-input',
+	'immich-browsing-mode-personal',
+	'immich-browsing-mode-admin-managed',
 	'immich-admin-api-key-input',
 	'provisioning-enabled-toggle',
 	'host-path-template-input',
@@ -276,6 +307,9 @@ const evidence = {
 		selectedGroupsNormalized: disabledPayload.user_scope_groups,
 		nonBlankAdminApiKeyPreserved: enabledPayload.admin_api_key === 'test-api-key-redacted',
 		validInitialPasswordPolicies: VALID_INITIAL_PASSWORD_POLICIES,
+		validImmichBrowsingModes: VALID_IMMICH_BROWSING_MODES,
+		personalModeDisablesCentralProvisioning: personalModePayload.provisioning_enabled === false
+			&& personalModePayload.quota_sync_mode === 'disabled',
 		redactedMarkers: REDACTED_MARKERS,
 	},
 	errorCodeAssertions: {
@@ -305,6 +339,7 @@ writeFileSync(
 		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
 		'Post-save API key configured state guardrail verified blank/no-existing false, blank/existing preservation, nonblank fallback, and response/store-confirmed states.',
 		'Initial password policy payload guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Immich browsing mode payload guard verified personal/admin_managed enum validation and personal-mode centralized provisioning disablement.',
 		'Inline field error renderers verified for immich_base_url, admin_api_key, initial_password_policy, host_path_template, and nc_visible_path_template.',
 		'No local Nextcloud + Immich runtime was available to drive the browser; this file records source-level fallback evidence only.',
 		'',
@@ -319,6 +354,7 @@ writeFileSync(
 		'No @update:checked bindings found in src/AdminSettings.vue.',
 		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
 		'Initial password policy enum guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Immich browsing mode enum guard verified personal/admin_managed preservation and invalid value rejection.',
 		'Blank admin API key omission verified, including with sso_oidc policy.',
 		'',
 	].join('\n'),

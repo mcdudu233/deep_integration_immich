@@ -36,6 +36,7 @@ class FrontendInitialStateService {
         AdminConfigService::KEY_MOUNT_NAME_TEMPLATE,
         AdminConfigService::KEY_HOST_PATH_TEMPLATE,
         AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE,
+        AdminConfigService::KEY_IMMICH_BROWSING_MODE,
         AdminConfigService::KEY_PROVISIONING_ENABLED,
         AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
         AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
@@ -405,13 +406,16 @@ class FrontendInitialStateService {
     }
 
     private function browsingReadinessState(array $config, array $provisioning, array $mapping, array $mount, string $quotaStatus, array $warnings): array {
-        $adminManaged = ($provisioning['enabled'] ?? false) === true;
+        $adminManaged = ($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) === AdminConfigService::BROWSING_MODE_ADMIN_MANAGED;
         $status = 'ready';
         $messageKey = null;
         $messageParams = [];
         $mountStatus = (string)($mount['status'] ?? 'unavailable');
 
-        if ($this->hasErrorWarning($warnings) || ($mapping['status'] ?? '') === 'error') {
+        if (!$adminManaged) {
+            $status = 'personal_unconfigured';
+            $messageKey = 'browsing_setup_not_configured';
+        } elseif ($this->hasErrorWarning($warnings) || ($mapping['status'] ?? '') === 'error') {
             $status = 'error';
             $messageKey = 'browsing_status_error';
         } elseif (!$this->adminConfigComplete($config)) {
@@ -426,9 +430,6 @@ class FrontendInitialStateService {
         } elseif ($mountStatus === 'mount_pending') {
             $status = 'mount_pending';
             $messageKey = 'browsing_mount_pending';
-        } elseif (!$adminManaged) {
-            $status = 'personal_unconfigured';
-            $messageKey = 'browsing_setup_not_configured';
         } elseif ($this->mappingHasImmichUser($mapping)) {
             $status = 'admin_managed_ready';
         }
@@ -443,7 +444,7 @@ class FrontendInitialStateService {
             'autoLoginMode' => 'sso_recommended',
             'showAppBanner' => false,
             'showSidebarCard' => !in_array($status, ['ready', 'admin_managed_ready'], true),
-            'showPersonalSettings' => !$adminManaged && $status === 'personal_unconfigured',
+            'showPersonalSettings' => !$adminManaged,
             'messageParams' => $messageParams,
             'message' => $localizedMessage,
             'messageCode' => $messageKey,

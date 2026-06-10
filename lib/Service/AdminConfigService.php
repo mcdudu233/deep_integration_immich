@@ -17,6 +17,7 @@ use Psr\Log\LoggerInterface;
 class AdminConfigService {
     public const KEY_IMMICH_BASE_URL = 'immich_base_url';
     public const KEY_ADMIN_API_KEY = 'admin_api_key';
+    public const KEY_IMMICH_BROWSING_MODE = 'immich_browsing_mode';
     public const KEY_PROVISIONING_ENABLED = 'provisioning_enabled';
     public const KEY_USER_SCOPE_MODE = 'user_scope_mode';
     public const KEY_USER_SCOPE_GROUPS = 'user_scope_groups';
@@ -48,10 +49,14 @@ class AdminConfigService {
     public const VALIDATION_INVALID_TEMPLATE = 'invalid_template';
     public const VALIDATION_UNSUPPORTED_TEMPLATE_PLACEHOLDER = 'unsupported_template_placeholder';
 
+    public const BROWSING_MODE_PERSONAL = 'personal';
+    public const BROWSING_MODE_ADMIN_MANAGED = 'admin_managed';
+
     private const DEFAULT_QUOTA_RESERVE_BYTES = 268435456;
 
     private const DEFAULTS = [
         self::KEY_IMMICH_BASE_URL => '',
+        self::KEY_IMMICH_BROWSING_MODE => self::BROWSING_MODE_ADMIN_MANAGED,
         self::KEY_PROVISIONING_ENABLED => false,
         self::KEY_USER_SCOPE_MODE => 'all',
         self::KEY_USER_SCOPE_GROUPS => [],
@@ -100,6 +105,7 @@ class AdminConfigService {
     ];
 
     private const VALID_USER_SCOPE_MODES = ['all', 'groups'];
+    private const VALID_BROWSING_MODES = [self::BROWSING_MODE_PERSONAL, self::BROWSING_MODE_ADMIN_MANAGED];
     private const VALID_QUOTA_SYNC_MODES = ['disabled', 'manual', 'event_scheduled'];
     private const VALID_DELETE_DISABLE_POLICIES = ['disable_suspend', 'delete_opt_in'];
     private const VALID_INITIAL_PASSWORD_POLICIES = ['random', 'sso_oidc'];
@@ -220,6 +226,15 @@ class AdminConfigService {
             );
         }
 
+        if (!in_array((string)$values[self::KEY_IMMICH_BROWSING_MODE], self::VALID_BROWSING_MODES, true)) {
+            $errors[self::KEY_IMMICH_BROWSING_MODE] = $this->validationDetail(
+                self::KEY_IMMICH_BROWSING_MODE,
+                self::VALIDATION_INVALID_ENUM,
+                'Immich browsing mode must be personal or admin_managed.',
+                ['allowed_values' => self::VALID_BROWSING_MODES]
+            );
+        }
+
         if ($this->parseGroups($values[self::KEY_USER_SCOPE_GROUPS]) === null) {
             $errors[self::KEY_USER_SCOPE_GROUPS] = $this->validationDetail(
                 self::KEY_USER_SCOPE_GROUPS,
@@ -310,6 +325,7 @@ class AdminConfigService {
     private function readConfigValues(): array {
         return [
             self::KEY_IMMICH_BASE_URL => rtrim(trim($this->getAppString(self::KEY_IMMICH_BASE_URL, '')), '/'),
+            self::KEY_IMMICH_BROWSING_MODE => $this->getAppString(self::KEY_IMMICH_BROWSING_MODE, self::BROWSING_MODE_ADMIN_MANAGED),
             self::KEY_PROVISIONING_ENABLED => $this->getAppBool(self::KEY_PROVISIONING_ENABLED, false),
             self::KEY_USER_SCOPE_MODE => $this->getAppString(self::KEY_USER_SCOPE_MODE, 'all'),
             self::KEY_USER_SCOPE_GROUPS => $this->getAppGroups(),
@@ -335,6 +351,7 @@ class AdminConfigService {
 
         return [
             self::KEY_IMMICH_BASE_URL => rtrim(trim((string)$values[self::KEY_IMMICH_BASE_URL]), '/'),
+            self::KEY_IMMICH_BROWSING_MODE => (string)$values[self::KEY_IMMICH_BROWSING_MODE],
             self::KEY_PROVISIONING_ENABLED => $this->parseBool($values[self::KEY_PROVISIONING_ENABLED]) ?? false,
             self::KEY_USER_SCOPE_MODE => (string)$values[self::KEY_USER_SCOPE_MODE],
             self::KEY_USER_SCOPE_GROUPS => $this->parseGroups($values[self::KEY_USER_SCOPE_GROUPS]) ?? [],
@@ -356,6 +373,13 @@ class AdminConfigService {
     }
 
     private function normaliseEffectivePathFeatureFlags(array $values): array {
+        if (($values[self::KEY_IMMICH_BROWSING_MODE] ?? self::BROWSING_MODE_ADMIN_MANAGED) === self::BROWSING_MODE_PERSONAL) {
+            $values[self::KEY_PROVISIONING_ENABLED] = false;
+            $values[self::KEY_MKDIR_POLICY_ENABLED] = false;
+            $values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;
+            $values[self::KEY_QUOTA_SYNC_MODE] = 'disabled';
+        }
+
         if ($this->parseBool($values[self::KEY_PROVISIONING_ENABLED] ?? false) !== true) {
             $values[self::KEY_MKDIR_POLICY_ENABLED] = false;
             $values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;

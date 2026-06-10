@@ -29,6 +29,7 @@ class PageControllerStateTest extends TestCase {
     private QuotaSyncService&MockObject $quotaSyncService;
     private IInitialState&MockObject $initialState;
     private IRequest&MockObject $request;
+    private array $adminConfig = [];
 
     protected function setUp(): void {
         parent::setUp();
@@ -42,7 +43,8 @@ class PageControllerStateTest extends TestCase {
         $this->initialState = $this->createMock(IInitialState::class);
         $this->request = $this->createMock(IRequest::class);
 
-        $this->adminConfigService->method('getAdminConfig')->willReturn($this->adminConfig());
+        $this->adminConfig = $this->adminConfig();
+        $this->adminConfigService->method('getAdminConfig')->willReturnCallback(fn(): array => $this->adminConfig);
         $this->actionPolicyService->method('getCapabilityFlags')->willReturn([
             'exportCopyEnabled' => false,
             'importToImmichEnabled' => false,
@@ -108,6 +110,23 @@ class PageControllerStateTest extends TestCase {
         $this->assertSame(['/Immich Photos'], $data['actionCapabilities']['mirrorMountPaths']);
         $this->assertSame([], $data['warningDetails']);
         $this->assertStringNotContainsString('secret-admin-key', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    public function testPersonalBrowsingModeShowsPersonalSettingsWithoutAdminMapping(): void {
+        $this->adminConfig[AdminConfigService::KEY_IMMICH_BROWSING_MODE] = AdminConfigService::BROWSING_MODE_PERSONAL;
+        $this->adminConfig[AdminConfigService::KEY_PROVISIONING_ENABLED] = true;
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn(null);
+        $this->externalStorageProvisioner->expects($this->never())->method('verifyMount');
+        $this->quotaSyncService->expects($this->never())->method('computeQuota');
+
+        $provided = $this->providedUserConfig();
+        $this->controller('alice')->index();
+        $data = $provided();
+
+        $this->assertSame('personal_unconfigured', $data['browsingReadiness']['status']);
+        $this->assertFalse($data['browsingReadiness']['adminManaged']);
+        $this->assertTrue($data['browsingReadiness']['showPersonalSettings']);
+        $this->assertSame('browsing_setup_not_configured', $data['browsingReadiness']['messageKey']);
     }
 
     public function testMissingMappingProducesSetupMessageWithoutFatalHealthChecks(): void {
@@ -186,6 +205,7 @@ class PageControllerStateTest extends TestCase {
             AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
             AdminConfigService::KEY_ADMIN_API_KEY => 'secret-admin-key',
             'admin_api_key_configured' => true,
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
             AdminConfigService::KEY_PROVISIONING_ENABLED => true,
             AdminConfigService::KEY_USER_SCOPE_MODE => 'groups',
             AdminConfigService::KEY_USER_SCOPE_GROUPS => ['photos'],

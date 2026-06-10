@@ -22,6 +22,7 @@ const KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES = Object.freeze([
 ])
 
 const VALID_INITIAL_PASSWORD_POLICIES = Object.freeze(['random', 'sso_oidc'])
+const VALID_IMMICH_BROWSING_MODES = Object.freeze(['personal', 'admin_managed'])
 const REDACTED_MARKERS = Object.freeze(['[redacted]'])
 
 class AdminConfigPayloadValidationError extends Error {
@@ -89,6 +90,23 @@ function normalizeInitialPasswordPolicy(value) {
 	})
 }
 
+function normalizeImmichBrowsingMode(value) {
+	const mode = String(value || '').trim() || 'admin_managed'
+	if (VALID_IMMICH_BROWSING_MODES.includes(mode)) {
+		return mode
+	}
+
+	throw new AdminConfigPayloadValidationError({
+		field: 'immich_browsing_mode',
+		code: 'invalid_enum',
+		message: 'Immich browsing mode must be personal or admin_managed.',
+		params: {
+			allowed: VALID_IMMICH_BROWSING_MODES.slice(),
+			redacted: REDACTED_MARKERS.includes(mode),
+		},
+	})
+}
+
 function isAdminConfigPayloadValidationError(error) {
 	return error instanceof AdminConfigPayloadValidationError
 		|| error?.name === 'AdminConfigPayloadValidationError'
@@ -107,6 +125,13 @@ function buildAdminConfigPayload(formState, options = {}) {
 	}
 
 	payload.initial_password_policy = normalizeInitialPasswordPolicy(payload.initial_password_policy)
+	payload.immich_browsing_mode = normalizeImmichBrowsingMode(payload.immich_browsing_mode)
+	if (payload.immich_browsing_mode === 'personal') {
+		payload.provisioning_enabled = false
+		payload.mkdir_policy_enabled = false
+		payload.external_storage_auto_create = false
+		payload.quota_sync_mode = 'disabled'
+	}
 
 	if (payload.provisioning_enabled !== true) {
 		payload.provisioning_enabled = false
@@ -142,6 +167,7 @@ module.exports = {
 	LEGACY_ADMIN_CONFIG_ERROR_MESSAGES,
 	REDACTED_MARKERS,
 	VALID_INITIAL_PASSWORD_POLICIES,
+	VALID_IMMICH_BROWSING_MODES,
 	buildAdminConfigPayload,
 	isAdminConfigPayloadValidationError,
 	normalizeAdminConfigErrorCode,

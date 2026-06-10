@@ -8,7 +8,45 @@
 		<NcSettingsSection :name="t('deep_integration_immich', 'Immich Connection')"
 			:description="t('deep_integration_immich', 'Configure the Immich server URL and admin credentials')">
 			<div class="immich-settings-form">
-				<div class="field" data-testid="immich-admin-url">
+				<div class="field" data-testid="immich-browsing-mode">
+					<label class="field-label">{{ t('deep_integration_immich', 'Immich browsing mode') }}</label>
+					<div class="radio-group">
+						<label class="control-hit-target" @click.capture.stop.prevent="form.immich_browsing_mode = 'personal'">
+							<NcCheckboxRadioSwitch v-model="form.immich_browsing_mode"
+								name="immich_browsing_mode"
+								value="personal"
+								type="radio"
+								data-testid="immich-browsing-mode-personal">
+								{{ t('deep_integration_immich', 'Personal Immich') }}
+							</NcCheckboxRadioSwitch>
+						</label>
+						<label class="control-hit-target" @click.capture.stop.prevent="form.immich_browsing_mode = 'admin_managed'">
+							<NcCheckboxRadioSwitch v-model="form.immich_browsing_mode"
+								name="immich_browsing_mode"
+								value="admin_managed"
+								type="radio"
+								data-testid="immich-browsing-mode-admin-managed">
+								{{ t('deep_integration_immich', 'Administrator-managed Immich') }}
+							</NcCheckboxRadioSwitch>
+						</label>
+					</div>
+					<p v-if="fieldErrorMessage('immich_browsing_mode')"
+						class="validation-error-inline"
+						data-testid="immich-browsing-mode-field-error">
+						{{ fieldErrorMessage('immich_browsing_mode') }}
+					</p>
+					<p class="hint">
+						{{ browsingModeHint }}
+					</p>
+				</div>
+
+				<NcNoteCard v-if="!isAdminManagedMode"
+					type="info"
+					data-testid="personal-browsing-mode-note">
+					{{ t('deep_integration_immich', 'Personal Immich mode restores the original per-user connection flow. Users configure their own Immich server URL and API key in Immich Personal Connection.') }}
+				</NcNoteCard>
+
+				<div v-if="isAdminManagedMode" class="field" data-testid="immich-admin-url">
 					<NcTextField id="immich-server-url"
 						v-model="form.immich_base_url"
 						:label="t('deep_integration_immich', 'Immich server URL')"
@@ -21,7 +59,7 @@
 					</p>
 				</div>
 
-				<div class="field" data-testid="immich-admin-api-key">
+				<div v-if="isAdminManagedMode" class="field" data-testid="immich-admin-api-key">
 					<NcPasswordField id="immich-admin-api-key"
 						v-model="form.admin_api_key"
 						:label="t('deep_integration_immich', 'Admin API key')"
@@ -39,6 +77,7 @@
 
 				<div class="actions">
 					<NcButton type="secondary"
+						v-if="isAdminManagedMode"
 						:disabled="testingConnection || !form.immich_base_url"
 						data-testid="test-admin-connection"
 						@click="testConnection">
@@ -50,7 +89,7 @@
 
 					<span data-testid="save-admin-settings">
 						<NcButton type="primary"
-							:disabled="saving || !form.immich_base_url"
+							:disabled="saving || (isAdminManagedMode && !form.immich_base_url)"
 							data-testid="admin-config-save-button"
 							@click="saveSettings">
 							<template #icon>
@@ -79,7 +118,7 @@
 					</ul>
 				</NcNoteCard>
 
-				<NcNoteCard v-if="missingPermissions.length > 0"
+				<NcNoteCard v-if="isAdminManagedMode && missingPermissions.length > 0"
 					type="warning"
 					data-testid="admin-missing-permissions-warning">
 					{{ t('deep_integration_immich', 'Connection successful, but the API key is missing required permissions. The following features may not work:') }}
@@ -91,7 +130,7 @@
 					{{ t('deep_integration_immich', 'Please edit the API key in Immich (Account Settings → API Keys) and enable all required permissions, or create a new key with full permissions.') }}
 				</NcNoteCard>
 
-				<NcNoteCard v-if="localAccessBlocked"
+				<NcNoteCard v-if="isAdminManagedMode && localAccessBlocked"
 					type="error"
 					data-testid="admin-local-access-warning">
 					{{ t('deep_integration_immich', 'Nextcloud is blocking the connection because the Immich server address is a private/local IP. A Nextcloud administrator can allow this by running:') }}
@@ -104,7 +143,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 2: Provisioning ═══════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'User Provisioning')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'User Provisioning')"
 			:description="t('deep_integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
 			<div class="immich-settings-form">
 				<div class="field" data-testid="provisioning-enabled">
@@ -158,7 +198,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 3: Templates ══════════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Templates')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Templates')"
 			:description="t('deep_integration_immich', 'Configure naming and path templates for Immich users and mounts')">
 			<div class="immich-settings-form">
 				<NcNoteCard type="info">
@@ -257,7 +298,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 4: Storage ═════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Storage Settings')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Storage Settings')"
 			:description="t('deep_integration_immich', 'Control directory creation and external storage mount provisioning')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -293,7 +335,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 5: Quota Sync ══════════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Quota Synchronization')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Quota Synchronization')"
 			:description="t('deep_integration_immich', 'Control how Immich user quotas are derived from Nextcloud quotas')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -358,7 +401,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 6: Delete/Disable Policy ═══════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Delete / Disable Policy')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Delete / Disable Policy')"
 			:description="t('deep_integration_immich', 'What happens to the Immich user when a Nextcloud user is deleted or disabled')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -409,7 +453,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 7: Actions ═════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Provisioning Actions')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Provisioning Actions')"
 			:description="t('deep_integration_immich', 'Dry-run, reconcile, and recompute quota for Immich users')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -522,7 +567,8 @@
 		</NcSettingsSection>
 
 		<!-- ═══ Section 8: Status ══════════════════════════════════════════ -->
-		<NcSettingsSection :name="t('deep_integration_immich', 'Provisioning Status')"
+		<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Provisioning Status')"
 			:description="t('deep_integration_immich', 'Current sync state, mount health, and quota status for provisioned users')">
 			<div class="immich-settings-form">
 				<!-- Warnings -->
@@ -707,6 +753,7 @@ const store = useAdminProvisioningStore()
 const form = reactive({
 	immich_base_url: '',
 	admin_api_key: '',
+	immich_browsing_mode: 'admin_managed',
 	provisioning_enabled: false,
 	user_scope_mode: 'all',
 	user_scope_groups: [],
@@ -773,6 +820,11 @@ const saveFieldErrorsByField = computed(() => {
 	}, {})
 })
 
+const isAdminManagedMode = computed(() => form.immich_browsing_mode === 'admin_managed')
+const browsingModeHint = computed(() => isAdminManagedMode.value
+	? t('deep_integration_immich', 'Administrator-managed mode uses one Immich admin connection for provisioning, quotas, mounts, and centralized browsing.')
+	: t('deep_integration_immich', 'Personal mode lets each user connect their own Immich account with a personal URL and API key.'))
+
 // ── Lifecycle ─────────────────────────────────────────────────────────
 onMounted(() => {
 	try {
@@ -812,6 +864,7 @@ function applyLoadedState(state) {
 
 function applyConfigToForm(cfg) {
 	if (cfg.immich_base_url !== undefined) form.immich_base_url = cfg.immich_base_url
+	if (cfg.immich_browsing_mode !== undefined) form.immich_browsing_mode = cfg.immich_browsing_mode
 	if (cfg.provisioning_enabled !== undefined) form.provisioning_enabled = cfg.provisioning_enabled
 	if (cfg.user_scope_mode !== undefined) form.user_scope_mode = cfg.user_scope_mode
 	if (cfg.user_scope_groups !== undefined) {
@@ -1207,6 +1260,8 @@ function localizeAdminConfigValidationMessage(message) {
 	switch (message) {
 	case 'Immich base URL must be a valid http or https URL with a host.':
 		return t('deep_integration_immich', 'Immich base URL must be a valid http or https URL with a host.')
+	case 'Immich browsing mode must be personal or admin_managed.':
+		return t('deep_integration_immich', 'Immich browsing mode must be personal or admin_managed.')
 	case 'User scope mode must be all or groups.':
 		return t('deep_integration_immich', 'User scope mode must be all or groups.')
 	case 'User scope groups must be a JSON array of non-empty group IDs.':
@@ -1242,6 +1297,7 @@ function labelForConfigField(field) {
 	switch (field) {
 	case 'immich_base_url': return t('deep_integration_immich', 'Immich server URL')
 	case 'admin_api_key': return t('deep_integration_immich', 'Admin API key')
+	case 'immich_browsing_mode': return t('deep_integration_immich', 'Immich browsing mode')
 	case 'provisioning_enabled': return t('deep_integration_immich', 'Enable user provisioning')
 	case 'user_scope_mode': return t('deep_integration_immich', 'User scope')
 	case 'user_scope_groups': return t('deep_integration_immich', 'Selected groups')
