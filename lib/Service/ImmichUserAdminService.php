@@ -112,22 +112,39 @@ class ImmichUserAdminService {
         return $this->request('DELETE', '/admin/users/' . rawurlencode($immichUserId), ['body' => []]);
     }
 
-    public function getUserQuotaUsage(string $immichUserId): ?int {
-        foreach ($this->listUsers() as $user) {
-            if (!is_array($user)) {
-                continue;
+	public function getUserQuotaUsage(string $immichUserId): ?int {
+		$quotaState = $this->getUserQuotaState($immichUserId);
+		return $quotaState['quotaUsageInBytes'];
+	}
+
+	/**
+	 * @return array{found: bool, quotaUsageInBytes: ?int, quotaSizeInBytes: ?int}
+	 */
+	public function getUserQuotaState(string $immichUserId): array {
+		foreach ($this->listUsers() as $user) {
+			if (!is_array($user)) {
+				continue;
             }
             $id = (string)($user['id'] ?? $user['userId'] ?? '');
             if ($id !== $immichUserId) {
                 continue;
             }
 
-            $usage = $user['quotaUsageInBytes'] ?? null;
-            return is_numeric($usage) ? (int)$usage : null;
-        }
+			$usage = $user['quotaUsageInBytes'] ?? null;
+			$quota = $user['quotaSizeInBytes'] ?? null;
+			return [
+				'found' => true,
+				'quotaUsageInBytes' => is_numeric($usage) ? (int)$usage : null,
+				'quotaSizeInBytes' => is_numeric($quota) ? (int)$quota : null,
+			];
+		}
 
-        return null;
-    }
+		return [
+			'found' => false,
+			'quotaUsageInBytes' => null,
+			'quotaSizeInBytes' => null,
+		];
+	}
 
     private function findMappedImmichUser(SyncState $mappedState, array $users): ?array {
         $matches = [];
@@ -168,24 +185,10 @@ class ImmichUserAdminService {
             if ($fields['quotaSizeInBytes'] === 0) {
                 throw new \InvalidArgumentException('quotaSizeInBytes=0 is not allowed; use null or omit the field for unlimited quota.');
             }
-            if ($this->supportsQuotaUpdates()) {
-                $payload['quotaSizeInBytes'] = $fields['quotaSizeInBytes'];
-            }
+            $payload['quotaSizeInBytes'] = $fields['quotaSizeInBytes'];
         }
 
         return $payload;
-    }
-
-    private function supportsQuotaUpdates(): bool {
-        try {
-            $capabilities = $this->capabilityService->getCapabilities();
-            return ($capabilities['immichQuota']['supported'] ?? false) === true;
-        } catch (\Throwable $e) {
-            $this->logger->warning('Immich quota capability detection failed: ' . $e->getMessage(), [
-                'app' => Application::APP_ID,
-            ]);
-            return false;
-        }
     }
 
     private function request(string $method, string $endpoint, array $options = [], ?string $baseUrl = null, ?string $apiKey = null): array {

@@ -80,10 +80,7 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->assertSame(0, $result['data']['user_count']);
     }
 
-    public function testCreateUserGeneratesPasswordAndIncludesQuotaOnlyWhenSupported(): void {
-        $this->capabilityService->expects($this->once())
-            ->method('getCapabilities')
-            ->willReturn(['immichQuota' => ['supported' => true]]);
+    public function testCreateUserGeneratesPasswordAndIncludesQuota(): void {
         $this->client->expects($this->once())
             ->method('post')
             ->with('https://photos.example.com/api/admin/users', $this->callback(function (array $options): bool {
@@ -111,15 +108,12 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->assertArrayNotHasKey('password', $created);
     }
 
-    public function testCreateUserOmitsQuotaWhenCapabilityIsUnsupported(): void {
-        $this->capabilityService->expects($this->once())
-            ->method('getCapabilities')
-            ->willReturn(['immichQuota' => ['supported' => false]]);
+    public function testCreateUserIncludesQuotaWithoutCapabilityGate(): void {
         $this->client->expects($this->once())
             ->method('post')
             ->with('https://photos.example.com/api/admin/users', $this->callback(function (array $options): bool {
                 $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
-                $this->assertArrayNotHasKey('quotaSizeInBytes', $payload);
+                $this->assertSame(123456, $payload['quotaSizeInBytes']);
                 return true;
             }))
             ->willReturn($this->response(201, ['id' => 'immich-alice']));
@@ -228,9 +222,6 @@ class ImmichUserAdminServiceTest extends TestCase {
 	}
 
     public function testUpdateUserUsesAdminPutAndAllowsNullQuota(): void {
-        $this->capabilityService->expects($this->once())
-            ->method('getCapabilities')
-            ->willReturn(['immichQuota' => ['supported' => true]]);
         $this->client->expects($this->once())
             ->method('put')
             ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
@@ -251,16 +242,13 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->assertSame('Alice Updated', $updated['name']);
     }
 
-    public function testUpdateUserOmitsQuotaWhenCapabilityIsUnsupported(): void {
-        $this->capabilityService->expects($this->once())
-            ->method('getCapabilities')
-            ->willReturn(['immichQuota' => ['supported' => false]]);
+    public function testUpdateUserIncludesQuotaWithoutCapabilityGate(): void {
         $this->client->expects($this->once())
             ->method('put')
             ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
                 $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
                 $this->assertSame('Alice Updated', $payload['name']);
-                $this->assertArrayNotHasKey('quotaSizeInBytes', $payload);
+                $this->assertSame(123456, $payload['quotaSizeInBytes']);
                 return true;
             }))
             ->willReturn($this->response(200, ['id' => 'immich-alice']));
