@@ -62,13 +62,23 @@ class QuotaSyncServiceTest extends TestCase {
         $this->assertTrue($service->wasLastQuotaUnlimited());
     }
 
-    public function testInvalidQuotaReturnsNullWithError(): void {
+    public function testDefaultQuotaUsesConfiguredSystemDefault(): void {
+        $this->adminConfig['default_quota'] = '2 KB';
+        $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('default'));
+        $service = $this->service(fn(): int => 700);
+
+        $this->assertSame(1448, $service->computeQuota('alice', 200));
+        $this->assertNull($service->getLastError());
+        $this->assertFalse($service->wasLastQuotaUnlimited());
+    }
+
+    public function testMissingDefaultQuotaIsTreatedAsUnlimited(): void {
         $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('default'));
         $service = $this->service(fn(): int => 700);
 
         $this->assertNull($service->computeQuota('alice', 200));
-        $this->assertSame('Nextcloud quota must be a finite byte value or unlimited.', $service->getLastError());
-        $this->assertFalse($service->wasLastQuotaUnlimited());
+        $this->assertNull($service->getLastError());
+        $this->assertTrue($service->wasLastQuotaUnlimited());
     }
 
     public function testZeroComputedQuotaIsSkippedInsteadOfReturned(): void {

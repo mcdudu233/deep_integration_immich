@@ -74,6 +74,35 @@ class QuotaSyncService {
         }
     }
 
+    /**
+     * @return array{ncQuota: int|null, ncUsed: int|null, immichUsage: int, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
+     */
+    public function computeQuotaDetails(string $ncUid, ?int $immichUsage): array {
+        $computedQuota = $this->computeQuota($ncUid, $immichUsage);
+        $normalizedImmichUsage = max(0, $immichUsage ?? 0);
+        try {
+            $ncQuota = $this->nextcloudQuotaBytes($ncUid);
+        } catch (\Throwable) {
+            $ncQuota = null;
+        }
+        try {
+            $ncUsed = $this->nextcloudUsedBytes($ncUid);
+        } catch (\Throwable) {
+            $ncUsed = null;
+        }
+
+        return [
+            'ncQuota' => $ncQuota,
+            'ncUsed' => $ncUsed,
+            'immichUsage' => $normalizedImmichUsage,
+            'nonImmichUsed' => $ncUsed === null ? null : max(0, $ncUsed - $normalizedImmichUsage),
+            'reserve' => $this->getReserveBytes(),
+            'computedImmichQuota' => $computedQuota,
+            'unlimited' => $this->wasLastQuotaUnlimited() || ($ncQuota === null && $this->getLastError() === null),
+            'error' => $this->getLastError(),
+        ];
+    }
+
     public function getLastError(): ?string {
         return $this->lastError;
     }
@@ -83,6 +112,72 @@ class QuotaSyncService {
     }
 
     private function parseQuota(mixed $quota): ?int {
+        if (is_int($quota)) {
+            if ($quota < 0) {
+                return null;
+            }
+            if ($quota === 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $quota;
+        }
+
+        if (!is_string($quota)) {
+            throw new \RuntimeException('Nextcloud quota is unavailable.');
+        }
+
+        $quota = trim($quota);
+        if ($quota === '') {
+            throw new \RuntimeException('Nextcloud quota is unavailable.');
+        }
+
+        if (in_array(strtolower($quota), ['none', 'unlimited', '-1'], true)) {
+            return null;
+        }
+
+        if (strtolower($quota) === 'default') {
+            return $this->systemDefaultQuotaBytes();
+        }
+
+        if (preg_match('/^\d+$/', $quota) === 1) {
+            $bytes = (int)$quota;
+            if ($bytes <= 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $bytes;
+        }
+
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*([kmgtp])i?b?$/i', $quota, $matches) === 1) {
+            $bytes = (int)round((float)$matches[1] * $this->quotaUnitMultiplier(strtolower($matches[2])));
+            if ($bytes <= 0) {
+                throw new \RuntimeException('Nextcloud quota is zero or invalid.');
+            }
+            return $bytes;
+        }
+
+        throw new \RuntimeException('Nextcloud quota must be a finite byte value or unlimited.');
+    }
+
+    private function systemDefaultQuotaBytes(): ?int {
+        $config = $this->adminConfigService->getAdminConfig();
+        $defaultQuota = $config['default_quota'] ?? $config['defaultQuota'] ?? null;
+        if ($defaultQuota === null || $defaultQuota === '' || strtolower((string)$defaultQuota) === 'none') {
+            return null;
+        }
+
+        return $this->parseQuotaValue($defaultQuota);
+    }
+
+    private function nextcloudQuotaBytes(string $ncUid): ?int {
+        $user = $this->userManager->get($ncUid);
+        if ($user === null) {
+            throw new \RuntimeException('Nextcloud user was not found.');
+        }
+
+        return $this->parseQuota($user->getQuota());
+    }
+
+    private function parseQuotaValue(mixed $quota): ?int {
         if (is_int($quota)) {
             if ($quota < 0) {
                 return null;
@@ -123,6 +218,10 @@ class QuotaSyncService {
         }
 
         throw new \RuntimeException('Nextcloud quota must be a finite byte value or unlimited.');
+    }
+
+    private function nextcloudUsedBytes(string $ncUid): ?int {
+        return $this->getNextcloudTotalUsage($ncUid);
     }
 
     private function quotaUnitMultiplier(string $unit): int {
