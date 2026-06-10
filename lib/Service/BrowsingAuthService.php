@@ -38,9 +38,8 @@ class BrowsingAuthService {
      * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}
      */
     public function resolveCredentials(string $ncUid): array {
-        $personalCredentials = $this->resolvePersonalCredentials($ncUid);
-        if ($personalCredentials !== null) {
-            return $personalCredentials;
+        if ($this->browsingMode() === AdminConfigService::BROWSING_MODE_PERSONAL) {
+            return $this->resolvePersonalCredentials($ncUid) ?? $this->unavailableCredentials();
         }
 
         if (!$this->adminConfigService->isConfigured()) {
@@ -58,6 +57,15 @@ class BrowsingAuthService {
             'apiKey' => $this->adminConfigService->getAdminApiKey(),
             'immichUserId' => $syncState->getImmichUserId(),
         ];
+    }
+
+    private function browsingMode(): string {
+        $config = $this->adminConfigService->getAdminConfig();
+        $mode = (string)($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED);
+
+        return $mode === AdminConfigService::BROWSING_MODE_PERSONAL
+            ? AdminConfigService::BROWSING_MODE_PERSONAL
+            : AdminConfigService::BROWSING_MODE_ADMIN_MANAGED;
     }
 
     public function assertAssetOwnership(string $immichUserId, string $assetId): bool {

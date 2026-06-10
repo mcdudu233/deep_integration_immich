@@ -65,11 +65,14 @@ class BrowsingAuthServiceTest extends TestCase {
         );
     }
 
-    public function testResolveCredentialsPrefersPersonalApiKey(): void {
+    public function testResolveCredentialsUsesPersonalApiKeyInPersonalMode(): void {
         $this->userValues['alice'] = [
             'server_url' => 'https://personal.example.com/',
             'api_key' => 'encrypted:personal-key',
         ];
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
+        ]);
         $this->adminConfigService->expects($this->never())->method('isConfigured');
 
         $credentials = $this->service->resolveCredentials('alice');
@@ -78,6 +81,42 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertSame('https://personal.example.com', $credentials['url']);
         $this->assertSame('personal-key', $credentials['apiKey']);
         $this->assertNull($credentials['immichUserId']);
+    }
+
+    public function testResolveCredentialsReturnsUnavailableInPersonalModeWhenPersonalKeyIsMissing(): void {
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
+        ]);
+        $this->adminConfigService->expects($this->never())->method('isConfigured');
+        $this->syncStateService->expects($this->never())->method('findByUid');
+
+        $credentials = $this->service->resolveCredentials('alice');
+
+        $this->assertSame(BrowsingAuthService::MODE_UNAVAILABLE, $credentials['mode']);
+        $this->assertSame('', $credentials['url']);
+        $this->assertNull($credentials['apiKey']);
+        $this->assertNull($credentials['immichUserId']);
+    }
+
+    public function testResolveCredentialsIgnoresPersonalApiKeyInAdminManagedMode(): void {
+        $this->userValues['alice'] = [
+            'server_url' => 'https://personal.example.com/',
+            'api_key' => 'encrypted:personal-key',
+        ];
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
+        ]);
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
+        $this->adminConfigService->method('getAdminApiKey')->willReturn('admin-key');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->syncState('alice', 'immich-alice'));
+
+        $credentials = $this->service->resolveCredentials('alice');
+
+        $this->assertSame(BrowsingAuthService::MODE_ADMIN_PROXY, $credentials['mode']);
+        $this->assertSame('https://admin.example.com', $credentials['url']);
+        $this->assertSame('admin-key', $credentials['apiKey']);
+        $this->assertSame('immich-alice', $credentials['immichUserId']);
     }
 
     public function testResolveCredentialsUsesAdminProxyWhenPersonalKeyIsAbsentAndMappingExists(): void {
