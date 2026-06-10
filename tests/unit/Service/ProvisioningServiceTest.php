@@ -240,6 +240,34 @@ class ProvisioningServiceTest extends TestCase {
         $this->assertSame(900, $result['quotaSet']);
     }
 
+    public function testExistingImmichUserWithMissingUsageSkipsQuotaUpdate(): void {
+        $state = $this->state('alice', 'immich-alice', 'old@example.com', 'alice');
+        $this->userManager->method('get')->with('alice')->willReturn($this->user('alice@example.com', 'Alice Updated'));
+        $this->syncStateService->method('getOrCreateForUid')->with('alice')->willReturn($state);
+        $this->quotaSyncService->expects($this->once())->method('computeQuota')->with('alice', null)->willReturn(null);
+        $this->quotaSyncService->method('getLastError')->willReturn('Immich quota usage is unavailable.');
+        $this->immichUserAdminService->method('findUserForNcUid')->willReturn([
+            'id' => 'immich-alice',
+            'email' => 'old@example.com',
+            'name' => 'Alice Old',
+            'storageLabel' => 'alice',
+        ]);
+        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(null);
+        $this->immichUserAdminService->expects($this->never())->method('updateUser');
+        $this->syncStateService->expects($this->once())
+            ->method('updateMapping')
+            ->with('alice', $this->callback(function (array $fields): bool {
+                $this->assertSame(SyncStateService::STATUS_QUOTA_FAILED, $fields['lastSyncStatus']);
+                $this->assertSame('Immich quota usage is unavailable.', $fields['lastError']);
+                return true;
+            }));
+
+        $result = $this->service()->reconcileUser('alice');
+
+        $this->assertSame('skipped', $result['action']);
+        $this->assertSame(['Immich quota usage is unavailable.'], $result['errors']);
+    }
+
     public function testQuotaFailureSkipsProvisioningAndMarksState(): void {
         $state = $this->state('alice');
         $this->userManager->method('get')->with('alice')->willReturn($this->user('alice@example.com', 'Alice'));

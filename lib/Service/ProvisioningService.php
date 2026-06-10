@@ -121,7 +121,7 @@ class ProvisioningService {
         if (!$created) {
             $usage = $this->immichUserAdminService->getUserQuotaUsage($immichUserId);
             if ($quotaEnabled) {
-                $quotaSet = $this->quotaSyncService->computeQuota($ncUid, $usage ?? 0);
+                $quotaSet = $this->quotaSyncService->computeQuota($ncUid, $usage);
                 $errors = $this->quotaErrors($errors);
                 if ($errors !== []) {
                     $this->persistQuotaFailure($ncUid, implode('; ', $errors));
