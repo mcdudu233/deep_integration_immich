@@ -11,6 +11,8 @@ namespace OCA\IntegrationImmich\Service;
 
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Db\SyncState;
+use OCP\Files\Config\IMountProviderCollection;
+use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
 class ExternalStorageProvisioner {
@@ -32,8 +34,11 @@ class ExternalStorageProvisioner {
 		private LoggerInterface $logger,
 		private ?object $externalStorageConfigService = null,
 		?callable $filesystem = null,
+		private ?IMountProviderCollection $mountProviderCollection = null,
+		private ?IUserManager $userManager = null,
 	) {
 		$this->filesystem = $filesystem;
+		$this->externalStorageConfigService ??= new NextcloudExternalStorageConfigService();
 	}
 
 	public function verifyMount(string $ncUid): array {
@@ -259,12 +264,12 @@ class ExternalStorageProvisioner {
 	private function mountCandidates(string $ncUid): array {
 		$service = $this->externalStorageConfigService;
 		if ($service === null) {
-			return [];
+			return $this->mountProviderCandidates($ncUid);
 		}
 
 		if (method_exists($service, 'findLocalMountForUser')) {
 			$mount = $service->findLocalMountForUser($ncUid);
-			return is_object($mount) ? [$mount] : [];
+			return is_object($mount) ? [$mount] : $this->mountProviderCandidates($ncUid);
 		}
 
 		$candidates = [];
@@ -288,7 +293,31 @@ class ExternalStorageProvisioner {
 			}
 		}
 
-		return $candidates;
+		return $candidates !== [] ? $candidates : $this->mountProviderCandidates($ncUid);
+	}
+
+	/** @return list<object> */
+	private function mountProviderCandidates(string $ncUid): array {
+		if ($this->mountProviderCollection === null || $this->userManager === null) {
+			return [];
+		}
+
+		$user = $this->userManager->get($ncUid);
+		if ($user === null) {
+			return [];
+		}
+
+		try {
+			$mounts = $this->mountProviderCollection->getMountsForUser($user);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to inspect Nextcloud mounts for user "' . $ncUid . '": ' . $e->getMessage(), [
+				'app' => Application::APP_ID,
+				'ncUid' => $ncUid,
+			]);
+			return [];
+		}
+
+		return array_values(array_filter(is_array($mounts) ? $mounts : [], static fn(mixed $mount): bool => is_object($mount)));
 	}
 
 	private function createOrUpdateLocalMount(string $ncUid, string $mountName, string $targetPath, ?int $knownMountId): ?object {
@@ -323,13 +352,21 @@ class ExternalStorageProvisioner {
 
 	private function mountTargetPath(object $mount): ?string {
 		$options = $this->callMethod($mount, 'getBackendOptions', []);
-		if (!is_array($options)) {
-			return null;
+		if (is_array($options)) {
+			foreach (['datadir', 'directory', 'path'] as $key) {
+				if (isset($options[$key]) && is_string($options[$key]) && trim($options[$key]) !== '') {
+					return $this->normalizePath($options[$key]);
+				}
+			}
 		}
 
-		foreach (['datadir', 'directory', 'path'] as $key) {
-			if (isset($options[$key]) && is_string($options[$key]) && trim($options[$key]) !== '') {
-				return $this->normalizePath($options[$key]);
+		$storage = $this->callMethod($mount, 'getStorage', null);
+		if (is_object($storage)) {
+			foreach (['getSourcePath', 'getDatadir', 'getDataDir'] as $method) {
+				$path = $this->callMethod($storage, $method, null);
+				if (is_string($path) && trim($path) !== '') {
+					return $this->normalizePath($path);
+				}
 			}
 		}
 
@@ -356,7 +393,7 @@ class ExternalStorageProvisioner {
 	private function mountIsReadOnly(object $mount): bool {
 		$options = $this->callMethod($mount, 'getMountOptions', []);
 		if (!is_array($options)) {
-			return false;
+			$options = [];
 		}
 
 		foreach (['readonly', 'read_only', 'readOnly'] as $key) {
@@ -365,7 +402,8 @@ class ExternalStorageProvisioner {
 			}
 		}
 
-		return false;
+
+		return filter_var($this->mountOption($mount, 'readonly', false), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true;
 	}
 
 	private function mountTargetMatches(object $mount, string $targetPath): bool {
@@ -378,13 +416,18 @@ class ExternalStorageProvisioner {
 		$groups = $this->callMethod($mount, 'getApplicableGroups', []);
 
 		if (!is_array($users)) {
-			return false;
+			$users = [];
 		}
 
 		$users = array_values(array_map('strval', $users));
 		$groups = is_array($groups) ? array_values($groups) : [];
 
-		return $users === [$ncUid] && $groups === [];
+		if ($users === [$ncUid] && $groups === []) {
+			return true;
+		}
+
+		$mountPoint = $this->normalizeMountPoint((string)$this->callMethod($mount, 'getMountPoint', ''));
+		return str_starts_with($mountPoint, '/' . trim($ncUid, '/') . '/files/') && $groups === [];
 	}
 
 	private function mountIsNotRootStorage(object $mount): bool {
@@ -404,6 +447,18 @@ class ExternalStorageProvisioner {
 
 		try {
 			return $object->{$method}();
+		} catch (\Throwable) {
+			return $default;
+		}
+	}
+
+	private function mountOption(object $mount, string $key, mixed $default): mixed {
+		if (!method_exists($mount, 'getOption')) {
+			return $default;
+		}
+
+		try {
+			return $mount->getOption($key, $default);
 		} catch (\Throwable) {
 			return $default;
 		}
