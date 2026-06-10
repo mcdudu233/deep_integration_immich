@@ -107,7 +107,7 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertSame('node scripts/verify-localization-guardrail.mjs', $package['scripts']['verify:localization'] ?? null);
 
         $payloadScript = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'verify-admin-settings-payload.mjs');
-        $this->assertStringContainsString('disabledProvisioningForcesStorageBooleansFalse', $payloadScript);
+        $this->assertStringContainsString('disabledProvisioningPreservesStorageBooleans', $payloadScript);
         $this->assertStringContainsString('blankAdminApiKeyOmitted', $payloadScript);
         $this->assertStringContainsString('pathTemplatesPreserved', $payloadScript);
         $this->assertStringContainsString('nonBlankAdminApiKeyPreserved', $payloadScript);
@@ -127,7 +127,7 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString("public const VALIDATION_INVALID_PATH_TEMPLATE = 'invalid_path_template';", $adminConfigSource);
 
         $adminConfigTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'AdminConfigServiceTest.php');
-        $this->assertStringContainsString('testDisabledProvisioningIgnoresStalePathFeatureFlagsForBlankTemplates', $adminConfigTest);
+        $this->assertStringContainsString('testDisabledProvisioningStorageFlagsStillRequirePathTemplates', $adminConfigTest);
         $this->assertStringContainsString('testTemplateValidationRejectsTraversalAndUnsupportedPlaceholders', $adminConfigTest);
         $this->assertStringContainsString('C:\\\\immich\\\\..\\\\library\\\\{storageLabel}', $adminConfigTest);
     }

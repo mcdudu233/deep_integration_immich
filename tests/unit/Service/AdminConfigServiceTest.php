@@ -60,7 +60,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->service->setAdminConfig([
             'immich_base_url' => 'https://photos.example.com/',
             'admin_api_key' => 'test-api-key-redacted',
-            'immich_browsing_mode' => 'personal',
+            'immich_browsing_mode' => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
             'provisioning_enabled' => true,
             'user_scope_mode' => 'groups',
             'user_scope_groups' => ['staff', 'family'],
@@ -82,7 +82,7 @@ class AdminConfigServiceTest extends TestCase {
         $config = $this->service->getAdminConfig();
 
         $this->assertSame('https://photos.example.com', $config['immich_base_url']);
-        $this->assertSame('personal', $config['immich_browsing_mode']);
+        $this->assertSame(AdminConfigService::BROWSING_MODE_ADMIN_MANAGED, $config['immich_browsing_mode']);
         $this->assertTrue($config['provisioning_enabled']);
         $this->assertSame('groups', $config['user_scope_mode']);
         $this->assertSame(['staff', 'family'], $config['user_scope_groups']);
@@ -145,11 +145,40 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('encrypted:test-api-key-redacted', $this->appValues['admin_api_key']);
     }
 
-    public function testDisabledProvisioningIgnoresStalePathFeatureFlagsForBlankTemplates(): void {
+    public function testDisabledProvisioningStorageFlagsStillRequirePathTemplates(): void {
         $errors = $this->service->validateAdminConfig([
             'provisioning_enabled' => false,
             'mkdir_policy_enabled' => true,
             'external_storage_auto_create' => true,
+            'host_path_template' => ' ',
+            'nc_visible_path_template' => "\t",
+        ]);
+
+        $this->assertArrayHasKey('host_path_template', $errors);
+        $this->assertArrayHasKey('nc_visible_path_template', $errors);
+
+        $this->service->setAdminConfig([
+            'provisioning_enabled' => false,
+            'mkdir_policy_enabled' => true,
+            'external_storage_auto_create' => true,
+            'host_path_template' => '/srv/immich/originals/library/{storageLabel}',
+            'nc_visible_path_template' => '/mnt/immich-library/{storageLabel}',
+        ]);
+
+        $config = $this->service->getAdminConfig();
+
+        $this->assertFalse($config['provisioning_enabled']);
+        $this->assertTrue($config['mkdir_policy_enabled']);
+        $this->assertTrue($config['external_storage_auto_create']);
+        $this->assertSame('/srv/immich/originals/library/{storageLabel}', $config['host_path_template']);
+        $this->assertSame('/mnt/immich-library/{storageLabel}', $config['nc_visible_path_template']);
+    }
+
+    public function testDisabledProvisioningAllowsBlankPathTemplatesWhenStorageFlagsAreDisabled(): void {
+        $errors = $this->service->validateAdminConfig([
+            'provisioning_enabled' => false,
+            'mkdir_policy_enabled' => false,
+            'external_storage_auto_create' => false,
             'host_path_template' => ' ',
             'nc_visible_path_template' => "\t",
         ]);
@@ -159,8 +188,8 @@ class AdminConfigServiceTest extends TestCase {
 
         $this->service->setAdminConfig([
             'provisioning_enabled' => false,
-            'mkdir_policy_enabled' => true,
-            'external_storage_auto_create' => true,
+            'mkdir_policy_enabled' => false,
+            'external_storage_auto_create' => false,
             'host_path_template' => ' ',
             'nc_visible_path_template' => "\t",
         ]);

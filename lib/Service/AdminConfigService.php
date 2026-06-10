@@ -380,11 +380,6 @@ class AdminConfigService {
             $values[self::KEY_QUOTA_SYNC_MODE] = 'disabled';
         }
 
-        if ($this->parseBool($values[self::KEY_PROVISIONING_ENABLED] ?? false) !== true) {
-            $values[self::KEY_MKDIR_POLICY_ENABLED] = false;
-            $values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;
-        }
-
         return $values;
     }
 

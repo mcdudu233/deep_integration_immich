@@ -87,7 +87,7 @@ function assertStaticAdminGuardrails() {
     assert.ok(packageJson.scripts['verify:safety'].includes('verify:localization'), 'verify:safety must include localization guardrail')
 
     const payloadScript = readProjectFile('scripts/verify-admin-settings-payload.mjs')
-    assertIncludes(payloadScript, 'disabledProvisioningForcesStorageBooleansFalse', 'payload evidence keeps disabled-provisioning boolean guardrail')
+    assertIncludes(payloadScript, 'disabledProvisioningPreservesStorageBooleans', 'payload evidence keeps disabled-provisioning boolean persistence guardrail')
     assertIncludes(payloadScript, 'blankAdminApiKeyOmitted', 'payload evidence keeps blank admin key omission guardrail')
     assertIncludes(payloadScript, 'pathTemplatesPreserved', 'payload evidence keeps path template preservation guardrail')
     assertIncludes(payloadScript, 'nonBlankAdminApiKeyPreserved', 'payload evidence must not write fixture secret values')
@@ -113,7 +113,7 @@ function assertStaticAdminGuardrails() {
     assertIncludes(adminConfigSource, "public const VALIDATION_MISSING_PATH_TEMPLATE = 'missing_path_template';", 'missing path validation code must remain stable')
 
     const adminConfigTest = readProjectFile('tests/unit/Service/AdminConfigServiceTest.php')
-    assertIncludes(adminConfigTest, 'testDisabledProvisioningIgnoresStalePathFeatureFlagsForBlankTemplates', 'PHP tests preserve disabled provisioning path behavior')
+    assertIncludes(adminConfigTest, 'testDisabledProvisioningStorageFlagsStillRequirePathTemplates', 'PHP tests preserve disabled provisioning storage flag path behavior')
     assertIncludes(adminConfigTest, 'testTemplateValidationRejectsTraversalAndUnsupportedPlaceholders', 'PHP tests preserve strict path traversal validation')
     assertIncludes(adminConfigTest, String.raw`C:\\immich\\..\\library\\{storageLabel}`, 'PHP tests cover Windows-style traversal')
 
