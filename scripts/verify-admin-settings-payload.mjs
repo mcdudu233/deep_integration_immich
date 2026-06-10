@@ -142,8 +142,8 @@ const disabledPayload = buildAdminConfigPayload(disabledForm, {
 })
 
 assert.equal(disabledPayload.provisioning_enabled, false)
-assert.equal(disabledPayload.mkdir_policy_enabled, false)
-assert.equal(disabledPayload.external_storage_auto_create, false)
+assert.equal(disabledPayload.mkdir_policy_enabled, true)
+assert.equal(disabledPayload.external_storage_auto_create, true)
 assert.equal(Object.hasOwn(disabledPayload, 'admin_api_key'), false)
 assert.deepEqual(disabledPayload.user_scope_groups, ['photos-team', 'archive'])
 assert.equal(disabledPayload.host_path_template, disabledForm.host_path_template)
@@ -298,8 +298,8 @@ const evidence = {
 	command: 'node scripts/verify-admin-settings-payload.mjs',
 	status: 'passed',
 	payloadAssertions: {
-		disabledProvisioningForcesStorageBooleansFalse: disabledPayload.mkdir_policy_enabled === false
-			&& disabledPayload.external_storage_auto_create === false,
+		disabledProvisioningPreservesStorageBooleans: disabledPayload.mkdir_policy_enabled === true
+			&& disabledPayload.external_storage_auto_create === true,
 		blankAdminApiKeyOmitted: Object.hasOwn(disabledPayload, 'admin_api_key') === false,
 		blankApiKeyStillOmittedWithSsoPolicy: Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key') === false,
 		pathTemplatesPreserved: disabledPayload.host_path_template === disabledForm.host_path_template

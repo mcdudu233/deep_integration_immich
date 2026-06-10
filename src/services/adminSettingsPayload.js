@@ -135,8 +135,6 @@ function buildAdminConfigPayload(formState, options = {}) {
 
 	if (payload.provisioning_enabled !== true) {
 		payload.provisioning_enabled = false
-		payload.mkdir_policy_enabled = false
-		payload.external_storage_auto_create = false
 	}
 
 	if (payload.delete_disable_policy === 'delete_opt_in') {
