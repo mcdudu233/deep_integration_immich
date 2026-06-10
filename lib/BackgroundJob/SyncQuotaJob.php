@@ -83,8 +83,9 @@ class SyncQuotaJob extends QueuedJob {
                 return $this->fail($result, $ncUid, 'Immich quota usage is unavailable for mapped user "' . $immichUserId . '".');
             }
 
-            $computedQuota = $this->quotaSyncService->computeQuota($ncUid, $immichUsage);
-            $result = array_merge($result, $this->quotaDetails($ncUid, $immichUsage, $computedQuota, $config));
+            $quotaDetails = $this->quotaSyncService->computeQuotaDetails($ncUid, $immichUsage);
+            $computedQuota = $quotaDetails['computedImmichQuota'];
+            $result = array_merge($result, $this->quotaDetailsResult($quotaDetails));
 
             $quotaError = $this->quotaSyncService->getLastError();
             if ($computedQuota === null && $quotaError !== null) {
@@ -165,17 +166,14 @@ class SyncQuotaJob extends QueuedJob {
         return $immichUserId === '' ? null : $immichUserId;
     }
 
-    private function quotaDetails(string $ncUid, int $immichUsage, ?int $computedQuota, array $config): array {
-        $nextcloudQuota = $this->nextcloudQuotaBytes($ncUid);
-        $nextcloudUsed = $this->nextcloudUsedBytes($ncUid);
-
+    private function quotaDetailsResult(array $quotaDetails): array {
         return [
-            'nc_quota' => $nextcloudQuota,
-            'nc_used' => $nextcloudUsed,
-            'immich_usage' => $immichUsage,
-            'non_immich_used' => $nextcloudUsed === null ? null : max(0, $nextcloudUsed - $immichUsage),
-            'reserve' => $this->reserveBytes($config),
-            'computed_immich_quota' => $computedQuota,
+            'nc_quota' => $quotaDetails['ncQuota'] ?? null,
+            'nc_used' => $quotaDetails['ncUsed'] ?? null,
+            'immich_usage' => $quotaDetails['immichUsage'] ?? null,
+            'non_immich_used' => $quotaDetails['nonImmichUsed'] ?? null,
+            'reserve' => $quotaDetails['reserve'] ?? 0,
+            'computed_immich_quota' => $quotaDetails['computedImmichQuota'] ?? null,
         ];
     }
 
