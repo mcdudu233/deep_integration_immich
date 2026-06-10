@@ -9,12 +9,16 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\Controller;
 
+use DateTimeInterface;
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\BackgroundJob\ReconcileUsersJob;
 use OCA\IntegrationImmich\BackgroundJob\SyncQuotaJob;
 use OCA\IntegrationImmich\BackgroundJob\VerifyProvisioningJob;
 use OCA\IntegrationImmich\Db\SyncState;
 use OCA\IntegrationImmich\Service\ProvisioningService;
+use OCA\IntegrationImmich\Service\ExternalStorageProvisioner;
+use OCA\IntegrationImmich\Service\ImmichUserAdminService;
+use OCA\IntegrationImmich\Service\QuotaSyncService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -37,6 +41,9 @@ class AdminProvisioningController extends Controller {
 		private IJobList $jobList,
 		private ReconcileUsersJob $reconcileUsersJob,
 		private VerifyProvisioningJob $verifyProvisioningJob,
+		private ExternalStorageProvisioner $externalStorageProvisioner,
+		private QuotaSyncService $quotaSyncService,
+		private ImmichUserAdminService $immichUserAdminService,
 		private LoggerInterface $logger,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -231,7 +238,75 @@ class AdminProvisioningController extends Controller {
     }
 
     private function stateToArray(SyncState $state): array {
-        return $this->redact($state->jsonSerialize());
+        $data = $state->jsonSerialize();
+        $data['mount'] = $this->mountSummary($state);
+        $data['quota'] = $this->quotaSummary($state);
+
+        return $this->redact($data);
+    }
+
+    private function mountSummary(SyncState $state): array {
+        try {
+            return $this->externalStorageProvisioner->verifyMount((string)$state->getNcUid());
+        } catch (\Throwable $e) {
+            return [
+                'status' => 'unavailable',
+                'mount_id' => $state->getNcMountId(),
+                'mount_name' => null,
+                'read_only' => null,
+                'error' => $this->redactString($e->getMessage()),
+            ];
+        }
+    }
+
+    private function quotaSummary(SyncState $state): array {
+        $immichUserId = trim((string)$state->getImmichUserId());
+        if ($immichUserId === '') {
+            return [
+                'status' => 'unavailable',
+                'warningCode' => 'quota_needs_mapping',
+            ];
+        }
+
+        try {
+            $immichUsage = $this->immichUserAdminService->getUserQuotaUsage($immichUserId);
+            $details = $this->quotaSyncService->computeQuotaDetails((string)$state->getNcUid(), $immichUsage);
+        } catch (\Throwable $e) {
+            return [
+                'status' => 'failed',
+                'warningCode' => 'quota_unavailable',
+                'warning' => $this->redactString($e->getMessage()),
+                'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+            ];
+        }
+
+        $status = 'ok';
+        $warningCode = null;
+        if (($details['error'] ?? null) !== null) {
+            $status = 'failed';
+            $warningCode = 'quota_unavailable';
+        } elseif (($details['unlimited'] ?? false) === true) {
+            $status = 'unlimited';
+            $warningCode = 'quota_unlimited';
+        } elseif ($state->getLastQuotaSyncAt() === null) {
+            $status = 'stale';
+            $warningCode = 'quota_stale';
+        }
+
+        return [
+            'status' => $status,
+            'mode' => null,
+            'ncQuota' => $details['ncQuota'] ?? null,
+            'ncUsed' => $details['ncUsed'] ?? null,
+            'ncRemaining' => $details['ncRemaining'] ?? null,
+            'immichUsage' => $details['immichUsage'] ?? null,
+            'immichAvailable' => $details['immichAvailable'] ?? null,
+            'computedImmichQuota' => $details['computedImmichQuota'] ?? null,
+            'reserve' => $details['reserve'] ?? null,
+            'warningCode' => $warningCode,
+            'warning' => $details['error'] ?? null,
+            'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+        ];
     }
 
     private function invalidUidResponse(): JSONResponse {
@@ -292,6 +367,10 @@ class AdminProvisioningController extends Controller {
 
     private function redactString(string $value): string {
         return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;]+/i', '$1$2[redacted]', $value) ?? $value;
+    }
+
+    private function formatDateTime(?DateTimeInterface $dateTime): ?string {
+        return $dateTime?->format(DateTimeInterface::ATOM);
     }
 
     private function isSecretKey(string $key): bool {

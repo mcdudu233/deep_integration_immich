@@ -10,7 +10,10 @@ use OCA\IntegrationImmich\BackgroundJob\SyncQuotaJob;
 use OCA\IntegrationImmich\BackgroundJob\VerifyProvisioningJob;
 use OCA\IntegrationImmich\Controller\AdminProvisioningController;
 use OCA\IntegrationImmich\Db\SyncState;
+use OCA\IntegrationImmich\Service\ExternalStorageProvisioner;
+use OCA\IntegrationImmich\Service\ImmichUserAdminService;
 use OCA\IntegrationImmich\Service\ProvisioningService;
+use OCA\IntegrationImmich\Service\QuotaSyncService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\AdminRequired;
@@ -29,6 +32,9 @@ class AdminProvisioningControllerTest extends TestCase {
 	private IJobList&MockObject $jobList;
 	private ReconcileUsersJob&MockObject $reconcileUsersJob;
 	private VerifyProvisioningJob&MockObject $verifyProvisioningJob;
+    private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
+    private QuotaSyncService&MockObject $quotaSyncService;
+    private ImmichUserAdminService&MockObject $immichUserAdminService;
     private IRequest&MockObject $request;
     private LoggerInterface&MockObject $logger;
 
@@ -40,6 +46,9 @@ class AdminProvisioningControllerTest extends TestCase {
 		$this->jobList = $this->createMock(IJobList::class);
 		$this->reconcileUsersJob = $this->createMock(ReconcileUsersJob::class);
 		$this->verifyProvisioningJob = $this->createMock(VerifyProvisioningJob::class);
+        $this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
+        $this->quotaSyncService = $this->createMock(QuotaSyncService::class);
+        $this->immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
         $this->request = $this->createMock(IRequest::class);
         $this->logger = $this->createMock(LoggerInterface::class);
 
@@ -50,6 +59,9 @@ class AdminProvisioningControllerTest extends TestCase {
 			$this->jobList,
 			$this->reconcileUsersJob,
 			$this->verifyProvisioningJob,
+			$this->externalStorageProvisioner,
+			$this->quotaSyncService,
+			$this->immichUserAdminService,
 			$this->logger,
 		);
     }
@@ -156,6 +168,25 @@ class AdminProvisioningControllerTest extends TestCase {
                 $this->state('bob', 'immich-bob'),
                 $this->state('carol', 'immich-carol'),
             ]);
+        $this->externalStorageProvisioner->method('verifyMount')->willReturnCallback(fn(string $uid): array => [
+            'status' => 'ok',
+            'mount_id' => 42,
+            'mount_name' => '/Immich Photos',
+            'read_only' => true,
+        ]);
+        $this->immichUserAdminService->method('getUserQuotaUsage')->willReturn(200);
+        $this->quotaSyncService->method('computeQuotaDetails')->willReturn([
+            'ncQuota' => 1000,
+            'ncUsed' => 700,
+            'ncRemaining' => 300,
+            'immichUsage' => 200,
+            'immichAvailable' => 200,
+            'nonImmichUsed' => 500,
+            'reserve' => 100,
+            'computedImmichQuota' => 400,
+            'unlimited' => false,
+            'error' => null,
+        ]);
 
         $response = $this->controller->listSyncState();
         $data = $response->getData();
@@ -163,6 +194,9 @@ class AdminProvisioningControllerTest extends TestCase {
         $this->assertSame(Http::STATUS_OK, $response->getStatus());
         $this->assertCount(2, $data['sync_state']);
         $this->assertSame('alice', $data['sync_state'][0]['ncUid']);
+        $this->assertSame('ok', $data['sync_state'][0]['mount']['status']);
+        $this->assertSame(300, $data['sync_state'][0]['quota']['ncRemaining']);
+        $this->assertSame(200, $data['sync_state'][0]['quota']['immichAvailable']);
         $this->assertTrue($data['pagination']['has_more']);
         $this->assertSame(2, $data['pagination']['limit']);
     }
