@@ -170,7 +170,9 @@ class SyncQuotaJob extends QueuedJob {
         return [
             'nc_quota' => $quotaDetails['ncQuota'] ?? null,
             'nc_used' => $quotaDetails['ncUsed'] ?? null,
+            'nc_remaining' => $quotaDetails['ncRemaining'] ?? null,
             'immich_usage' => $quotaDetails['immichUsage'] ?? null,
+            'immich_available' => $quotaDetails['immichAvailable'] ?? null,
             'non_immich_used' => $quotaDetails['nonImmichUsed'] ?? null,
             'reserve' => $quotaDetails['reserve'] ?? 0,
             'computed_immich_quota' => $quotaDetails['computedImmichQuota'] ?? null,

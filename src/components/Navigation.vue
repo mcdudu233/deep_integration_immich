@@ -257,8 +257,8 @@ const quotaRows = computed(() => [
 		testid: 'sidebar-quota-nextcloud-remaining',
 	},
 	{
-		label: t('deep_integration_immich', 'Immich quota'),
-		value: formatOptionalBytes(userQuota.value.computedImmichQuota),
+		label: t('deep_integration_immich', 'Immich available'),
+		value: formatOptionalBytes(userQuota.value.immichAvailable),
 		testid: 'sidebar-quota-immich-quota',
 	},
 	{
@@ -271,6 +271,11 @@ const quotaRows = computed(() => [
 const nextcloudRemainingLabel = computed(() => {
 	if (userQuota.value.status === 'unlimited') {
 		return t('deep_integration_immich', 'Unlimited')
+	}
+
+	const explicitRemaining = Number(userQuota.value.ncRemaining)
+	if (Number.isFinite(explicitRemaining)) {
+		return formatBytes(Math.max(0, explicitRemaining))
 	}
 
 	const rawQuota = userQuota.value.ncQuota

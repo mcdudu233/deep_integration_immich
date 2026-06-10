@@ -282,7 +282,9 @@ class SyncQuotaJobTest extends TestCase {
         return [
             'ncQuota' => $ncQuota,
             'ncUsed' => $ncUsed,
+            'ncRemaining' => $ncQuota === null || $ncUsed === null ? null : max(0, $ncQuota - max($ncUsed, $immichUsage)),
             'immichUsage' => $immichUsage,
+            'immichAvailable' => $computedImmichQuota === null ? null : max(0, $computedImmichQuota - $immichUsage),
             'nonImmichUsed' => $nonImmichUsed,
             'reserve' => $reserve,
             'computedImmichQuota' => $computedImmichQuota,

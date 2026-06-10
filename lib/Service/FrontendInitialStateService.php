@@ -263,7 +263,9 @@ class FrontendInitialStateService {
         $computedQuota = $quotaDetails['computedImmichQuota'];
         $summary['ncQuota'] = $quotaDetails['ncQuota'];
         $summary['ncUsed'] = $quotaDetails['ncUsed'];
+        $summary['ncRemaining'] = $quotaDetails['ncRemaining'] ?? null;
         $summary['immichUsage'] = $quotaDetails['immichUsage'];
+        $summary['immichAvailable'] = $quotaDetails['immichAvailable'] ?? null;
         $summary['computedImmichQuota'] = $computedQuota;
         $summary['reserve'] = $quotaDetails['reserve'];
 
