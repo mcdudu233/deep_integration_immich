@@ -40,6 +40,7 @@ class AdminProvisioningController extends Controller {
 		private SyncStateService $syncStateService,
 		private IJobList $jobList,
 		private ReconcileUsersJob $reconcileUsersJob,
+		private SyncQuotaJob $syncQuotaJob,
 		private VerifyProvisioningJob $verifyProvisioningJob,
 		private ExternalStorageProvisioner $externalStorageProvisioner,
 		private QuotaSyncService $quotaSyncService,
@@ -118,42 +119,43 @@ class AdminProvisioningController extends Controller {
         }
 
         try {
-            $queued = $this->queueJob(SyncQuotaJob::class, ['ncUid' => $ncUid]);
+            $result = $this->syncQuotaJob->syncForUser($ncUid);
             return $this->success([
-                'queued' => [$queued],
+                'results' => [$result],
                 'count' => 1,
             ]);
         } catch (\Throwable $e) {
-            return $this->serviceErrorResponse('quota_queue_failed', 'Failed to queue quota sync job.', $e);
+            return $this->serviceErrorResponse('quota_sync_failed', 'Failed to sync Immich quota.', $e);
         }
     }
 
-    #[AdminRequired]
-    public function recomputeQuotaAll(): JSONResponse {
-        try {
-            $queued = [];
-            $offset = 0;
-            do {
-                $states = $this->syncStateService->listMappedStates(self::QUOTA_QUEUE_PAGE_SIZE, $offset);
-                foreach ($states as $state) {
+	#[AdminRequired]
+	public function recomputeQuotaAll(): JSONResponse {
+		try {
+			$queued = [];
+			$offset = 0;
+			do {
+				$states = $this->syncStateService->listMappedStates(self::QUOTA_QUEUE_PAGE_SIZE, $offset);
+				foreach ($states as $state) {
                     $ncUid = $this->normaliseUid($state->getNcUid());
                     if ($ncUid === null) {
                         continue;
                     }
 
-                    $queued[] = $this->queueJob(SyncQuotaJob::class, ['ncUid' => $ncUid]);
-                }
+					$queued[] = $this->queueJob(SyncQuotaJob::class, ['ncUid' => $ncUid]);
+				}
 
                 $stateCount = count($states);
                 $offset += self::QUOTA_QUEUE_PAGE_SIZE;
             } while ($stateCount === self::QUOTA_QUEUE_PAGE_SIZE);
 
-            return $this->success([
-                'queued' => $queued,
-                'count' => count($queued),
-            ]);
-        } catch (\Throwable $e) {
-            return $this->serviceErrorResponse('quota_queue_failed', 'Failed to queue quota sync jobs for mapped users.', $e);
+			return $this->success([
+				'queued' => $queued,
+				'count' => count($queued),
+				'scope' => 'mapped_users',
+			]);
+		} catch (\Throwable $e) {
+            return $this->serviceErrorResponse('quota_sync_failed', 'Failed to sync Immich quotas for mapped users.', $e);
         }
     }
 
@@ -268,46 +270,40 @@ class AdminProvisioningController extends Controller {
             ];
         }
 
-        try {
-            $immichUsage = $this->immichUserAdminService->getUserQuotaUsage($immichUserId);
-            $details = $this->quotaSyncService->computeQuotaDetails((string)$state->getNcUid(), $immichUsage);
-        } catch (\Throwable $e) {
-            return [
-                'status' => 'failed',
-                'warningCode' => 'quota_unavailable',
-                'warning' => $this->redactString($e->getMessage()),
-                'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
-            ];
-        }
-
-        $status = 'ok';
-        $warningCode = null;
-        if (($details['error'] ?? null) !== null) {
-            $status = 'failed';
-            $warningCode = 'quota_unavailable';
-        } elseif (($details['unlimited'] ?? false) === true) {
-            $status = 'unlimited';
-            $warningCode = 'quota_unlimited';
-        } elseif ($state->getLastQuotaSyncAt() === null) {
-            $status = 'stale';
-            $warningCode = 'quota_stale';
+		$status = 'ok';
+		$warningCode = null;
+		$lastError = $this->redactString((string)($state->getLastError() ?? '')) ?: null;
+		$details = $this->quotaSyncService->computeNextcloudQuotaSnapshot((string)$state->getNcUid());
+		if ($state->getLastSyncStatus() === SyncStateService::STATUS_QUOTA_FAILED) {
+			$status = 'failed';
+			$warningCode = 'quota_unavailable';
+		} elseif (($details['error'] ?? null) !== null) {
+			$status = 'failed';
+			$warningCode = 'quota_unavailable';
+			$lastError = $this->redactString((string)$details['error']);
+		} elseif (($details['unlimited'] ?? false) === true) {
+			$status = 'unlimited';
+			$warningCode = 'quota_unlimited';
+		} elseif ($state->getLastQuotaSyncAt() === null) {
+			$status = 'stale';
+			$warningCode = 'quota_stale';
         }
 
         return [
-            'status' => $status,
-            'mode' => null,
-            'ncQuota' => $details['ncQuota'] ?? null,
-            'ncUsed' => $details['ncUsed'] ?? null,
-            'ncRemaining' => $details['ncRemaining'] ?? null,
-            'immichUsage' => $details['immichUsage'] ?? null,
-            'immichAvailable' => $details['immichAvailable'] ?? null,
-            'computedImmichQuota' => $details['computedImmichQuota'] ?? null,
-            'reserve' => $details['reserve'] ?? null,
-            'warningCode' => $warningCode,
-            'warning' => $details['error'] ?? null,
-            'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
-        ];
-    }
+			'status' => $status,
+			'mode' => null,
+			'ncQuota' => $details['ncQuota'] ?? null,
+			'ncUsed' => $details['ncUsed'] ?? null,
+			'ncRemaining' => $details['ncRemaining'] ?? null,
+			'immichUsage' => null,
+			'immichAvailable' => null,
+			'computedImmichQuota' => null,
+			'reserve' => $details['reserve'] ?? null,
+			'warningCode' => $warningCode,
+			'warning' => $status === 'failed' ? $lastError : null,
+			'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+		];
+	}
 
     private function invalidUidResponse(): JSONResponse {
         return $this->errorResponse(

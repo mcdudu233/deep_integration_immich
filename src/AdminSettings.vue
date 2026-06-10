@@ -1055,6 +1055,7 @@ async function recomputeQuotaOneUser() {
 	actionMessage.value = ''
 	try {
 		await store.recomputeQuotaForUser(actionNcUid.value)
+		await refreshSyncStates()
 		actionMessage.value = t('deep_integration_immich', 'Quota recomputed')
 		actionMessageType.value = 'success'
 	} catch (e) {
@@ -1067,6 +1068,7 @@ async function recomputeQuotaAllUsers() {
 	actionMessage.value = ''
 	try {
 		await store.recomputeQuotaForAll()
+		await refreshSyncStates()
 		actionMessage.value = t('deep_integration_immich', 'All quotas recomputed')
 		actionMessageType.value = 'success'
 	} catch (e) {

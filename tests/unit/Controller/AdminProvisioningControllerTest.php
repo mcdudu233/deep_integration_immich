@@ -31,6 +31,7 @@ class AdminProvisioningControllerTest extends TestCase {
 	private SyncStateService&MockObject $syncStateService;
 	private IJobList&MockObject $jobList;
 	private ReconcileUsersJob&MockObject $reconcileUsersJob;
+	private SyncQuotaJob&MockObject $syncQuotaJob;
 	private VerifyProvisioningJob&MockObject $verifyProvisioningJob;
     private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
     private QuotaSyncService&MockObject $quotaSyncService;
@@ -45,6 +46,7 @@ class AdminProvisioningControllerTest extends TestCase {
 		$this->syncStateService = $this->createMock(SyncStateService::class);
 		$this->jobList = $this->createMock(IJobList::class);
 		$this->reconcileUsersJob = $this->createMock(ReconcileUsersJob::class);
+		$this->syncQuotaJob = $this->createMock(SyncQuotaJob::class);
 		$this->verifyProvisioningJob = $this->createMock(VerifyProvisioningJob::class);
         $this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
         $this->quotaSyncService = $this->createMock(QuotaSyncService::class);
@@ -58,6 +60,7 @@ class AdminProvisioningControllerTest extends TestCase {
 			$this->syncStateService,
 			$this->jobList,
 			$this->reconcileUsersJob,
+			$this->syncQuotaJob,
 			$this->verifyProvisioningJob,
 			$this->externalStorageProvisioner,
 			$this->quotaSyncService,
@@ -119,41 +122,46 @@ class AdminProvisioningControllerTest extends TestCase {
         $this->assertSame('all_scoped_users', $response->getData()['scope']);
     }
 
-    public function testRecomputeQuotaOneQueuesQuotaJobForUser(): void {
-        $this->jobList->expects($this->once())
-            ->method('add')
-            ->with(SyncQuotaJob::class, ['ncUid' => 'alice']);
+	public function testRecomputeQuotaOneSyncsQuotaForUser(): void {
+		$this->syncQuotaJob->expects($this->once())
+			->method('syncForUser')
+			->with('alice')
+			->willReturn(['ncUid' => 'alice', 'status' => 'active', 'action' => 'updated']);
 
-        $response = $this->controller->recomputeQuotaOne('alice');
+		$response = $this->controller->recomputeQuotaOne('alice');
 
-        $this->assertSame(Http::STATUS_OK, $response->getStatus());
-        $this->assertSame(SyncQuotaJob::class, $response->getData()['queued'][0]['job']);
-    }
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertSame('updated', $response->getData()['results'][0]['action']);
+	}
 
-    public function testRecomputeQuotaAllQueuesQuotaJobsForMappedUsers(): void {
-        $this->syncStateService->expects($this->once())
-            ->method('listMappedStates')
+	public function testRecomputeQuotaAllQueuesQuotaJobsForMappedUsers(): void {
+		$this->syncStateService->expects($this->once())
+			->method('listMappedStates')
             ->with(500, 0)
             ->willReturn([
                 $this->state('alice', 'immich-alice'),
                 $this->state('bob', 'immich-bob'),
-            ]);
-        $queued = [];
-        $this->jobList->expects($this->exactly(2))
-            ->method('add')
-            ->willReturnCallback(function (string $jobClass, array $argument) use (&$queued): void {
-                $queued[] = [$jobClass, $argument];
-            });
+		]);
+		$this->syncQuotaJob->expects($this->never())->method('syncForUser');
+		$queued = [];
+		$this->jobList->expects($this->exactly(2))
+			->method('add')
+			->willReturnCallback(function (string $jobClass, array $argument) use (&$queued): void {
+				$queued[] = [$jobClass, $argument];
+			});
 
         $response = $this->controller->recomputeQuotaAll();
 
-        $this->assertSame(Http::STATUS_OK, $response->getStatus());
-        $this->assertSame(2, $response->getData()['count']);
-        $this->assertSame([
-            [SyncQuotaJob::class, ['ncUid' => 'alice']],
-            [SyncQuotaJob::class, ['ncUid' => 'bob']],
-        ], $queued);
-    }
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertSame(2, $response->getData()['count']);
+		$this->assertSame('mapped_users', $response->getData()['scope']);
+		$this->assertSame([
+			[SyncQuotaJob::class, ['ncUid' => 'alice']],
+			[SyncQuotaJob::class, ['ncUid' => 'bob']],
+		], $queued);
+		$this->assertSame(SyncQuotaJob::class, $response->getData()['queued'][0]['job']);
+		$this->assertSame(['ncUid' => 'alice'], $response->getData()['queued'][0]['argument']);
+	}
 
     public function testListSyncStateReturnsPaginatedStates(): void {
         $this->request->method('getParam')->willReturnMap([
@@ -173,20 +181,17 @@ class AdminProvisioningControllerTest extends TestCase {
             'mount_id' => 42,
             'mount_name' => '/Immich Photos',
             'read_only' => true,
-        ]);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->willReturn(200);
-        $this->quotaSyncService->method('computeQuotaDetails')->willReturn([
-            'ncQuota' => 1000,
-            'ncUsed' => 700,
-            'ncRemaining' => 300,
-            'immichUsage' => 200,
-            'immichAvailable' => 200,
-            'nonImmichUsed' => 500,
-            'reserve' => 100,
-            'computedImmichQuota' => 400,
-            'unlimited' => false,
-            'error' => null,
-        ]);
+		]);
+		$this->immichUserAdminService->expects($this->never())->method('getUserQuotaUsage');
+		$this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
+		$this->quotaSyncService->method('computeNextcloudQuotaSnapshot')->willReturnCallback(fn(string $uid): array => [
+			'ncQuota' => 1000,
+			'ncUsed' => $uid === 'alice' ? 700 : 500,
+			'ncRemaining' => $uid === 'alice' ? 300 : 500,
+			'reserve' => 100,
+			'unlimited' => false,
+			'error' => null,
+		]);
 
         $response = $this->controller->listSyncState();
         $data = $response->getData();
@@ -195,8 +200,8 @@ class AdminProvisioningControllerTest extends TestCase {
         $this->assertCount(2, $data['sync_state']);
         $this->assertSame('alice', $data['sync_state'][0]['ncUid']);
         $this->assertSame('ok', $data['sync_state'][0]['mount']['status']);
-        $this->assertSame(300, $data['sync_state'][0]['quota']['ncRemaining']);
-        $this->assertSame(200, $data['sync_state'][0]['quota']['immichAvailable']);
+		$this->assertSame('stale', $data['sync_state'][0]['quota']['status']);
+		$this->assertSame(300, $data['sync_state'][0]['quota']['ncRemaining']);
         $this->assertTrue($data['pagination']['has_more']);
         $this->assertSame(2, $data['pagination']['limit']);
     }
