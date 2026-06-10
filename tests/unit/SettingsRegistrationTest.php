@@ -8,12 +8,15 @@ use OCA\IntegrationImmich\Settings\AdminSection;
 use OCA\IntegrationImmich\Settings\AdminSettings;
 use OCA\IntegrationImmich\Settings\PersonalSection;
 use OCA\IntegrationImmich\Settings\PersonalSettings;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\FrontendInitialStateService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
+use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserSession;
+use OCP\IURLGenerator;
 use Test\TestCase;
 
 class SettingsRegistrationTest extends TestCase {
@@ -36,6 +39,10 @@ class SettingsRegistrationTest extends TestCase {
         $immichService = $this->createMock(ImmichService::class);
         $immichService->method('getServerUrl')->willReturn('https://photos.example.com');
         $immichService->method('getApiKey')->willReturn('');
+        $adminConfigService = $this->createMock(AdminConfigService::class);
+        $adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_PROVISIONING_ENABLED => false,
+        ]);
         $frontendInitialStateService = $this->createMock(FrontendInitialStateService::class);
         $frontendInitialStateService->method('buildAdminState')->willReturn([
             'server_url' => 'https://photos.example.com',
@@ -63,7 +70,7 @@ class SettingsRegistrationTest extends TestCase {
             });
 
         $adminSettings = new AdminSettings($frontendInitialStateService, $initialState);
-        $personalSettings = new PersonalSettings($immichService, $frontendInitialStateService, $initialState, $userSession);
+        $personalSettings = new PersonalSettings($immichService, $adminConfigService, $frontendInitialStateService, $initialState, $userSession);
 
         $this->assertSame(AdminSection::SECTION_ID, $adminSettings->getSection());
         $this->assertSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
@@ -91,5 +98,33 @@ class SettingsRegistrationTest extends TestCase {
         $this->assertInstanceOf(TemplateResponse::class, $personalForm);
         $this->assertSame('adminSettings', $adminForm->getTemplateName());
         $this->assertSame('personalSettings', $personalForm->getTemplateName());
+    }
+
+    public function testPersonalSettingsSectionIsHiddenWhenAdminProvisioningIsEnabled(): void {
+        $immichService = $this->createMock(ImmichService::class);
+        $adminConfigService = $this->createMock(AdminConfigService::class);
+        $adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_PROVISIONING_ENABLED => true,
+        ]);
+        $frontendInitialStateService = $this->createMock(FrontendInitialStateService::class);
+        $initialState = $this->createMock(IInitialState::class);
+        $userSession = $this->createMock(IUserSession::class);
+
+        $personalSettings = new PersonalSettings($immichService, $adminConfigService, $frontendInitialStateService, $initialState, $userSession);
+
+        $this->assertNotSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
+    }
+
+    public function testSettingsSectionsUseLocalizedNames(): void {
+        $l10n = $this->createMock(IL10N::class);
+        $l10n->method('t')->willReturnCallback(static fn (string $text): string => $text);
+        $urlGenerator = $this->createMock(IURLGenerator::class);
+        $urlGenerator->method('imagePath')->willReturn('/apps/deep_integration_immich/img/app-dark.svg');
+
+        $personalSection = new PersonalSection($l10n, $urlGenerator);
+        $adminSection = new AdminSection($l10n, $urlGenerator);
+
+        $this->assertSame('Immich Personal Connection', $personalSection->getName());
+        $this->assertSame('Immich Administration', $adminSection->getName());
     }
 }

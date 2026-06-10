@@ -29,7 +29,7 @@ class PersonalSection implements IIconSection {
     }
 
     public function getName(): string {
-        return $this->l->t('Immich Browsing');
+        return $this->l->t('Immich Personal Connection');
     }
 
     public function getPriority(): int {

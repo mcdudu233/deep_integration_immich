@@ -3,16 +3,10 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
   -->
 <template>
-	<div id="immich-personal-settings">
+	<div v-if="!adminManagedBrowsing" id="immich-personal-settings">
 		<NcSettingsSection :name="t('deep_integration_immich', 'Immich Personal Connection')"
 			:description="sectionDescription">
-			<NcNoteCard v-if="adminManagedBrowsing"
-				type="info"
-				data-testid="personal-config-admin-managed-message">
-				<p>{{ t('deep_integration_immich', 'This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.') }}</p>
-			</NcNoteCard>
-
-			<div v-else class="immich-personal-settings-form">
+			<div class="immich-personal-settings-form">
 				<NcTextField v-model="form.server_url"
 					:label="t('deep_integration_immich', 'Immich server URL')"
 					placeholder="https://immich.example.com"
@@ -88,12 +82,11 @@ const message = ref('')
 const messageType = ref('success')
 const adminManagedBrowsing = computed(() => initialState.browsingReadiness?.adminManaged === true
 	|| (initialState.provisioning?.enabled === true && initialState.provisioning?.status !== 'personal_unconfigured'))
-const sectionDescription = computed(() => adminManagedBrowsing.value
-	? t('deep_integration_immich', 'This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.')
-	: t('deep_integration_immich', 'Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.'))
+const sectionDescription = computed(() => t('deep_integration_immich', 'Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.'))
 
 onMounted(async () => {
 	if (adminManagedBrowsing.value) {
+		hidePersonalSettingsNavigationEntry()
 		return
 	}
 
@@ -149,6 +142,18 @@ function localizeError(error) {
 	}
 
 	return error?.message || t('deep_integration_immich', 'Could not save personal Immich settings.')
+}
+
+function hidePersonalSettingsNavigationEntry() {
+	const links = document.querySelectorAll('a[href*="/settings/user/deep_integration_immich-personal"]')
+	for (const link of links) {
+		const listItem = link.closest('li')
+		if (listItem) {
+			listItem.hidden = true
+		} else {
+			link.hidden = true
+		}
+	}
 }
 </script>
 

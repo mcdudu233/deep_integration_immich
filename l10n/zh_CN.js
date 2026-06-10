@@ -200,6 +200,7 @@ OC.L10N.register(
     "Error deleting from Immich: {msg}": "从 Immich 删除出错：{msg}",
     "No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.": "此用户没有 Immich 映射。请联系管理员运行 Immich 预配。",
     "Immich Personal Connection": "Immich 个人连接",
+    "Immich Administration": "Immich 管理",
     "Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.": "当未使用管理员代理浏览时，配置用于浏览的个人 Immich 服务器 URL 和 API Key。",
     "This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.": "此实例由管理员统一管理 Immich 连接。你不需要配置个人 Immich API Key。",
     "Personal API key": "个人 API Key",
