@@ -73,7 +73,9 @@
 
 		<!-- Footer: provisioning status panel + link to Immich instance -->
 		<template #footer>
-			<div class="immich-status-panel" data-testid="user-status-panel">
+			<div v-if="showAdminManagedStatusPanel"
+				class="immich-status-panel"
+				data-testid="user-status-panel">
 				<!-- Mapping status badge -->
 				<div class="immich-status-item" data-testid="mapping-status-badge">
 					<CheckCircleIcon v-if="userMapping.status === 'mapped'"
@@ -199,6 +201,7 @@ const userMapping = computed(() => store.mapping ?? { status: 'missing' })
 const userMount = computed(() => store.mount ?? { status: 'unavailable' })
 const userQuota = computed(() => store.quota ?? { stale: false })
 const browsingReadiness = computed(() => store.browsingReadiness ?? { status: 'ready' })
+const showAdminManagedStatusPanel = computed(() => browsingReadiness.value.adminManaged === true)
 const showSsoGuidance = computed(() => browsingReadiness.value.adminManaged === true
 	&& browsingReadiness.value.autoLoginMode === 'sso_recommended')
 const warnings = computed(() => normalizeWarnings(store.warningDetails, store.warnings))
