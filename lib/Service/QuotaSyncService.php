@@ -57,10 +57,14 @@ class QuotaSyncService {
             $immichUsage = max(0, $immichUsage ?? 0);
             $nonImmichUsage = max(0, $nextcloudUsed - $immichUsage);
             $reserveBytes = $this->getReserveBytes();
-            $computedQuota = max($immichUsage, $nextcloudQuota - $nonImmichUsage - $reserveBytes);
+            $remainingNextcloudCapacity = max(0, $nextcloudQuota - max($nextcloudUsed, $immichUsage));
+            $availableGrowth = $remainingNextcloudCapacity > $reserveBytes
+                ? $remainingNextcloudCapacity - $reserveBytes
+                : $remainingNextcloudCapacity;
+            $computedQuota = $immichUsage + $availableGrowth;
 
             if ($computedQuota <= 0) {
-                throw new \RuntimeException('Computed Immich quota is zero; leaving quota unchanged.');
+                $computedQuota = 1;
             }
 
             return $computedQuota;
@@ -75,7 +79,7 @@ class QuotaSyncService {
     }
 
     /**
-     * @return array{ncQuota: int|null, ncUsed: int|null, immichUsage: int, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
+     * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, immichUsage: int, immichAvailable: int|null, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
      */
     public function computeQuotaDetails(string $ncUid, ?int $immichUsage): array {
         $computedQuota = $this->computeQuota($ncUid, $immichUsage);
@@ -91,10 +95,15 @@ class QuotaSyncService {
             $ncUsed = null;
         }
 
+        $ncRemaining = $ncQuota === null || $ncUsed === null ? null : max(0, $ncQuota - max($ncUsed, $normalizedImmichUsage));
+        $immichAvailable = $computedQuota === null ? null : max(0, $computedQuota - $normalizedImmichUsage);
+
         return [
             'ncQuota' => $ncQuota,
             'ncUsed' => $ncUsed,
+            'ncRemaining' => $ncRemaining,
             'immichUsage' => $normalizedImmichUsage,
+            'immichAvailable' => $immichAvailable,
             'nonImmichUsed' => $ncUsed === null ? null : max(0, $ncUsed - $normalizedImmichUsage),
             'reserve' => $this->getReserveBytes(),
             'computedImmichQuota' => $computedQuota,

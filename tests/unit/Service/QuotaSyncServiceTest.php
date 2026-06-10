@@ -81,20 +81,20 @@ class QuotaSyncServiceTest extends TestCase {
         $this->assertTrue($service->wasLastQuotaUnlimited());
     }
 
-    public function testZeroComputedQuotaIsSkippedInsteadOfReturned(): void {
+    public function testSmallRemainingQuotaIsStillAllocatedWhenReserveIsLarger(): void {
         $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
         $service = $this->service(fn(): int => 50);
 
-        $this->assertNull($service->computeQuota('alice', 0));
-        $this->assertSame('Computed Immich quota is zero; leaving quota unchanged.', $service->getLastError());
+        $this->assertSame(50, $service->computeQuota('alice', 0));
+        $this->assertNull($service->getLastError());
     }
 
-    public function testReserveLargerThanQuotaKeepsCurrentImmichUsage(): void {
+    public function testReserveLargerThanRemainingCapacityUsesRealRemainingCapacity(): void {
         $this->adminConfig[AdminConfigService::KEY_QUOTA_RESERVE_BYTES] = 200;
         $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
         $service = $this->service(fn(): int => 70);
 
-        $this->assertSame(25, $service->computeQuota('alice', 25));
+        $this->assertSame(55, $service->computeQuota('alice', 25));
         $this->assertNull($service->getLastError());
     }
 
