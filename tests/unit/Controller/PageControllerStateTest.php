@@ -24,10 +24,10 @@ class PageControllerStateTest extends TestCase {
     private AdminConfigService&MockObject $adminConfigService;
     private SyncStateService&MockObject $syncStateService;
     private CapabilityService&MockObject $capabilityService;
-    private ActionPolicyService&MockObject $actionPolicyService;
-    private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
-    private QuotaSyncService&MockObject $quotaSyncService;
-    private IInitialState&MockObject $initialState;
+	private ActionPolicyService&MockObject $actionPolicyService;
+	private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
+	private QuotaSyncService&MockObject $quotaSyncService;
+	private IInitialState&MockObject $initialState;
     private IRequest&MockObject $request;
     private array $adminConfig = [];
 
@@ -37,10 +37,10 @@ class PageControllerStateTest extends TestCase {
         $this->adminConfigService = $this->createMock(AdminConfigService::class);
         $this->syncStateService = $this->createMock(SyncStateService::class);
         $this->capabilityService = $this->createMock(CapabilityService::class);
-        $this->actionPolicyService = $this->createMock(ActionPolicyService::class);
-        $this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
-        $this->quotaSyncService = $this->createMock(QuotaSyncService::class);
-        $this->initialState = $this->createMock(IInitialState::class);
+		$this->actionPolicyService = $this->createMock(ActionPolicyService::class);
+		$this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
+		$this->quotaSyncService = $this->createMock(QuotaSyncService::class);
+		$this->initialState = $this->createMock(IInitialState::class);
         $this->request = $this->createMock(IRequest::class);
 
         $this->adminConfig = $this->adminConfig();
@@ -64,16 +64,14 @@ class PageControllerStateTest extends TestCase {
             'mount_name' => '/Immich Photos',
             'read_only' => true,
         ]);
-        $this->quotaSyncService->expects($this->once())->method('computeQuotaDetails')->with('alice', null)->willReturn([
-            'ncQuota' => 10000,
-            'ncUsed' => 1000,
-            'immichUsage' => 0,
-            'nonImmichUsed' => 1000,
-            'reserve' => 512,
-            'computedImmichQuota' => 9000,
-            'unlimited' => false,
-            'error' => null,
-        ]);
+		$this->quotaSyncService->expects($this->once())->method('computeNextcloudQuotaSnapshot')->with('alice')->willReturn([
+			'ncQuota' => 10000,
+			'ncUsed' => 1000,
+			'ncRemaining' => 9000,
+			'reserve' => 512,
+			'unlimited' => false,
+			'error' => null,
+		]);
         $this->actionPolicyService->method('getCapabilityFlags')->with('alice')->willReturn([
             'exportCopyEnabled' => true,
             'importToImmichEnabled' => false,
@@ -88,7 +86,8 @@ class PageControllerStateTest extends TestCase {
         $this->assertInstanceOf(TemplateResponse::class, $response);
         $this->assertSame('https://photos.example.com', $data['immich_url']);
         $this->assertSame('https://photos.example.com', $data['server_url']);
-        $this->assertSame(['enabled' => true, 'scope' => 'groups', 'scopedGroups' => ['photos'], 'status' => 'active'], $data['provisioning']);
+		$this->assertSame(['enabled' => true, 'scope' => 'groups', 'status' => 'active'], $data['provisioning']);
+		$this->assertArrayNotHasKey('scopedGroups', $data['provisioning']);
         $this->assertSame('active', $data['mapping']['status']);
         $this->assertSame('immich-alice', $data['mapping']['immichUserId']);
         $this->assertSame('alice', $data['mapping']['storageLabel']);
@@ -96,7 +95,8 @@ class PageControllerStateTest extends TestCase {
         $this->assertSame(42, $data['mount']['mountId']);
         $this->assertSame('/Immich Photos', $data['mount']['path']);
         $this->assertTrue($data['mount']['readOnly']);
-        $this->assertSame(9000, $data['quota']['computedImmichQuota']);
+		$this->assertSame(9000, $data['quota']['ncRemaining']);
+		$this->assertNull($data['quota']['computedImmichQuota']);
         $this->assertSame('admin_managed_ready', $data['browsingReadiness']['status']);
         $this->assertSame('success', $data['browsingReadiness']['severity']);
         $this->assertSame('sso_recommended', $data['browsingReadiness']['autoLoginMode']);
@@ -201,10 +201,10 @@ class PageControllerStateTest extends TestCase {
                 $this->adminConfigService,
                 $this->syncStateService,
                 $this->capabilityService,
-                $this->actionPolicyService,
-                $this->externalStorageProvisioner,
-                $this->quotaSyncService,
-            ),
+				$this->actionPolicyService,
+				$this->externalStorageProvisioner,
+				$this->quotaSyncService,
+			),
             $uid,
         );
     }

@@ -61,19 +61,19 @@ class FrontendInitialStateService {
     public function __construct(
         private AdminConfigService $adminConfigService,
         private SyncStateService $syncStateService,
-        private CapabilityService $capabilityService,
-        private ActionPolicyService $actionPolicyService,
-        private ExternalStorageProvisioner $externalStorageProvisioner,
-        private QuotaSyncService $quotaSyncService,
-    ) {
-    }
+		private CapabilityService $capabilityService,
+		private ActionPolicyService $actionPolicyService,
+		private ExternalStorageProvisioner $externalStorageProvisioner,
+		private QuotaSyncService $quotaSyncService,
+	) {
+	}
 
     public function buildUserState(?string $ncUid): array {
         $warnings = [];
         $config = $this->safeAdminConfig();
         $syncState = $this->currentUserSyncState($ncUid, $warnings);
         $actionCapabilities = $this->safeActionCapabilities($ncUid, $warnings);
-        $provisioning = $this->provisioningState($config);
+		$provisioning = $this->provisioningState($config, false);
 
         if ($syncState !== null) {
             $provisioning['status'] = $syncState->getScopeStatus();
@@ -259,19 +259,15 @@ class FrontendInitialStateService {
             return $summary;
         }
 
-        $quotaDetails = $this->quotaSyncService->computeQuotaDetails($ncUid, null);
-        $computedQuota = $quotaDetails['computedImmichQuota'];
-        $summary['ncQuota'] = $quotaDetails['ncQuota'];
-        $summary['ncUsed'] = $quotaDetails['ncUsed'];
-        $summary['ncRemaining'] = $quotaDetails['ncRemaining'] ?? null;
-        $summary['immichUsage'] = $quotaDetails['immichUsage'];
-        $summary['immichAvailable'] = $quotaDetails['immichAvailable'] ?? null;
-        $summary['computedImmichQuota'] = $computedQuota;
-        $summary['reserve'] = $quotaDetails['reserve'];
+		$quotaDetails = $this->quotaSyncService->computeNextcloudQuotaSnapshot($ncUid);
+		$summary['ncQuota'] = $quotaDetails['ncQuota'];
+		$summary['ncUsed'] = $quotaDetails['ncUsed'];
+		$summary['ncRemaining'] = $quotaDetails['ncRemaining'] ?? null;
+		$summary['reserve'] = $quotaDetails['reserve'];
 
-        if ($computedQuota !== null) {
-            $summary['status'] = 'ok';
-        }
+		if ($quotaDetails['error'] === null) {
+			$summary['status'] = 'ok';
+		}
 
         if ($quotaDetails['error'] !== null) {
             $summary['status'] = 'failed';
@@ -280,9 +276,9 @@ class FrontendInitialStateService {
             return $summary;
         }
 
-        if ($computedQuota === null && $quotaDetails['unlimited']) {
-            $summary['status'] = 'unlimited';
-            $this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
+		if (($quotaDetails['unlimited'] ?? false) === true) {
+			$summary['status'] = 'unlimited';
+			$this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
             return $summary;
         }
 
@@ -332,7 +328,7 @@ class FrontendInitialStateService {
                 'immich_base_url_configured' => trim((string)($config[AdminConfigService::KEY_IMMICH_BASE_URL] ?? '')) !== '',
                 'admin_api_key_configured' => ($config['admin_api_key_configured'] ?? false) === true,
             ],
-            'provisioning' => $this->provisioningState($config),
+			'provisioning' => $this->provisioningState($config, true),
             'quota' => [
                 'mode' => (string)($config[AdminConfigService::KEY_QUOTA_SYNC_MODE] ?? 'disabled'),
                 'reserve' => $this->reserveBytes($config),
@@ -341,30 +337,106 @@ class FrontendInitialStateService {
         ];
     }
 
-    private function adminSyncStates(array &$warnings): array {
-        try {
-            $states = $this->syncStateService->listStates(100, 0);
+	private function adminSyncStates(array &$warnings): array {
+		$config = $this->safeAdminConfig();
+
+		try {
+			$states = $this->syncStateService->listStates(100, 0);
         } catch (\Throwable) {
             $this->addWarning($warnings, self::CODE_SYNC_STATE_LIST_UNAVAILABLE);
             return [];
         }
 
-        return array_map(fn(SyncState $state): array => [
-            'ncUid' => $state->getNcUid(),
-            'nc_uid' => $state->getNcUid(),
-            'immichUserId' => $state->getImmichUserId(),
-            'immich_user_id' => $state->getImmichUserId(),
-            'immichEmail' => $state->getImmichEmail(),
-            'storageLabel' => $state->getStorageLabel(),
-            'storage_label' => $state->getStorageLabel(),
-            'ncMountId' => $state->getNcMountId(),
-            'scopeStatus' => $state->getScopeStatus(),
-            'lastSyncStatus' => $state->getLastSyncStatus(),
-            'lastError' => $this->redactString((string)($state->getLastError() ?? '')) ?: null,
-            'lastQuotaSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
-            'updatedAt' => $this->formatDateTime($state->getUpdatedAt()),
-        ], $states);
+		return array_map(function (SyncState $state) use ($config): array {
+            $data = [
+                'ncUid' => $state->getNcUid(),
+                'nc_uid' => $state->getNcUid(),
+                'immichUserId' => $state->getImmichUserId(),
+                'immich_user_id' => $state->getImmichUserId(),
+                'immichEmail' => $state->getImmichEmail(),
+                'storageLabel' => $state->getStorageLabel(),
+                'storage_label' => $state->getStorageLabel(),
+                'ncMountId' => $state->getNcMountId(),
+                'scopeStatus' => $state->getScopeStatus(),
+                'lastSyncStatus' => $state->getLastSyncStatus(),
+                'lastError' => $this->redactString((string)($state->getLastError() ?? '')) ?: null,
+                'lastQuotaSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+                'updatedAt' => $this->formatDateTime($state->getUpdatedAt()),
+            ];
+            $data['mount'] = $this->adminMountSummary($state);
+			$data['quota'] = $this->adminQuotaSummary($state, $config);
+
+            return $this->redact($data);
+        }, $states);
     }
+
+    private function adminMountSummary(SyncState $state): array {
+        try {
+            return $this->externalStorageProvisioner->verifyMount((string)$state->getNcUid());
+        } catch (\Throwable $e) {
+            return [
+                'status' => 'unavailable',
+                'mount_id' => $state->getNcMountId(),
+                'mount_name' => null,
+                'read_only' => null,
+                'error' => $this->redactString($e->getMessage()),
+            ];
+        }
+    }
+
+	private function adminQuotaSummary(SyncState $state, array $config): array {
+		$mode = (string)($config[AdminConfigService::KEY_QUOTA_SYNC_MODE] ?? 'disabled');
+		$immichUserId = trim((string)$state->getImmichUserId());
+		if ($immichUserId === '') {
+			return [
+                'status' => 'unavailable',
+                'warningCode' => self::CODE_QUOTA_NEEDS_MAPPING,
+			];
+		}
+
+		if (!in_array($mode, ['manual', 'event_scheduled'], true)) {
+			return [
+				'status' => 'disabled',
+				'mode' => $mode,
+				'reserve' => $this->reserveBytes($config),
+				'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+			];
+		}
+
+		$status = 'ok';
+		$warningCode = null;
+		$lastError = $this->redactString((string)($state->getLastError() ?? '')) ?: null;
+		$details = $this->quotaSyncService->computeNextcloudQuotaSnapshot((string)$state->getNcUid());
+		if ($state->getLastSyncStatus() === SyncStateService::STATUS_QUOTA_FAILED) {
+			$status = 'failed';
+			$warningCode = self::CODE_QUOTA_UNAVAILABLE;
+		} elseif (($details['error'] ?? null) !== null) {
+			$status = 'failed';
+			$warningCode = self::CODE_QUOTA_UNAVAILABLE;
+			$lastError = $this->redactString((string)$details['error']);
+		} elseif (($details['unlimited'] ?? false) === true) {
+			$status = 'unlimited';
+			$warningCode = self::CODE_QUOTA_UNLIMITED;
+		} elseif ($state->getLastQuotaSyncAt() === null) {
+			$status = 'stale';
+			$warningCode = self::CODE_QUOTA_STALE;
+        }
+
+		return [
+			'status' => $status,
+			'mode' => $mode,
+			'ncQuota' => $details['ncQuota'] ?? null,
+			'ncUsed' => $details['ncUsed'] ?? null,
+			'ncRemaining' => $details['ncRemaining'] ?? null,
+			'immichUsage' => null,
+			'immichAvailable' => null,
+			'computedImmichQuota' => null,
+			'reserve' => $details['reserve'] ?? $this->reserveBytes($config),
+			'warningCode' => $warningCode,
+			'warning' => $status === 'failed' ? $lastError : null,
+			'lastSyncAt' => $this->formatDateTime($state->getLastQuotaSyncAt()),
+		];
+	}
 
     private function adminCapabilities(array &$warnings): array {
         try {
@@ -546,7 +618,7 @@ class FrontendInitialStateService {
         };
     }
 
-    private function provisioningState(array $config): array {
+	private function provisioningState(array $config, bool $includeScopedGroups = true): array {
         $scope = (string)($config[AdminConfigService::KEY_USER_SCOPE_MODE] ?? 'all');
         $state = [
             'enabled' => ($config[AdminConfigService::KEY_PROVISIONING_ENABLED] ?? false) === true,
@@ -554,9 +626,9 @@ class FrontendInitialStateService {
         ];
 
         $groups = $config[AdminConfigService::KEY_USER_SCOPE_GROUPS] ?? [];
-        if (is_array($groups) && $groups !== []) {
-            $state['scopedGroups'] = array_values(array_map('strval', $groups));
-        }
+		if ($includeScopedGroups && is_array($groups) && $groups !== []) {
+			$state['scopedGroups'] = array_values(array_map('strval', $groups));
+		}
 
         return $state;
     }

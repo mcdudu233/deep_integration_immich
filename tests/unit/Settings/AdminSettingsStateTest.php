@@ -23,10 +23,10 @@ class AdminSettingsStateTest extends TestCase {
     private AdminConfigService&MockObject $adminConfigService;
     private SyncStateService&MockObject $syncStateService;
     private CapabilityService&MockObject $capabilityService;
-    private ActionPolicyService&MockObject $actionPolicyService;
-    private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
-    private QuotaSyncService&MockObject $quotaSyncService;
-    private IInitialState&MockObject $initialState;
+	private ActionPolicyService&MockObject $actionPolicyService;
+	private ExternalStorageProvisioner&MockObject $externalStorageProvisioner;
+	private QuotaSyncService&MockObject $quotaSyncService;
+	private IInitialState&MockObject $initialState;
 
     protected function setUp(): void {
         parent::setUp();
@@ -34,10 +34,10 @@ class AdminSettingsStateTest extends TestCase {
         $this->adminConfigService = $this->createMock(AdminConfigService::class);
         $this->syncStateService = $this->createMock(SyncStateService::class);
         $this->capabilityService = $this->createMock(CapabilityService::class);
-        $this->actionPolicyService = $this->createMock(ActionPolicyService::class);
-        $this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
-        $this->quotaSyncService = $this->createMock(QuotaSyncService::class);
-        $this->initialState = $this->createMock(IInitialState::class);
+		$this->actionPolicyService = $this->createMock(ActionPolicyService::class);
+		$this->externalStorageProvisioner = $this->createMock(ExternalStorageProvisioner::class);
+		$this->quotaSyncService = $this->createMock(QuotaSyncService::class);
+		$this->initialState = $this->createMock(IInitialState::class);
     }
 
     public function testAdminInitialStateContainsDashboardStateWithoutSecrets(): void {
@@ -68,9 +68,24 @@ class AdminSettingsStateTest extends TestCase {
                 ],
             ],
         ]);
-        $this->syncStateService->expects($this->once())->method('listStates')->with(100, 0)->willReturn([
-            $this->syncState(),
-        ]);
+		$this->syncStateService->expects($this->once())->method('listStates')->with(100, 0)->willReturn([
+			$this->syncState(),
+		]);
+		$this->externalStorageProvisioner->expects($this->once())->method('verifyMount')->with('alice')->willReturn([
+			'status' => 'ok',
+			'mount_id' => 42,
+			'mount_name' => '/Immich Photos',
+			'read_only' => true,
+		]);
+		$this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
+		$this->quotaSyncService->expects($this->once())->method('computeNextcloudQuotaSnapshot')->with('alice')->willReturn([
+			'ncQuota' => 1000,
+			'ncUsed' => 700,
+			'ncRemaining' => 300,
+			'reserve' => 1024,
+			'unlimited' => false,
+			'error' => null,
+		]);
 
         $provided = null;
         $this->initialState->expects($this->once())
@@ -93,9 +108,14 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $provided['settings']);
         $this->assertSame(['enabled' => true, 'scope' => 'groups', 'scopedGroups' => ['photos']], $provided['status']['provisioning']);
         $this->assertTrue($provided['status']['credentials']['admin_api_key_configured']);
-        $this->assertTrue($provided['status']['actions']['exportCopyEnabled']);
-        $this->assertSame('alice', $provided['syncStates'][0]['ncUid']);
-        $this->assertSame('sync failed with api_key=[redacted] authorization=[redacted];json={"admin_api_key":"[redacted]"}', $provided['syncStates'][0]['lastError']);
+		$this->assertTrue($provided['status']['actions']['exportCopyEnabled']);
+		$this->assertSame('alice', $provided['syncStates'][0]['ncUid']);
+		$this->assertSame('ok', $provided['syncStates'][0]['mount']['status']);
+		$this->assertSame(42, $provided['syncStates'][0]['mount']['mount_id']);
+		$this->assertSame('failed', $provided['syncStates'][0]['quota']['status']);
+		$this->assertSame('quota_unavailable', $provided['syncStates'][0]['quota']['warningCode']);
+		$this->assertSame(300, $provided['syncStates'][0]['quota']['ncRemaining']);
+		$this->assertSame('sync failed with api_key=[redacted] authorization=[redacted];json={"admin_api_key":"[redacted]"}', $provided['syncStates'][0]['lastError']);
         $this->assertSame('probe failed with https://photos.example.com/check?api_key=[redacted]&token=[redacted] Authorization: [redacted]', $provided['capabilities']['safeProxyBrowsing']['reason']);
         $this->assertSame('configure payload {"authorization":"[redacted]","admin_api_key":"[redacted]"}', $provided['capabilities']['safeProxyBrowsing']['remediation']);
         $this->assertSame('retry with Bearer [redacted] and password=[redacted]', $provided['capabilities']['safeProxyBrowsing']['genericBearer']);
@@ -174,11 +194,11 @@ class AdminSettingsStateTest extends TestCase {
             $this->adminConfigService,
             $this->syncStateService,
             $this->capabilityService,
-            $this->actionPolicyService,
-            $this->externalStorageProvisioner,
-            $this->quotaSyncService,
-        );
-    }
+			$this->actionPolicyService,
+			$this->externalStorageProvisioner,
+			$this->quotaSyncService,
+		);
+	}
 
     private function syncState(): SyncState {
         $state = new SyncState();
