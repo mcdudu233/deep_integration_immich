@@ -213,6 +213,20 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->service->findUserForNcUid('alice', 'alice@example.com', 'alice');
     }
 
+    public function testFindUserForNcUidRejectsStorageLabelOwnedByDifferentMapping(): void {
+		$otherState = new SyncState();
+		$otherState->setNcUid('bob');
+		$otherState->setStorageLabel('alice');
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn(null);
+		$this->syncStateService->method('findByStorageLabel')->with('alice')->willReturn($otherState);
+		$this->client->expects($this->never())->method('get');
+
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('storage label conflict');
+
+		$this->service->findUserForNcUid('alice', 'alice@example.com', 'alice');
+	}
+
     public function testUpdateUserUsesAdminPutAndAllowsNullQuota(): void {
         $this->capabilityService->expects($this->once())
             ->method('getCapabilities')

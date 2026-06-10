@@ -81,7 +81,26 @@ export const useImmichStore = defineStore('immich', {
 			warning: null,
 			lastSyncAt: null,
 		},
+        browsingReadiness: {
+            status: 'ready',
+            severity: 'info',
+            autoLoginMode: 'sso_recommended',
+            messageKey: null,
+            localizedMessage: null,
+            showAppBanner: false,
+            showSidebarCard: false,
+            showPersonalSettings: false,
+			message: null,
+			messageCode: null,
+			messageParams: {},
+			adminManaged: false,
+			mapped: false,
+			mountStatus: 'unavailable',
+			quotaStatus: 'unknown',
+		},
+		quotaStatus: 'unknown',
 		warnings: [],
+		warningDetails: [],
 	}),
 
 	actions: {
@@ -147,6 +166,32 @@ export const useImmichStore = defineStore('immich', {
 				}
 			}
 
+			if (state.browsingReadiness && typeof state.browsingReadiness === 'object') {
+                this.browsingReadiness = {
+                    status: typeof state.browsingReadiness.status === 'string' ? state.browsingReadiness.status : 'ready',
+                    severity: typeof state.browsingReadiness.severity === 'string' ? state.browsingReadiness.severity : 'info',
+                    autoLoginMode: typeof state.browsingReadiness.autoLoginMode === 'string' ? state.browsingReadiness.autoLoginMode : 'sso_recommended',
+                    messageKey: typeof state.browsingReadiness.messageKey === 'string' ? state.browsingReadiness.messageKey : null,
+                    localizedMessage: typeof state.browsingReadiness.localizedMessage === 'string' ? state.browsingReadiness.localizedMessage : null,
+                    showAppBanner: state.browsingReadiness.showAppBanner === true,
+                    showSidebarCard: state.browsingReadiness.showSidebarCard === true,
+                    showPersonalSettings: state.browsingReadiness.showPersonalSettings === true,
+					message: typeof state.browsingReadiness.message === 'string' ? state.browsingReadiness.message : null,
+					messageCode: typeof state.browsingReadiness.messageCode === 'string' ? state.browsingReadiness.messageCode : null,
+					messageParams: state.browsingReadiness.messageParams && typeof state.browsingReadiness.messageParams === 'object'
+						? state.browsingReadiness.messageParams
+						: {},
+					adminManaged: state.browsingReadiness.adminManaged === true,
+					mapped: state.browsingReadiness.mapped === true,
+					mountStatus: typeof state.browsingReadiness.mountStatus === 'string' ? state.browsingReadiness.mountStatus : 'unavailable',
+					quotaStatus: typeof state.browsingReadiness.quotaStatus === 'string' ? state.browsingReadiness.quotaStatus : 'unknown',
+				}
+			}
+
+			if (typeof state.quotaStatus === 'string') {
+				this.quotaStatus = state.quotaStatus
+			}
+
 			// Action capabilities (preferred source)
 			if (state.actionCapabilities && typeof state.actionCapabilities === 'object') {
 				this.setActionCapabilities(state.actionCapabilities)
@@ -155,6 +200,9 @@ export const useImmichStore = defineStore('immich', {
 			// Warnings
 			if (Array.isArray(state.warnings)) {
 				this.warnings = state.warnings.filter(w => typeof w === 'string')
+			}
+			if (Array.isArray(state.warningDetails)) {
+				this.warningDetails = state.warningDetails.filter(w => w && typeof w === 'object')
 			}
 		},
 

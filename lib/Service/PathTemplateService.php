@@ -29,7 +29,11 @@ class PathTemplateService {
 			throw new InvalidArgumentException('Storage label must not contain NUL bytes.');
 		}
 
-		$label = trim($input, ' .');
+		if (str_contains($input, '/') || str_contains($input, '\\')) {
+			throw new InvalidArgumentException('Storage label must not contain path separators.');
+		}
+
+		$label = trim($input, " .\t\n\r\0\x0B");
 		if ($label === '' || $label === '.' || $label === '..') {
 			throw new InvalidArgumentException('Storage label must not be empty, ".", or "..".');
 		}
@@ -38,7 +42,21 @@ class PathTemplateService {
 			throw new InvalidArgumentException('Storage label may only contain ASCII letters, digits, dots, underscores, and hyphens.');
 		}
 
+		if (str_contains($label, '..')) {
+			throw new InvalidArgumentException('Storage label must not contain traversal-like dot-dot sequences.');
+		}
+
 		return $label;
+	}
+
+	public function isUuidLikeStorageLabel(string $label): bool {
+		try {
+			$label = $this->sanitizeStorageLabel($label);
+		} catch (InvalidArgumentException) {
+			return false;
+		}
+
+		return preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i', $label) === 1;
 	}
 
 	public function expandStorageLabelTemplate(string $template, string $uid): string {

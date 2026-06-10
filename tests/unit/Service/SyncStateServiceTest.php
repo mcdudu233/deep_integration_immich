@@ -148,6 +148,17 @@ class SyncStateServiceTest extends TestCase {
         $this->service->updateMapping('bob', ['storageLabel' => 'alice']);
     }
 
+    /**
+     * @dataProvider invalidStorageLabelProvider
+     */
+    public function testUpdateMappingRejectsUnsafeStorageLabels(string $storageLabel): void {
+        $this->service->getOrCreateForUid('alice');
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->service->updateMapping('alice', ['storageLabel' => $storageLabel]);
+    }
+
     public function testEmptyUidIsRejectedBeforeMapperAccess(): void {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Nextcloud user id must not be empty');
@@ -159,6 +170,18 @@ class SyncStateServiceTest extends TestCase {
         return [
             'disabled' => [SyncStateService::STATUS_DISABLED],
             'deleted' => [SyncStateService::STATUS_DELETED],
+        ];
+    }
+
+    public static function invalidStorageLabelProvider(): array {
+        return [
+            'empty' => [''],
+            'dot' => ['.'],
+            'dot-dot' => ['..'],
+            'traversal-like' => ['alice..bob'],
+            'slash' => ['alice/bob'],
+            'backslash' => ['alice\\bob'],
+            'unsafe char' => ['alice bob'],
         ];
     }
 }

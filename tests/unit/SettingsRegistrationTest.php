@@ -43,6 +43,10 @@ class SettingsRegistrationTest extends TestCase {
         ]);
         $frontendInitialStateService->method('buildUserState')->with('alice')->willReturn([
             'immich_url' => 'https://admin-photos.example.com',
+            'browsingReadiness' => [
+                'adminManaged' => true,
+                'showPersonalSettings' => false,
+            ],
             'actionCapabilities' => [],
         ]);
         $user = $this->createMock(IUser::class);
@@ -74,6 +78,10 @@ class SettingsRegistrationTest extends TestCase {
             ['admin-config', ['server_url' => 'https://photos.example.com', 'api_key_set' => false]],
             ['personal-config', [
                 'immich_url' => 'https://admin-photos.example.com',
+                'browsingReadiness' => [
+                    'adminManaged' => true,
+                    'showPersonalSettings' => false,
+                ],
                 'actionCapabilities' => [],
                 'server_url' => 'https://photos.example.com',
                 'api_key_set' => false,

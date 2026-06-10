@@ -5,8 +5,14 @@
 <template>
 	<div id="immich-personal-settings">
 		<NcSettingsSection :name="t('deep_integration_immich', 'Immich Personal Connection')"
-			:description="t('deep_integration_immich', 'Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.')">
-			<div class="immich-personal-settings-form">
+			:description="sectionDescription">
+			<NcNoteCard v-if="adminManagedBrowsing"
+				type="info"
+				data-testid="personal-config-admin-managed-message">
+				<p>{{ t('deep_integration_immich', 'This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.') }}</p>
+			</NcNoteCard>
+
+			<div v-else class="immich-personal-settings-form">
 				<NcTextField v-model="form.server_url"
 					:label="t('deep_integration_immich', 'Immich server URL')"
 					placeholder="https://immich.example.com"
@@ -55,7 +61,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import {
@@ -80,8 +86,17 @@ const saving = ref(false)
 const validating = ref(false)
 const message = ref('')
 const messageType = ref('success')
+const adminManagedBrowsing = computed(() => initialState.browsingReadiness?.adminManaged === true
+	|| (initialState.provisioning?.enabled === true && initialState.provisioning?.status !== 'personal_unconfigured'))
+const sectionDescription = computed(() => adminManagedBrowsing.value
+	? t('deep_integration_immich', 'This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.')
+	: t('deep_integration_immich', 'Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.'))
 
 onMounted(async () => {
+	if (adminManagedBrowsing.value) {
+		return
+	}
+
 	try {
 		const response = await getConfig()
 		const config = response.data || {}

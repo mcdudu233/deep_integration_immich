@@ -72,6 +72,7 @@ class ProvisioningService {
         $name = $this->nameForUser($user, $ncUid);
         $state = $dryRun ? $this->syncStateService->findByUid($ncUid) : $this->syncStateService->getOrCreateForUid($ncUid);
         $knownImmichUserId = $state?->getImmichUserId();
+        $this->assertMappingStorageLabelIsRepairable($state, $storageLabel);
         $quotaSet = null;
         $quotaEnabled = $this->isQuotaSyncEnabled();
 
@@ -156,10 +157,7 @@ class ProvisioningService {
 
         $currentStorageLabel = (string)($immichUser['storageLabel'] ?? '');
         if ($currentStorageLabel !== $storageLabel) {
-            if (($immichUsage ?? 0) > 0) {
-                throw new \RuntimeException('Refusing to change Immich storage label after assets exist.');
-            }
-            $fields['storageLabel'] = $storageLabel;
+            throw new \RuntimeException('Storage label mismatch requires explicit repair or migration before provisioning can continue.');
         }
 
         return $fields;
@@ -256,6 +254,23 @@ class ProvisioningService {
         return $id;
     }
 
+    private function assertMappingStorageLabelIsRepairable(?SyncState $state, string $expectedStorageLabel): void {
+        if ($state === null) {
+            return;
+        }
+
+        $mappedStorageLabel = trim((string)$state->getStorageLabel());
+        if ($mappedStorageLabel === '' || $mappedStorageLabel === $expectedStorageLabel) {
+            return;
+        }
+
+        if ($this->pathTemplateService->isUuidLikeStorageLabel($mappedStorageLabel)) {
+            throw new \RuntimeException('Stored storage_label looks like an Immich UUID; repair or migration is required before provisioning can continue.');
+        }
+
+        throw new \RuntimeException('Stored storage_label differs from the expected Nextcloud UID-derived label; repair or migration is required before provisioning can continue.');
+    }
+
     private function safeStorageLabel(string $ncUid): string {
         try {
             return $this->storageLabelForUid($ncUid);
@@ -274,9 +289,12 @@ class ProvisioningService {
     private function result(string $ncUid, string $action, ?string $immichUserId, string $storageLabel, ?int $quotaSet, array $errors, bool $dryRun): array {
         return [
             'ncUid' => $ncUid,
+            'nc_uid' => $ncUid,
             'action' => $action,
             'immichUserId' => $immichUserId,
+            'immich_user_id' => $immichUserId,
             'storageLabel' => $storageLabel,
+            'storage_label' => $storageLabel,
             'quotaSet' => $quotaSet,
             'errors' => array_values($errors),
             'dryRun' => $dryRun,

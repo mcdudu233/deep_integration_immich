@@ -9,6 +9,7 @@
     "Map": "地图",
     "Explore": "探索",
     "Open Immich": "打开 Immich",
+    "Immich does not provide an official API for Nextcloud to silently create a web login session. To open Immich without re-authentication, configure Nextcloud and Immich with the same OIDC/SSO provider.": "Immich 没有提供供 Nextcloud 静默创建网页登录会话的官方 API。若要在不重新认证的情况下打开 Immich，请将 Nextcloud 和 Immich 配置为使用同一个 OIDC/SSO 提供方。",
     "Select": "选择",
     "{count} selected": "已选择 {count} 项",
     "Save to Nextcloud": "保存到 Nextcloud",
@@ -197,6 +198,16 @@
     "{count} file(s) deleted from Immich": "{count} 个文件已从 Immich 删除",
     "Error deleting from Immich: {msg}": "从 Immich 删除出错：{msg}",
     "No Immich mapping exists for this user. Ask an administrator to run Immich provisioning.": "此用户没有 Immich 映射。请联系管理员运行 Immich 预配。",
+    "Immich Personal Connection": "Immich 个人连接",
+    "Configure your personal Immich server URL and API key for browsing when admin proxy browsing is not used.": "当未使用管理员代理浏览时，配置用于浏览的个人 Immich 服务器 URL 和 API Key。",
+    "This instance manages the Immich connection centrally. You do not need to configure a personal Immich API key.": "此实例由管理员统一管理 Immich 连接。你不需要配置个人 Immich API Key。",
+    "Personal API key": "个人 API Key",
+    "A personal API key is already configured. Leave blank to keep the current key.": "个人 API Key 已配置。留空以保留当前密钥。",
+    "Save and validate": "保存并验证",
+    "Could not refresh personal Immich settings. Showing saved initial state.": "无法刷新个人 Immich 设置。正在显示已保存的初始状态。",
+    "Personal Immich settings saved and validated.": "个人 Immich 设置已保存并验证。",
+    "Personal Immich settings saved.": "个人 Immich 设置已保存。",
+    "Could not save personal Immich settings.": "无法保存个人 Immich 设置。",
     "Immich Connection": "Immich 连接",
     "Configure the Immich server URL and admin credentials": "配置 Immich 服务器 URL 和管理员凭据",
     "Admin API key": "管理员 API 密钥",
@@ -344,7 +355,12 @@
     "Unknown status ({code})": "未知状态（{code}）",
     "Unlimited": "不受限制",
     "unknown": "未知",
-    "{message} {setup}": "{message} {setup}"
+    "{message} {setup}": "{message} {setup}",
+    "Immich used": "Immich 已用",
+    "Nextcloud remaining": "Nextcloud 剩余",
+    "Immich quota": "Immich 配额",
+    "Last sync": "上次同步",
+    "Quota may lag until external storage is scanned.": "配额可能会有延迟，直到外部存储被扫描。"
   },
   "pluralForm": "nplurals=1; plural=0;"
 }

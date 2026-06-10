@@ -27,6 +27,8 @@ class PathTemplateServiceTest extends TestCase {
 	public static function validStorageLabelProvider(): array {
 		return [
 			['alice', 'alice'],
+			['admin', 'admin'],
+			['immich-e2e-test', 'immich-e2e-test'],
 			['john.doe', 'john.doe'],
 			['john-doe_1', 'john-doe_1'],
 			[' alice ', 'alice'],
@@ -47,6 +49,8 @@ class PathTemplateServiceTest extends TestCase {
 	public static function invalidStorageLabelProvider(): array {
 		return [
 			['../alice'],
+			['alice..bob'],
+			['alice/../bob'],
 			['.'],
 			['..'],
 			['...'],
@@ -63,6 +67,14 @@ class PathTemplateServiceTest extends TestCase {
 	public function testExpandStorageLabelTemplateUsesSanitizedUid(): void {
 		$this->assertSame('nc-alice', $this->service->expandStorageLabelTemplate('nc-{uid}', 'alice'));
 		$this->assertSame('library-alice', $this->service->expandStorageLabelTemplate('library-{storageLabel}', 'alice'));
+		$this->assertSame('admin', $this->service->expandStorageLabelTemplate('{uid}', 'admin'));
+		$this->assertSame('immich-e2e-test', $this->service->expandStorageLabelTemplate('{uid}', 'immich-e2e-test'));
+	}
+
+	public function testDetectsUuidLikeStorageLabels(): void {
+		$this->assertTrue($this->service->isUuidLikeStorageLabel('550e8400-e29b-41d4-a716-446655440000'));
+		$this->assertFalse($this->service->isUuidLikeStorageLabel('immich-e2e-test'));
+		$this->assertFalse($this->service->isUuidLikeStorageLabel('alice'));
 	}
 
 	public function testExpandStorageLabelTemplateRejectsUnsafeOutput(): void {

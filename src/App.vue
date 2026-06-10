@@ -164,10 +164,6 @@
 						</div>
 					</template>
 				</div>
-				<div v-if="mappingMissing" class="provisioning-status-warning" data-testid="provisioning-status-warning">
-					<AlertOutlineIcon :size="18" class="provisioning-status-warning__icon" />
-					<span>{{ mappingMissingMessage }}</span>
-				</div>
 				<div class="view-page">
 					<router-view />
 				</div>
@@ -217,7 +213,6 @@ import HeartOutlineIcon from 'vue-material-design-icons/HeartOutline.vue'
 import HeartIcon from 'vue-material-design-icons/Heart.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import DotsVerticalIcon from 'vue-material-design-icons/DotsVertical.vue'
-import AlertOutlineIcon from 'vue-material-design-icons/AlertOutline.vue'
 
 const store = useImmichStore()
 const route = useRoute()
@@ -269,15 +264,6 @@ const pageTitle = computed(() => pageTitles[route.name] ?? t('deep_integration_i
 const isPhotoView = computed(() => photoViews.has(route.name))
 const canExportCopy = computed(() => store.actionCapabilities.exportCopyEnabled === true)
 const canDeleteFromImmich = computed(() => store.actionCapabilities.immichDeleteEnabled === true)
-const mappingState = computed(() => ({ ...store.mapping, ...(initialConfig?.mapping ?? {}) }))
-const mappingMissing = computed(() => mappingState.value.status === 'missing')
-const mappingMissingMessage = computed(() => {
-	return localizeStatusCode(
-		mappingState.value.messageCode,
-		mappingState.value.messageParams,
-		mappingState.value.message,
-	)
-})
 
 // Clear selection when navigating to a different view
 watch(() => route.name, () => {

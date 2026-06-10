@@ -44,12 +44,15 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$result = $this->service()->verifyMount('alice');
 
 		$this->assertSame('ok', $result['status']);
+		$this->assertSame('/Immich Photos', $result['mount_name']);
+		$this->assertSame('/mnt/immich-library/alice', $result['target_path']);
 		$this->assertTrue($result['configured']);
 		$this->assertTrue($result['exists']);
 		$this->assertTrue($result['readable']);
 		$this->assertTrue($result['read_only']);
 		$this->assertTrue($result['available_only_to_uid']);
 		$this->assertTrue($result['not_root_storage']);
+		$this->assertTrue($result['target_matches']);
 		$this->assertSame(42, $result['mount_id']);
 	}
 
@@ -80,6 +83,29 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->assertSame('/srv/immich/originals/library/library-alice', $result['host_path']);
 		$this->assertSame('/mnt/immich-library/library-alice', $result['target_path']);
 		$this->assertSame([], $this->mounts->created);
+	}
+
+	public function testMountPathUsesStoredStorageLabelNotImmichUserId(): void {
+		$this->mockConfig(true, false);
+		$this->mockAutoCreateCapability(true);
+		$state = $this->state('alice', 'alice');
+		$state->setImmichUserId('550e8400-e29b-41d4-a716-446655440000');
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->syncStateService->expects($this->once())->method('getOrCreateForUid')->with('alice');
+		$this->syncStateService->expects($this->once())->method('updateMapping')->with('alice', ['ncMountId' => 99]);
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+
+		$result = $this->service()->provisionMount('alice');
+
+		$this->assertSame('ok', $result['status']);
+		$this->assertSame('/Immich Photos', $result['mount_name']);
+		$this->assertSame('/mnt/immich-library/alice', $result['target_path']);
+		$this->assertSame('/mnt/immich-library/alice', $this->mounts->created[0]['targetPath']);
+		$this->assertStringNotContainsString('550e8400', $this->mounts->created[0]['targetPath']);
+		$this->assertSame(['alice'], $this->mounts->mounts[0]->getApplicableUsers());
+		$this->assertSame([], $this->mounts->mounts[0]->getApplicableGroups());
+		$this->assertTrue($this->mounts->created[0]['readOnly']);
 	}
 
 	public function testUnsafePathFromUidIsRejectedBeforeMountLookup(): void {
@@ -115,6 +141,46 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->assertSame([], $this->mounts->created);
 	}
 
+	public function testSameNamedMountWithWrongTargetIsMisconfigured(): void {
+		$this->mockConfig(false, false);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+		$this->mounts->mounts[] = new FakeStorageMount(42, '/Immich Photos', '/mnt/immich-library/bob', ['readonly' => true], ['alice'], []);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('misconfigured', $result['status']);
+		$this->assertFalse($result['target_matches']);
+		$this->assertStringContainsString('/mnt/immich-library/alice', $result['remediation']);
+	}
+
+	public function testMountAtDifferentRootNameIsNotAcceptedByTargetOnly(): void {
+		$this->mockConfig(false, false);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+		$this->mounts->mounts[] = new FakeStorageMount(42, '/Photos', '/mnt/immich-library/alice', ['readonly' => true], ['alice'], []);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('template_verification_required', $result['status']);
+		$this->assertFalse($result['configured']);
+	}
+
+	public function testGlobalMountIsMisconfiguredEvenWhenReadOnlyAndTargetMatches(): void {
+		$this->mockConfig(false, false);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+		$this->mounts->mounts[] = new FakeStorageMount(42, '/Immich Photos', '/mnt/immich-library/alice', ['readonly' => true], [], []);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('misconfigured', $result['status']);
+		$this->assertFalse($result['available_only_to_uid']);
+	}
+
 	public function testAutoCreateUnavailableReturnsManualRemediation(): void {
 		$this->mockConfig(true, false);
 		$this->mockAutoCreateCapability(false);
@@ -124,9 +190,27 @@ class ExternalStorageProvisionerTest extends TestCase {
 
 		$result = $this->service()->provisionMount('alice');
 
-		$this->assertSame('auto_create_unavailable', $result['status']);
+		$this->assertSame('manual_setup_required', $result['status']);
 		$this->assertStringContainsString('missing', implode('; ', $result['errors']));
 		$this->assertStringContainsString('configure manually', $result['remediation']);
+		$this->assertSame([], $this->mounts->created);
+	}
+
+	public function testBlockedLocalBackendReturnsManualSetupRequired(): void {
+		$this->mounts = new FakeExternalStorageConfigService(false);
+		$this->mockConfig(true, false);
+		$this->mockAutoCreateCapability(true);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+
+		$result = $this->service()->provisionMount('alice');
+
+		$this->assertSame('manual_setup_required', $result['status']);
+		$this->assertStringContainsString('Local backend', $result['remediation']);
+		$this->assertStringContainsString('/Immich Photos', $result['remediation']);
+		$this->assertStringContainsString('/mnt/immich-library/alice', $result['remediation']);
+		$this->assertStringContainsString('user "alice"', $result['remediation']);
 		$this->assertSame([], $this->mounts->created);
 	}
 
@@ -232,12 +316,19 @@ final class FakeExternalStorageConfigService {
 	/** @var list<array{uid: string, mountName: string, targetPath: string, readOnly: bool, knownMountId: int|null}> */
 	public array $created = [];
 
+	public function __construct(private bool $allowCreate = true) {
+	}
+
 	/** @return list<FakeStorageMount> */
 	public function getUserStorages(string $uid): array {
 		return $this->mounts;
 	}
 
 	public function createOrUpdateLocalMount(string $uid, string $mountName, string $targetPath, bool $readOnly, ?int $knownMountId): FakeStorageMount {
+		if (!$this->allowCreate) {
+			throw new \RuntimeException('Local backend is blocked by the current Nextcloud external storage configuration.');
+		}
+
 		$this->created[] = compact('uid', 'mountName', 'targetPath', 'readOnly', 'knownMountId');
 		$mount = new FakeStorageMount($knownMountId ?? 99, $mountName, $targetPath, ['readonly' => $readOnly], [$uid], []);
 		$this->mounts[] = $mount;

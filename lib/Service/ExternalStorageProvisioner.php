@@ -61,9 +61,9 @@ class ExternalStorageProvisioner {
 
 		$capability = $this->externalStorageAutoCreateCapability();
 		if (!($capability['supported'] ?? false)) {
-			$result['status'] = 'auto_create_unavailable';
+			$result['status'] = 'manual_setup_required';
 			$result['errors'][] = (string)($capability['reason'] ?? 'Nextcloud external storage auto-create capability is unavailable.');
-			$result['remediation'] = (string)($capability['remediation'] ?? 'Configure the Local External Storage mount manually and use verify-only mode.');
+			$result['remediation'] = (string)($capability['remediation'] ?? $this->manualSetupRemediation($ncUid, (string)$result['mount_name'], (string)$result['target_path']));
 			return $result;
 		}
 
@@ -86,9 +86,9 @@ class ExternalStorageProvisioner {
 		try {
 			$mount = $this->createOrUpdateLocalMount($ncUid, (string)$result['mount_name'], (string)$result['target_path'], $result['mount_id']);
 			if ($mount === null) {
-				$result['status'] = 'auto_create_unavailable';
+				$result['status'] = 'manual_setup_required';
 				$result['errors'][] = 'No stable writable Nextcloud external-storage API adapter is available to create or update Local mounts.';
-				$result['remediation'] = 'Configure the Local External Storage mount manually; this app will verify path, read-only options, and user scoping.';
+				$result['remediation'] = $this->manualSetupRemediation($ncUid, (string)$result['mount_name'], (string)$result['target_path']);
 				return $result;
 			}
 		} catch (\Throwable $e) {
@@ -97,8 +97,9 @@ class ExternalStorageProvisioner {
 				'ncUid' => $ncUid,
 			]);
 
-			$result['status'] = 'failed';
+			$result['status'] = 'manual_setup_required';
 			$result['errors'][] = $e->getMessage();
+			$result['remediation'] = $this->manualSetupRemediation($ncUid, (string)$result['mount_name'], (string)$result['target_path']);
 			return $result;
 		}
 
@@ -147,17 +148,18 @@ class ExternalStorageProvisioner {
 
 		$result['configured'] = true;
 		$result['mount_id'] = $this->mountId($mount);
+		$result['target_matches'] = $this->mountTargetMatches($mount, (string)$result['target_path']);
 		$result['read_only'] = $this->mountIsReadOnly($mount);
 		$result['available_only_to_uid'] = $this->mountIsOnlyAvailableToUid($mount, $ncUid);
 		$result['not_root_storage'] = $this->mountIsNotRootStorage($mount);
 
-		if ($result['exists'] && $result['readable'] && $result['read_only'] && $result['available_only_to_uid'] && $result['not_root_storage']) {
+		if ($result['exists'] && $result['readable'] && $result['target_matches'] && $result['read_only'] && $result['available_only_to_uid'] && $result['not_root_storage']) {
 			$result['status'] = 'ok';
 		} elseif (!$result['exists']) {
 			$result['status'] = 'mount_pending';
 		} else {
 			$result['status'] = 'misconfigured';
-			$result['remediation'] = 'Adjust the Local External Storage mount so it points to the expanded path, is read-only, is not root storage, and is available only to this user.';
+			$result['remediation'] = 'Adjust the Local External Storage mount so it is named exactly "' . (string)$result['mount_name'] . '", points to "' . (string)$result['target_path'] . '", is read-only, is not root storage, and is available only to this user.';
 		}
 
 		return $result;
@@ -172,6 +174,7 @@ class ExternalStorageProvisioner {
 			'read_only' => false,
 			'available_only_to_uid' => false,
 			'not_root_storage' => false,
+			'target_matches' => false,
 			'mount_id' => null,
 			'status' => 'unknown',
 			'errors' => [],
@@ -240,7 +243,7 @@ class ExternalStorageProvisioner {
 
 			$mountTarget = $this->mountTargetPath($mount);
 			$mountPoint = $this->normalizeMountPoint((string)$this->callMethod($mount, 'getMountPoint', ''));
-			if ($mountTarget !== null && $this->pathsEqual($mountTarget, $targetPath) && ($mountPoint === $mountName || $mountPoint !== '/')) {
+			if ($mountTarget !== null && $this->pathsEqual($mountTarget, $targetPath) && $mountPoint === $mountName) {
 				return $mount;
 			}
 
@@ -314,6 +317,10 @@ class ExternalStorageProvisioner {
 		return null;
 	}
 
+	private function manualSetupRemediation(string $ncUid, string $mountName, string $targetPath): string {
+		return 'Enable the Nextcloud External storage app with the Local backend available, then create or update a read-only Local mount named "' . $mountName . '" pointing to "' . $targetPath . '" and make it applicable only to user "' . $ncUid . '" with no applicable groups.';
+	}
+
 	private function mountTargetPath(object $mount): ?string {
 		$options = $this->callMethod($mount, 'getBackendOptions', []);
 		if (!is_array($options)) {
@@ -359,6 +366,11 @@ class ExternalStorageProvisioner {
 		}
 
 		return false;
+	}
+
+	private function mountTargetMatches(object $mount, string $targetPath): bool {
+		$mountTarget = $this->mountTargetPath($mount);
+		return $mountTarget !== null && $this->pathsEqual($mountTarget, $targetPath);
 	}
 
 	private function mountIsOnlyAvailableToUid(object $mount, string $ncUid): bool {

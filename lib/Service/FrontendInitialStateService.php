@@ -77,12 +77,19 @@ class FrontendInitialStateService {
             $provisioning['status'] = $syncState->getScopeStatus();
         }
 
+        $mapping = $this->mappingState($ncUid, $syncState);
+        $mount = $this->mountState($ncUid, $syncState, $warnings);
+        $quota = $this->quotaState($ncUid, $syncState, $config, $warnings);
+        $quotaStatus = $this->quotaReadinessStatus($quota);
+
         return [
             'immich_url' => (string)($config[AdminConfigService::KEY_IMMICH_BASE_URL] ?? ''),
             'provisioning' => $provisioning,
-            'mapping' => $this->mappingState($ncUid, $syncState),
-            'mount' => $this->mountState($ncUid, $syncState, $warnings),
-            'quota' => $this->quotaState($ncUid, $syncState, $config, $warnings),
+            'browsingReadiness' => $this->browsingReadinessState($config, $provisioning, $mapping, $mount, $quotaStatus, $warnings),
+            'quotaStatus' => $quotaStatus,
+            'mapping' => $mapping,
+            'mount' => $mount,
+            'quota' => $quota,
             'actions' => $this->actionsFromCapabilities($actionCapabilities),
             'actionCapabilities' => $actionCapabilities,
             'warnings' => $this->warningMessages($warnings),
@@ -144,12 +151,15 @@ class FrontendInitialStateService {
         $immichUserId = trim((string)$syncState->getImmichUserId());
         $mapping = [
             'status' => $this->mappingStatus($syncState),
+            'nc_uid' => $ncUid,
             'storageLabel' => $syncState->getStorageLabel(),
+            'storage_label' => $syncState->getStorageLabel(),
             'lastSyncAt' => $this->formatDateTime($syncState->getUpdatedAt()),
         ];
 
         if ($immichUserId !== '') {
             $mapping['immichUserId'] = $immichUserId;
+            $mapping['immich_user_id'] = $immichUserId;
         }
 
         return $mapping;
@@ -324,9 +334,12 @@ class FrontendInitialStateService {
 
         return array_map(fn(SyncState $state): array => [
             'ncUid' => $state->getNcUid(),
+            'nc_uid' => $state->getNcUid(),
             'immichUserId' => $state->getImmichUserId(),
+            'immich_user_id' => $state->getImmichUserId(),
             'immichEmail' => $state->getImmichEmail(),
             'storageLabel' => $state->getStorageLabel(),
+            'storage_label' => $state->getStorageLabel(),
             'ncMountId' => $state->getNcMountId(),
             'scopeStatus' => $state->getScopeStatus(),
             'lastSyncStatus' => $state->getLastSyncStatus(),
@@ -391,6 +404,108 @@ class FrontendInitialStateService {
         return array_values($details);
     }
 
+    private function browsingReadinessState(array $config, array $provisioning, array $mapping, array $mount, string $quotaStatus, array $warnings): array {
+        $adminManaged = ($provisioning['enabled'] ?? false) === true;
+        $status = 'ready';
+        $messageKey = null;
+        $messageParams = [];
+        $mountStatus = (string)($mount['status'] ?? 'unavailable');
+
+        if ($this->hasErrorWarning($warnings) || ($mapping['status'] ?? '') === 'error') {
+            $status = 'error';
+            $messageKey = 'browsing_status_error';
+        } elseif (!$this->adminConfigComplete($config)) {
+            $status = 'admin_config_missing';
+            $messageKey = 'browsing_admin_config_missing';
+        } elseif (($mapping['status'] ?? '') === 'missing') {
+            $status = 'unmapped';
+            $messageKey = self::CODE_NO_IMMICH_MAPPING;
+        } elseif ($mountStatus === 'template_verification_required') {
+            $status = 'manual_setup_required';
+            $messageKey = 'browsing_manual_setup_required';
+        } elseif ($mountStatus === 'mount_pending') {
+            $status = 'mount_pending';
+            $messageKey = 'browsing_mount_pending';
+        } elseif (!$adminManaged) {
+            $status = 'personal_unconfigured';
+            $messageKey = 'browsing_setup_not_configured';
+        } elseif ($this->mappingHasImmichUser($mapping)) {
+            $status = 'admin_managed_ready';
+        }
+
+        $localizedMessage = $messageKey !== null ? $this->messageForCode($messageKey, $messageParams) : null;
+
+        return [
+            'status' => $status,
+            'severity' => $this->browsingReadinessSeverity($status),
+            'messageKey' => $messageKey,
+            'localizedMessage' => $localizedMessage,
+            'autoLoginMode' => 'sso_recommended',
+            'showAppBanner' => false,
+            'showSidebarCard' => !in_array($status, ['ready', 'admin_managed_ready'], true),
+            'showPersonalSettings' => !$adminManaged && $status === 'personal_unconfigured',
+            'messageParams' => $messageParams,
+            'message' => $localizedMessage,
+            'messageCode' => $messageKey,
+            'adminManaged' => $adminManaged,
+            'mapped' => $this->mappingHasImmichUser($mapping),
+            'mountStatus' => $mountStatus,
+            'quotaStatus' => $quotaStatus,
+        ];
+    }
+
+    private function browsingReadinessSeverity(string $status): string {
+        return match ($status) {
+            'error', 'admin_config_missing' => 'error',
+            'unmapped', 'manual_setup_required', 'mount_pending', 'personal_unconfigured' => 'warning',
+            'admin_managed_ready' => 'success',
+            default => 'info',
+        };
+    }
+
+    private function quotaReadinessStatus(array $quota): string {
+        if (($quota['warningCode'] ?? null) === self::CODE_QUOTA_UNAVAILABLE || ($quota['status'] ?? '') === 'failed') {
+            return 'sync_failed';
+        }
+
+        if (($quota['status'] ?? '') === 'disabled') {
+            return 'unknown';
+        }
+
+        if (($quota['stale'] ?? false) === true || ($quota['warningCode'] ?? null) === self::CODE_QUOTA_STALE) {
+            return 'stale';
+        }
+
+        if (($quota['status'] ?? '') === 'ok' || ($quota['status'] ?? '') === 'unlimited') {
+            return 'current';
+        }
+
+        return 'unknown';
+    }
+
+    private function hasErrorWarning(array $warnings): bool {
+        foreach ($warnings as $warning) {
+            if (!is_array($warning)) {
+                continue;
+            }
+
+            if (in_array($warning['code'] ?? '', [self::CODE_MAPPING_STATUS_UNAVAILABLE], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function adminConfigComplete(array $config): bool {
+        return trim((string)($config[AdminConfigService::KEY_IMMICH_BASE_URL] ?? '')) !== ''
+            && ($config['admin_api_key_configured'] ?? false) === true;
+    }
+
+    private function mappingHasImmichUser(array $mapping): bool {
+        return trim((string)($mapping['immichUserId'] ?? '')) !== '';
+    }
+
     private function messageForCode(string $code, array $params = []): string {
         return match ($code) {
             self::CODE_MAPPING_STATUS_UNAVAILABLE => 'Immich mapping status is temporarily unavailable.',
@@ -405,6 +520,11 @@ class FrontendInitialStateService {
             self::CODE_ACTION_CAPABILITIES_UNAVAILABLE => 'Immich action capabilities are temporarily unavailable.',
             self::CODE_SYNC_STATE_LIST_UNAVAILABLE => 'Immich sync-state list is temporarily unavailable.',
             self::CODE_CAPABILITY_DETECTION_UNAVAILABLE => 'Immich capability detection is temporarily unavailable.',
+            'browsing_status_error' => 'Immich browsing status is temporarily unavailable.',
+            'browsing_admin_config_missing' => 'Immich admin configuration is incomplete. Ask an administrator to configure Immich browsing.',
+            'browsing_setup_not_configured' => 'Immich browsing is not configured for this account.',
+            'browsing_mount_pending' => 'Immich mirror mount is pending. Upload through Immich first or ask an administrator to reconcile provisioning.',
+            'browsing_manual_setup_required' => 'Immich mirror mount requires manual administrator setup before browsing is ready.',
             default => 'Immich status code: ' . $code,
         };
     }

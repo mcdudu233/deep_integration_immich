@@ -243,8 +243,14 @@ class SyncStateService {
         if ($label === '' || $label === '.' || $label === '..') {
             throw new \InvalidArgumentException('Storage label must not be empty, ".", or "..".');
         }
+        if (str_contains($label, '/') || str_contains($label, '\\')) {
+            throw new \InvalidArgumentException('Storage label must not contain path separators.');
+        }
         if (!preg_match('/^[A-Za-z0-9._-]+$/', $label)) {
             throw new \InvalidArgumentException('Storage label may only contain letters, numbers, dots, underscores, and hyphens.');
+        }
+        if (str_contains($label, '..')) {
+            throw new \InvalidArgumentException('Storage label must not contain traversal-like dot-dot sequences.');
         }
     }
 
