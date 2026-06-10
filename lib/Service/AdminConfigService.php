@@ -343,6 +343,7 @@ class AdminConfigService {
             self::KEY_EXPORT_COPY_ENABLED => $this->getAppBool(self::KEY_EXPORT_COPY_ENABLED, false),
             self::KEY_IMPORT_TO_IMMICH_ENABLED => $this->getAppBool(self::KEY_IMPORT_TO_IMMICH_ENABLED, false),
             self::KEY_IMMICH_DELETE_ENABLED => $this->getAppBool(self::KEY_IMMICH_DELETE_ENABLED, false),
+            'default_quota' => $this->config->getAppValue('files', 'default_quota', ''),
         ];
     }
 

@@ -41,6 +41,7 @@ class FrontendInitialStateService {
         AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
         AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
         AdminConfigService::KEY_QUOTA_RESERVE_BYTES,
+        'default_quota',
         'admin_api_key_configured',
         'api_key_set',
     ];
@@ -151,7 +152,7 @@ class FrontendInitialStateService {
 
         $immichUserId = trim((string)$syncState->getImmichUserId());
         $mapping = [
-            'status' => $this->mappingStatus($syncState),
+            'status' => $this->mappingStatus($syncState, $immichUserId),
             'nc_uid' => $ncUid,
             'storageLabel' => $syncState->getStorageLabel(),
             'storage_label' => $syncState->getStorageLabel(),
@@ -166,13 +167,21 @@ class FrontendInitialStateService {
         return $mapping;
     }
 
-    private function mappingStatus(SyncState $syncState): string {
+    private function mappingStatus(SyncState $syncState, string $immichUserId): string {
+        $scopeStatus = trim((string)$syncState->getScopeStatus());
+        if (in_array($scopeStatus, [SyncStateService::STATUS_DISABLED, SyncStateService::STATUS_DELETED], true)) {
+            return $scopeStatus;
+        }
+
         $lastSyncStatus = trim((string)$syncState->getLastSyncStatus());
-        if ($lastSyncStatus !== '') {
+        if (in_array($lastSyncStatus, [SyncStateService::STATUS_FAILED, SyncStateService::STATUS_MOUNT_PENDING, SyncStateService::STATUS_QUOTA_FAILED], true)) {
             return $lastSyncStatus;
         }
 
-        $scopeStatus = trim((string)$syncState->getScopeStatus());
+        if ($immichUserId !== '') {
+            return 'mapped';
+        }
+
         return $scopeStatus !== '' ? $scopeStatus : SyncStateService::STATUS_PENDING;
     }
 
@@ -250,21 +259,26 @@ class FrontendInitialStateService {
             return $summary;
         }
 
-        $computedQuota = $this->quotaSyncService->computeQuota($ncUid, null);
+        $quotaDetails = $this->quotaSyncService->computeQuotaDetails($ncUid, null);
+        $computedQuota = $quotaDetails['computedImmichQuota'];
+        $summary['ncQuota'] = $quotaDetails['ncQuota'];
+        $summary['ncUsed'] = $quotaDetails['ncUsed'];
+        $summary['immichUsage'] = $quotaDetails['immichUsage'];
         $summary['computedImmichQuota'] = $computedQuota;
+        $summary['reserve'] = $quotaDetails['reserve'];
 
         if ($computedQuota !== null) {
             $summary['status'] = 'ok';
         }
 
-        if ($this->quotaSyncService->getLastError() !== null) {
+        if ($quotaDetails['error'] !== null) {
             $summary['status'] = 'failed';
             $this->setWarningFields($summary, self::CODE_QUOTA_UNAVAILABLE);
             $this->addWarning($warnings, self::CODE_QUOTA_UNAVAILABLE);
             return $summary;
         }
 
-        if ($computedQuota === null && $this->quotaSyncService->wasLastQuotaUnlimited()) {
+        if ($computedQuota === null && $quotaDetails['unlimited']) {
             $summary['status'] = 'unlimited';
             $this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
             return $summary;
@@ -554,6 +568,7 @@ class FrontendInitialStateService {
 
         unset($config[AdminConfigService::KEY_ADMIN_API_KEY]);
         $config['admin_api_key_configured'] = ($config['admin_api_key_configured'] ?? false) === true;
+        $config['default_quota'] = $config['default_quota'] ?? null;
 
         return $this->redact($config);
     }

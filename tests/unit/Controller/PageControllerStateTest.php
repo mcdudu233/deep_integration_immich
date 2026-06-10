@@ -64,7 +64,16 @@ class PageControllerStateTest extends TestCase {
             'mount_name' => '/Immich Photos',
             'read_only' => true,
         ]);
-        $this->quotaSyncService->expects($this->once())->method('computeQuota')->with('alice', null)->willReturn(9000);
+        $this->quotaSyncService->expects($this->once())->method('computeQuotaDetails')->with('alice', null)->willReturn([
+            'ncQuota' => 10000,
+            'ncUsed' => 1000,
+            'immichUsage' => 0,
+            'nonImmichUsed' => 1000,
+            'reserve' => 512,
+            'computedImmichQuota' => 9000,
+            'unlimited' => false,
+            'error' => null,
+        ]);
         $this->actionPolicyService->method('getCapabilityFlags')->with('alice')->willReturn([
             'exportCopyEnabled' => true,
             'importToImmichEnabled' => false,
@@ -117,7 +126,7 @@ class PageControllerStateTest extends TestCase {
         $this->adminConfig[AdminConfigService::KEY_PROVISIONING_ENABLED] = true;
         $this->syncStateService->method('findByUid')->with('alice')->willReturn(null);
         $this->externalStorageProvisioner->expects($this->never())->method('verifyMount');
-        $this->quotaSyncService->expects($this->never())->method('computeQuota');
+        $this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
 
         $provided = $this->providedUserConfig();
         $this->controller('alice')->index();
@@ -132,7 +141,7 @@ class PageControllerStateTest extends TestCase {
     public function testMissingMappingProducesSetupMessageWithoutFatalHealthChecks(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn(null);
         $this->externalStorageProvisioner->expects($this->never())->method('verifyMount');
-        $this->quotaSyncService->expects($this->never())->method('computeQuota');
+        $this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
 
         $provided = $this->providedUserConfig();
         $this->controller('alice')->index();

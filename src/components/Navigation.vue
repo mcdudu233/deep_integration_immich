@@ -94,7 +94,7 @@
 				<div v-if="userMount.status"
 					class="immich-status-item"
 					data-testid="mount-health-badge">
-					<CheckIcon v-if="userMount.status === 'available'"
+					<CheckIcon v-if="userMount.status === 'ok' || userMount.status === 'available'"
 						:size="18" class="immich-status-icon immich-mount-available" />
 					<CloseIcon v-else-if="userMount.status === 'unavailable'"
 						:size="18" class="immich-status-icon immich-mount-unavailable" />
@@ -224,6 +224,9 @@ const mountLabel = computed(() => {
 		case 'ok': return t('deep_integration_immich', 'OK')
 		case 'available': return t('deep_integration_immich', 'Available')
 		case 'unavailable': return t('deep_integration_immich', 'Unavailable')
+		case 'template_verification_required': return t('deep_integration_immich', 'Manual setup required')
+		case 'mount_pending': return t('deep_integration_immich', 'Pending')
+		case 'misconfigured': return t('deep_integration_immich', 'Misconfigured')
 		case 'error': return t('deep_integration_immich', 'Mount error')
 		default: return unknownStatusLabel(userMount.value.status)
 	}

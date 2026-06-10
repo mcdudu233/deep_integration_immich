@@ -145,7 +145,6 @@ class BrowsingAuthService {
         return !in_array($syncState->getScopeStatus(), [
             SyncStateService::STATUS_DISABLED,
             SyncStateService::STATUS_DELETED,
-            SyncStateService::STATUS_OUT_OF_SCOPE,
         ], true);
     }
 
