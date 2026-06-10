@@ -50,13 +50,10 @@ class SyncQuotaJobTest extends TestCase {
     public function testFiniteQuotaUpdatesChangedImmichQuotaAndReturnsAccountingResult(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('1000', 700);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(200, 300));
         $this->quotaSyncService->expects($this->once())->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(1000, 700, 200, 500, 100, 400));
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
-        $this->immichUserAdminService->method('listUsers')->willReturn([
-            ['id' => 'immich-alice', 'quotaSizeInBytes' => 300],
-        ]);
         $this->immichUserAdminService->expects($this->once())
             ->method('updateUser')
             ->with('immich-alice', ['quotaSizeInBytes' => 400])
@@ -87,13 +84,10 @@ class SyncQuotaJobTest extends TestCase {
     public function testUnlimitedNextcloudQuotaMapsToImmichUnlimitedWithoutZeroQuota(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('none', 700);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(200, 900));
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(null, 700, 200, 500, 100, null, true));
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(true);
-        $this->immichUserAdminService->method('listUsers')->willReturn([
-            ['id' => 'immich-alice', 'quotaSizeInBytes' => 900],
-        ]);
         $this->immichUserAdminService->expects($this->once())
             ->method('updateUser')
             ->with('immich-alice', ['quotaSizeInBytes' => null])
@@ -112,7 +106,7 @@ class SyncQuotaJobTest extends TestCase {
     public function testInvalidQuotaMarksQuotaFailedAndLeavesImmichQuotaUnchanged(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('default', 700);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(200, null));
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(null, 700, 200, 500, 100, null, false, 'Nextcloud quota must be a finite byte value or unlimited.'));
         $this->quotaSyncService->method('getLastError')->willReturn('Nextcloud quota must be a finite byte value or unlimited.');
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
@@ -136,13 +130,10 @@ class SyncQuotaJobTest extends TestCase {
     public function testOverQuotaComputedLimitIsAllowedWhenItEqualsCurrentImmichUsage(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('1000', 1200);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(500);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(500, 800));
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 500)->willReturn($this->quotaDetails(1000, 1200, 500, 700, 100, 500));
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
-        $this->immichUserAdminService->method('listUsers')->willReturn([
-            ['id' => 'immich-alice', 'quotaSizeInBytes' => 800],
-        ]);
         $this->immichUserAdminService->expects($this->once())
             ->method('updateUser')
             ->with('immich-alice', ['quotaSizeInBytes' => 500])
@@ -160,13 +151,10 @@ class SyncQuotaJobTest extends TestCase {
     public function testUnchangedQuotaDoesNotCallImmichUpdateButRecordsSyncSuccess(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('1000', 700);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(200, 400));
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(1000, 700, 200, 500, 100, 400));
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
-        $this->immichUserAdminService->method('listUsers')->willReturn([
-            ['id' => 'immich-alice', 'quotaSizeInBytes' => 400],
-        ]);
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
         $this->syncStateService->expects($this->once())->method('updateMapping');
 
@@ -180,7 +168,7 @@ class SyncQuotaJobTest extends TestCase {
     public function testRefusesComputedQuotaBelowCurrentImmichUsage(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
         $this->mockNextcloudAccounting('1000', 700);
-        $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $this->immichUserAdminService->method('getUserQuotaState')->with('immich-alice')->willReturn($this->quotaState(200, null));
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(1000, 700, 200, 500, 100, 199));
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
@@ -201,7 +189,7 @@ class SyncQuotaJobTest extends TestCase {
 
     public function testMissingMappingSkipsQuotaSyncBeforeImmichCalls(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn(null);
-        $this->immichUserAdminService->expects($this->never())->method('getUserQuotaUsage');
+        $this->immichUserAdminService->expects($this->never())->method('getUserQuotaState');
         $this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
         $this->syncStateService->expects($this->never())->method('updateMapping');
@@ -215,7 +203,7 @@ class SyncQuotaJobTest extends TestCase {
     public function testDisabledQuotaModeSkipsWithoutMappingOrImmichCalls(): void {
         $this->adminConfig[AdminConfigService::KEY_QUOTA_SYNC_MODE] = 'disabled';
         $this->syncStateService->expects($this->never())->method('findByUid');
-        $this->immichUserAdminService->expects($this->never())->method('getUserQuotaUsage');
+        $this->immichUserAdminService->expects($this->never())->method('getUserQuotaState');
         $this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
 
         $result = $this->job()->syncForUser('alice');
@@ -226,7 +214,7 @@ class SyncQuotaJobTest extends TestCase {
 
     public function testExceptionsAreRedactedAndPersistedAsQuotaFailure(): void {
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'immich-alice'));
-        $this->immichUserAdminService->method('getUserQuotaUsage')->willThrowException(new \RuntimeException('Immich failed with api_key=super-secret'));
+        $this->immichUserAdminService->method('getUserQuotaState')->willThrowException(new \RuntimeException('Immich failed with api_key=super-secret'));
         $this->syncStateService->expects($this->once())
             ->method('updateMapping')
             ->with('alice', $this->callback(function (array $fields): bool {
@@ -290,6 +278,14 @@ class SyncQuotaJobTest extends TestCase {
             'computedImmichQuota' => $computedImmichQuota,
             'unlimited' => $unlimited,
             'error' => $error,
+        ];
+    }
+
+    private function quotaState(?int $usage, ?int $quota): array {
+        return [
+            'found' => true,
+            'quotaUsageInBytes' => $usage,
+            'quotaSizeInBytes' => $quota,
         ];
     }
 

@@ -77,10 +77,15 @@ class SyncQuotaJob extends QueuedJob {
                 return $this->fail($result, $ncUid, 'No Immich user mapping exists for Nextcloud user "' . $ncUid . '".');
             }
 
-            $immichUsage = $this->immichUserAdminService->getUserQuotaUsage($immichUserId);
-            $result['immich_usage'] = $immichUsage;
-            if ($immichUsage === null) {
-                return $this->fail($result, $ncUid, 'Immich quota usage is unavailable for mapped user "' . $immichUserId . '".');
+			$immichQuotaState = $this->immichUserAdminService->getUserQuotaState($immichUserId);
+			if (!$immichQuotaState['found']) {
+				return $this->fail($result, $ncUid, 'Mapped Immich user "' . $immichUserId . '" was not found.');
+			}
+
+			$immichUsage = $immichQuotaState['quotaUsageInBytes'];
+			$result['immich_usage'] = $immichUsage;
+			if ($immichUsage === null) {
+				return $this->fail($result, $ncUid, 'Immich quota usage is unavailable for mapped user "' . $immichUserId . '".');
             }
 
             $quotaDetails = $this->quotaSyncService->computeQuotaDetails($ncUid, $immichUsage);
@@ -100,10 +105,10 @@ class SyncQuotaJob extends QueuedJob {
                 return $this->fail($result, $ncUid, 'Computed Immich quota is below current Immich usage.');
             }
 
-            $currentQuota = $this->currentImmichQuota($immichUserId);
-            $result['current_immich_quota'] = $currentQuota['quota'];
+			$currentQuota = $immichQuotaState['quotaSizeInBytes'];
+			$result['current_immich_quota'] = $currentQuota;
 
-            $quotaChanged = !$currentQuota['found'] || $currentQuota['quota'] !== $computedQuota;
+			$quotaChanged = $currentQuota !== $computedQuota;
             if ($quotaChanged) {
                 $this->immichUserAdminService->updateUser($immichUserId, [
                     'quotaSizeInBytes' => $computedQuota,
@@ -237,30 +242,6 @@ class SyncQuotaJob extends QueuedJob {
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    /**
-     * @return array{found: bool, quota: ?int}
-     */
-    private function currentImmichQuota(string $immichUserId): array {
-        foreach ($this->immichUserAdminService->listUsers() as $user) {
-            if (!is_array($user)) {
-                continue;
-            }
-
-            $id = (string)($user['id'] ?? $user['userId'] ?? '');
-            if ($id !== $immichUserId) {
-                continue;
-            }
-
-            $quota = $user['quotaSizeInBytes'] ?? null;
-            return [
-                'found' => true,
-                'quota' => is_numeric($quota) ? (int)$quota : null,
-            ];
-        }
-
-        return ['found' => false, 'quota' => null];
     }
 
     private function persistSuccess(string $ncUid, DateTimeInterface $lastSyncAt): void {
