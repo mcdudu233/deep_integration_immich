@@ -247,30 +247,25 @@ const quotaWarning = computed(() => {
 
 const quotaRows = computed(() => [
 	{
-		label: t('deep_integration_immich', 'Immich used'),
+		label: t('deep_integration_immich', 'Used'),
 		value: formatOptionalBytes(userQuota.value.immichUsage),
 		testid: 'sidebar-quota-immich-used',
 	},
 	{
-		label: t('deep_integration_immich', 'Nextcloud remaining'),
-		value: nextcloudRemainingLabel.value,
-		testid: 'sidebar-quota-nextcloud-remaining',
-	},
-	{
-		label: t('deep_integration_immich', 'Immich available'),
-		value: formatOptionalBytes(userQuota.value.immichAvailable),
-		testid: 'sidebar-quota-immich-quota',
-	},
-	{
-		label: t('deep_integration_immich', 'Last sync'),
-		value: lastQuotaSyncLabel.value,
-		testid: 'sidebar-quota-last-sync',
+		label: t('deep_integration_immich', 'Remaining'),
+		value: remainingQuotaLabel.value,
+		testid: 'sidebar-quota-remaining',
 	},
 ])
 
-const nextcloudRemainingLabel = computed(() => {
+const remainingQuotaLabel = computed(() => {
 	if (userQuota.value.status === 'unlimited') {
 		return t('deep_integration_immich', 'Unlimited')
+	}
+
+	const immichAvailable = Number(userQuota.value.immichAvailable)
+	if (Number.isFinite(immichAvailable)) {
+		return formatBytes(Math.max(0, immichAvailable))
 	}
 
 	const explicitRemaining = Number(userQuota.value.ncRemaining)
@@ -291,8 +286,6 @@ const nextcloudRemainingLabel = computed(() => {
 	const ncUsed = Number(userQuota.value.ncUsed)
 	return formatBytes(Math.max(0, ncQuota - (Number.isFinite(ncUsed) ? ncUsed : 0)))
 })
-
-const lastQuotaSyncLabel = computed(() => userQuota.value.lastSyncAt || '—')
 
 const showQuotaCaveat = computed(() => store.quotaStatus !== 'current'
 	|| ['disabled', 'unavailable', 'failed'].includes(userQuota.value.status)
