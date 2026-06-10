@@ -698,9 +698,17 @@
 									<span class="health-label">{{ t('deep_integration_immich', 'NC used') }}</span>
 									<span class="mono">{{ formatBytes(card.ncUsed) }}</span>
 								</div>
+								<div v-if="card.ncRemaining !== null" class="health-row">
+									<span class="health-label">{{ t('deep_integration_immich', 'NC remaining') }}</span>
+									<span class="mono">{{ formatBytes(card.ncRemaining) }}</span>
+								</div>
 								<div v-if="card.immichUsage !== null" class="health-row">
 									<span class="health-label">{{ t('deep_integration_immich', 'Immich usage') }}</span>
 									<span class="mono">{{ formatBytes(card.immichUsage) }}</span>
+								</div>
+								<div v-if="card.immichAvailable !== null" class="health-row">
+									<span class="health-label">{{ t('deep_integration_immich', 'Immich available') }}</span>
+									<span class="mono">{{ formatBytes(card.immichAvailable) }}</span>
 								</div>
 								<div v-if="card.computedImmichQuota !== null" class="health-row">
 									<span class="health-label">{{ t('deep_integration_immich', 'Computed Immich quota') }}</span>
@@ -855,6 +863,7 @@ function applyLoadedState(state) {
 	}
 	if (Array.isArray(state.syncStates)) {
 		syncStates.value = state.syncStates
+		applyStatusCardsFromSyncStates(syncStates.value)
 	}
 	warnings.value = normalizeWarnings(state.warningDetails, state.warnings)
 	if (state.status) {
@@ -1098,8 +1107,51 @@ async function refreshSyncStates() {
 	try {
 		const result = await store.fetchSyncStates()
 		syncStates.value = result?.sync_state ?? store.syncStates.list
+		applyStatusCardsFromSyncStates(syncStates.value)
 	} catch (e) {
 		// Error is already in store.syncStates.error
+	}
+}
+
+function applyStatusCardsFromSyncStates(states) {
+	mountHealthCards.value = states.map(mountCardFromState).filter(Boolean)
+	quotaStatusCards.value = states.map(quotaCardFromState).filter(Boolean)
+}
+
+function mountCardFromState(row) {
+	const mount = row?.mount
+	if (!mount || typeof mount !== 'object') {
+		return null
+	}
+
+	return {
+		ncUid: row.ncUid || row.nc_uid || '',
+		status: mount.status ?? 'unknown',
+		mountId: mount.mount_id ?? mount.mountId ?? row.ncMountId ?? null,
+		path: mount.mount_name ?? mount.path ?? null,
+		readOnly: mount.read_only ?? mount.readOnly ?? null,
+	}
+}
+
+function quotaCardFromState(row) {
+	const quota = row?.quota
+	if (!quota || typeof quota !== 'object') {
+		return null
+	}
+
+	return {
+		ncUid: row.ncUid || row.nc_uid || '',
+		status: quota.status ?? 'unknown',
+		ncQuota: quota.ncQuota ?? null,
+		ncUsed: quota.ncUsed ?? null,
+		ncRemaining: quota.ncRemaining ?? null,
+		immichUsage: quota.immichUsage ?? null,
+		immichAvailable: quota.immichAvailable ?? null,
+		computedImmichQuota: quota.computedImmichQuota ?? null,
+		lastSyncAt: quota.lastSyncAt ?? row.lastQuotaSyncAt ?? null,
+		warning: quota.warning ?? null,
+		warningCode: quota.warningCode ?? null,
+		warningParams: quota.warningParams ?? {},
 	}
 }
 
@@ -1121,9 +1173,12 @@ function statusLabel(status) {
 	case 'active': return t('deep_integration_immich', 'Active')
 	case 'synced': return t('deep_integration_immich', 'Synced')
 	case 'pending': return t('deep_integration_immich', 'Pending')
+	case 'mount_pending': return t('deep_integration_immich', 'Pending')
 	case 'provisioning': return t('deep_integration_immich', 'Provisioning')
 	case 'failed': return t('deep_integration_immich', 'Failed')
 	case 'error': return t('deep_integration_immich', 'Error')
+	case 'misconfigured': return t('deep_integration_immich', 'Misconfigured')
+	case 'template_verification_required': return t('deep_integration_immich', 'Manual setup required')
 	case 'deleted': return t('deep_integration_immich', 'Deleted')
 	case 'warning': return t('deep_integration_immich', 'Warning')
 	case 'stale': return t('deep_integration_immich', 'Stale')
