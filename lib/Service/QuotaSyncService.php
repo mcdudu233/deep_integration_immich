@@ -33,12 +33,16 @@ class QuotaSyncService {
         $this->usageProvider = $usageProvider;
     }
 
-    public function computeQuota(string $ncUid, ?int $immichUsage): ?int {
-        $this->lastError = null;
-        $this->lastQuotaUnlimited = false;
+	public function computeQuota(string $ncUid, ?int $immichUsage): ?int {
+		$this->lastError = null;
+		$this->lastQuotaUnlimited = false;
 
-        try {
-            $user = $this->userManager->get($ncUid);
+		try {
+			if ($immichUsage === null) {
+				throw new \RuntimeException('Immich quota usage is unavailable.');
+			}
+
+			$user = $this->userManager->get($ncUid);
             if ($user === null) {
                 throw new \RuntimeException('Nextcloud user was not found.');
             }
@@ -54,14 +58,10 @@ class QuotaSyncService {
                 throw new \RuntimeException('Nextcloud total usage is unavailable.');
             }
 
-            $immichUsage = max(0, $immichUsage ?? 0);
-            $nonImmichUsage = max(0, $nextcloudUsed - $immichUsage);
-            $reserveBytes = $this->getReserveBytes();
-            $remainingNextcloudCapacity = max(0, $nextcloudQuota - max($nextcloudUsed, $immichUsage));
-            $availableGrowth = $remainingNextcloudCapacity > $reserveBytes
-                ? $remainingNextcloudCapacity - $reserveBytes
-                : $remainingNextcloudCapacity;
-            $computedQuota = $immichUsage + $availableGrowth;
+			$immichUsage = max(0, $immichUsage);
+			$nonImmichUsage = max(0, $nextcloudUsed - $immichUsage);
+			$reserveBytes = $this->getReserveBytes();
+			$computedQuota = max($immichUsage, $nextcloudQuota - $nonImmichUsage - $reserveBytes);
 
             if ($computedQuota <= 0) {
                 $computedQuota = 1;
@@ -79,24 +79,17 @@ class QuotaSyncService {
     }
 
     /**
-     * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, immichUsage: int, immichAvailable: int|null, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
-     */
-    public function computeQuotaDetails(string $ncUid, ?int $immichUsage): array {
-        $computedQuota = $this->computeQuota($ncUid, $immichUsage);
-        $normalizedImmichUsage = max(0, $immichUsage ?? 0);
-        try {
-            $ncQuota = $this->nextcloudQuotaBytes($ncUid);
-        } catch (\Throwable) {
-            $ncQuota = null;
-        }
-        try {
-            $ncUsed = $this->nextcloudUsedBytes($ncUid);
-        } catch (\Throwable) {
-            $ncUsed = null;
-        }
+	 * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, immichUsage: int|null, immichAvailable: int|null, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
+	 */
+	public function computeQuotaDetails(string $ncUid, ?int $immichUsage): array {
+		$computedQuota = $this->computeQuota($ncUid, $immichUsage);
+		$normalizedImmichUsage = $immichUsage === null ? null : max(0, $immichUsage);
+		$snapshot = $this->computeNextcloudQuotaSnapshot($ncUid);
+		$ncQuota = $snapshot['ncQuota'];
+		$ncUsed = $snapshot['ncUsed'];
 
-        $ncRemaining = $ncQuota === null || $ncUsed === null ? null : max(0, $ncQuota - max($ncUsed, $normalizedImmichUsage));
-        $immichAvailable = $computedQuota === null ? null : max(0, $computedQuota - $normalizedImmichUsage);
+		$ncRemaining = $ncQuota === null || $ncUsed === null || $normalizedImmichUsage === null ? null : max(0, $ncQuota - max($ncUsed, $normalizedImmichUsage));
+		$immichAvailable = $computedQuota === null || $normalizedImmichUsage === null ? null : max(0, $computedQuota - $normalizedImmichUsage);
 
         return [
             'ncQuota' => $ncQuota,
@@ -104,13 +97,43 @@ class QuotaSyncService {
             'ncRemaining' => $ncRemaining,
             'immichUsage' => $normalizedImmichUsage,
             'immichAvailable' => $immichAvailable,
-            'nonImmichUsed' => $ncUsed === null ? null : max(0, $ncUsed - $normalizedImmichUsage),
+			'nonImmichUsed' => $ncUsed === null || $normalizedImmichUsage === null ? null : max(0, $ncUsed - $normalizedImmichUsage),
             'reserve' => $this->getReserveBytes(),
             'computedImmichQuota' => $computedQuota,
             'unlimited' => $this->wasLastQuotaUnlimited() || ($ncQuota === null && $this->getLastError() === null),
             'error' => $this->getLastError(),
-        ];
-    }
+		];
+	}
+
+	/**
+	 * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, reserve: int, unlimited: bool, error: string|null}
+	 */
+	public function computeNextcloudQuotaSnapshot(string $ncUid): array {
+		$error = null;
+		$ncQuota = null;
+		$ncUsed = null;
+
+		try {
+			$ncQuota = $this->nextcloudQuotaBytes($ncUid);
+		} catch (\Throwable $e) {
+			$error = $e->getMessage();
+		}
+
+		try {
+			$ncUsed = $this->nextcloudUsedBytes($ncUid);
+		} catch (\Throwable $e) {
+			$error ??= $e->getMessage();
+		}
+
+		return [
+			'ncQuota' => $ncQuota,
+			'ncUsed' => $ncUsed,
+			'ncRemaining' => $ncQuota === null || $ncUsed === null ? null : max(0, $ncQuota - $ncUsed),
+			'reserve' => $this->getReserveBytes(),
+			'unlimited' => $ncQuota === null && $error === null,
+			'error' => $error,
+		];
+	}
 
     public function getLastError(): ?string {
         return $this->lastError;

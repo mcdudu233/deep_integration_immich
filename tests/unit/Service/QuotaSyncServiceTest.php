@@ -39,12 +39,19 @@ class QuotaSyncServiceTest extends TestCase {
         $this->assertFalse($service->wasLastQuotaUnlimited());
     }
 
-    public function testComputeQuotaNeverDropsBelowCurrentImmichUsage(): void {
-        $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1000'));
-        $service = $this->service(fn(): int => 950);
+	public function testComputeQuotaNeverDropsBelowCurrentImmichUsage(): void {
+		$this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1000'));
+		$service = $this->service(fn(): int => 950);
 
-        $this->assertSame(300, $service->computeQuota('alice', 300));
-    }
+		$this->assertSame(300, $service->computeQuota('alice', 300));
+	}
+
+	public function testComputeQuotaDoesNotSpendSafetyReserveWhenRemainingIsSmall(): void {
+		$this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1000'));
+		$service = $this->service(fn(): int => 950);
+
+		$this->assertSame(100, $service->computeQuota('alice', 100));
+	}
 
     public function testComputeQuotaParsesHumanReadableNextcloudQuota(): void {
         $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1 KB'));
@@ -81,22 +88,29 @@ class QuotaSyncServiceTest extends TestCase {
         $this->assertTrue($service->wasLastQuotaUnlimited());
     }
 
-    public function testSmallRemainingQuotaIsStillAllocatedWhenReserveIsLarger(): void {
-        $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
-        $service = $this->service(fn(): int => 50);
+	public function testSmallRemainingQuotaIsReservedWhenReserveIsLarger(): void {
+		$this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
+		$service = $this->service(fn(): int => 50);
 
-        $this->assertSame(50, $service->computeQuota('alice', 0));
-        $this->assertNull($service->getLastError());
-    }
+		$this->assertSame(1, $service->computeQuota('alice', 0));
+		$this->assertNull($service->getLastError());
+	}
 
-    public function testReserveLargerThanRemainingCapacityUsesRealRemainingCapacity(): void {
-        $this->adminConfig[AdminConfigService::KEY_QUOTA_RESERVE_BYTES] = 200;
-        $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
-        $service = $this->service(fn(): int => 70);
+	public function testReserveLargerThanRemainingCapacityBlocksGrowth(): void {
+		$this->adminConfig[AdminConfigService::KEY_QUOTA_RESERVE_BYTES] = 200;
+		$this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('100'));
+		$service = $this->service(fn(): int => 70);
 
-        $this->assertSame(55, $service->computeQuota('alice', 25));
-        $this->assertNull($service->getLastError());
-    }
+		$this->assertSame(25, $service->computeQuota('alice', 25));
+		$this->assertNull($service->getLastError());
+	}
+
+	public function testMissingImmichUsageLeavesQuotaUnchanged(): void {
+		$service = $this->service(fn(): int => 70);
+
+		$this->assertNull($service->computeQuota('alice', null));
+		$this->assertSame('Immich quota usage is unavailable.', $service->getLastError());
+	}
 
     public function testStaleOrUnavailableNextcloudUsageLeavesQuotaUnchanged(): void {
         $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1000'));
