@@ -75,7 +75,7 @@ class ExternalStorageProvisioner {
 		if (!$result['exists']) {
 			if (!$this->boolConfig($config, AdminConfigService::KEY_MKDIR_POLICY_ENABLED)) {
 				$result['status'] = 'mount_pending';
-				$result['remediation'] = 'The Immich library folder does not exist yet. Upload through Immich first or explicitly enable the admin mkdir policy for empty per-user directories.';
+				$result['remediation'] = 'The Immich library folder does not exist yet. Upload through Immich first, then rerun mount provisioning or configure the read-only mount manually.';
 				return $result;
 			}
 
@@ -147,7 +147,7 @@ class ExternalStorageProvisioner {
 			$result['status'] = $result['exists'] ? 'template_verification_required' : 'mount_pending';
 			$result['remediation'] = $result['exists']
 				? 'Create a read-only Local External Storage mount for this path and scope it only to the matching user.'
-				: 'The Immich library folder is pending; wait for Immich to create it or enable the guarded mkdir policy.';
+				: 'The Immich library folder is pending; wait for Immich to create it, then rerun verification.';
 			return $result;
 		}
 
