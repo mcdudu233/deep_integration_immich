@@ -117,7 +117,7 @@ class SafetyGuardrailTest extends TestCase {
         $this->assertStringContainsString('control-hit-target', $payloadScript);
         $this->assertStringContainsString('@click.capture.stop.prevent', $payloadScript);
         $this->assertStringContainsString('must not rely on wrapperElement', $payloadScript);
-        $this->assertStringContainsString("{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] }", $payloadScript);
+        $this->assertStringContainsString("assert.deepEqual(VALID_INITIAL_PASSWORD_POLICIES, ['random'])", $payloadScript);
         $this->assertStringContainsString("assertInitialPasswordPolicyValidation('[redacted]', 'invalid_enum')", $payloadScript);
 
         $adminConfigSource = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'AdminConfigService.php');
@@ -145,18 +145,18 @@ class SafetyGuardrailTest extends TestCase {
         $frontendInitialStateService = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'FrontendInitialStateService.php');
         $this->assertStringContainsString('private function redactString(string $value): string', $frontendInitialStateService);
         self::assertInitialPasswordPolicyIsSafeConfigKey($frontendInitialStateService, 'FrontendInitialStateService');
-        $this->assertStringContainsString('[?&](?:api[_-]?key|token|password|secret|authorization)=', $frontendInitialStateService);
-        $this->assertStringContainsString('"(?:password|admin_api_key|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*"', $frontendInitialStateService);
+        $this->assertStringContainsString('[?&](?:api[_-]?key|token|password|secret|authorization|immich[_-]?username|immich[_-]?password|immichUsername|immichPassword)=', $frontendInitialStateService);
+        $this->assertStringContainsString('"(?:password|admin_api_key|immich_username|immich_password|immichUsername|immichPassword|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*"', $frontendInitialStateService);
         $this->assertStringContainsString('\b(authorization)(\s*[=:]\s*)bearer\s+', $frontendInitialStateService);
         $this->assertStringContainsString('\bbearer\s+', $frontendInitialStateService);
-        $this->assertStringContainsString('(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)', $frontendInitialStateService);
+        $this->assertStringContainsString('(api[_-]?key|token|password|secret|authorization|immich[_-]?username|immich[_-]?password|immichUsername|immichPassword)(\s*[=:]\s*)', $frontendInitialStateService);
 
         $adminSettingsControllerTest = self::readFile(self::projectRoot() . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'unit' . DIRECTORY_SEPARATOR . 'Controller' . DIRECTORY_SEPARATOR . 'AdminSettingsControllerTest.php');
         $this->assertStringContainsString('testSetConfigReturnsStructuredValidationError', $adminSettingsControllerTest);
         $this->assertStringContainsString('testSetConfigPersistenceFailureUsesSaveFailedCodeAndRedacts', $adminSettingsControllerTest);
         $this->assertStringContainsString('testValidateConnectionFailureIsStructuredAndRedacted', $adminSettingsControllerTest);
-        $this->assertStringContainsString('testGetConfigPreservesSsoOidcPasswordPolicyAndRedactsCredentialFields', $adminSettingsControllerTest);
-        $this->assertStringContainsString('$this->assertSame(\'sso_oidc\', $config[\'initial_password_policy\']);', $adminSettingsControllerTest);
+        $this->assertStringContainsString('testGetConfigNormalizesLegacyPasswordPolicyAndRedactsCredentialFields', $adminSettingsControllerTest);
+        $this->assertStringContainsString('$this->assertSame(\'random\', $config[\'initial_password_policy\']);', $adminSettingsControllerTest);
         $this->assertStringContainsString("assertStringNotContainsString('test-api-key-redacted'", $adminSettingsControllerTest);
         $this->assertStringContainsString("assertStringNotContainsString('test-bearer-redacted'", $adminSettingsControllerTest);
 

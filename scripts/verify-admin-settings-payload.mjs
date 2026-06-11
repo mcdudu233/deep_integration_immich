@@ -27,7 +27,7 @@ function assertInitialPasswordPolicyValidation(value, expectedCode) {
 			assert.equal(error.code, 'admin_config_invalid')
 			assert.equal(error.fields?.[0]?.field, 'initial_password_policy')
 			assert.equal(error.fields?.[0]?.code, expectedCode)
-			assert.equal(error.fields?.[0]?.message, 'Initial password policy must be random or sso_oidc.')
+			assert.equal(error.fields?.[0]?.message, 'Initial password policy must be random.')
 			assert.deepEqual(error.fields?.[0]?.params?.allowed, VALID_INITIAL_PASSWORD_POLICIES)
 			return true
 		},
@@ -142,7 +142,7 @@ const disabledPayload = buildAdminConfigPayload(disabledForm, {
 })
 
 assert.equal(disabledPayload.provisioning_enabled, false)
-assert.equal(disabledPayload.mkdir_policy_enabled, true)
+assert.equal(disabledPayload.mkdir_policy_enabled, false)
 assert.equal(disabledPayload.external_storage_auto_create, true)
 assert.equal(Object.hasOwn(disabledPayload, 'admin_api_key'), false)
 assert.deepEqual(disabledPayload.user_scope_groups, ['photos-team', 'archive'])
@@ -165,15 +165,15 @@ const enabledPayload = buildAdminConfigPayload({
 })
 
 assert.equal(enabledPayload.admin_api_key, 'test-api-key-redacted')
-assert.equal(enabledPayload.mkdir_policy_enabled, true)
+assert.equal(enabledPayload.mkdir_policy_enabled, false)
 assert.equal(enabledPayload.external_storage_auto_create, true)
 assert.deepEqual(enabledPayload.user_scope_groups, ['family', 'mobile-uploaders'])
 assert.equal(enabledPayload.delete_opt_in_confirmed, true)
 
-assert.deepEqual(VALID_INITIAL_PASSWORD_POLICIES, ['random', 'sso_oidc'])
+assert.deepEqual(VALID_INITIAL_PASSWORD_POLICIES, ['random'])
 assert.deepEqual(REDACTED_MARKERS, ['[redacted]'])
 assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: 'random' }).initial_password_policy, 'random')
-assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: 'sso_oidc' }).initial_password_policy, 'sso_oidc')
+assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: 'sso_oidc' }).initial_password_policy, 'random')
 assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: undefined }).initial_password_policy, 'random')
 assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: null }).initial_password_policy, 'random')
 assert.equal(buildAdminConfigPayload({ ...disabledForm, initial_password_policy: '   ' }).initial_password_policy, 'random')
@@ -185,7 +185,7 @@ const blankApiKeyPolicyPayload = buildAdminConfigPayload({
 	admin_api_key: '',
 	initial_password_policy: 'sso_oidc',
 })
-assert.equal(blankApiKeyPolicyPayload.initial_password_policy, 'sso_oidc')
+assert.equal(blankApiKeyPolicyPayload.initial_password_policy, 'random')
 assert.equal(Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key'), false)
 
 const personalModePayload = buildAdminConfigPayload({
@@ -235,13 +235,18 @@ const requiredFieldCodes = [
 assert.deepEqual(KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES, requiredFieldCodes)
 
 const adminSettingsSource = readFileSync(join(appRoot, 'src', 'AdminSettings.vue'), 'utf8')
+const adminStoreSource = readFileSync(join(appRoot, 'src', 'store', 'adminProvisioning.js'), 'utf8')
+const adminApiSource = readFileSync(join(appRoot, 'src', 'services', 'api.js'), 'utf8')
+	const appRoutesSource = readFileSync(join(appRoot, 'appinfo', 'routes.php'), 'utf8')
+	const frontendInitialStateSource = readFileSync(join(appRoot, 'lib', 'Service', 'FrontendInitialStateService.php'), 'utf8')
+	const navigationSource = readFileSync(join(appRoot, 'src', 'components', 'Navigation.vue'), 'utf8')
 assert.equal(adminSettingsSource.includes('@update:checked'), false, 'AdminSettings.vue must not use @update:checked; use v-model/modelValue semantics for NcCheckboxRadioSwitch controls')
 assertVisibleSwitchHitTargets(adminSettingsSource)
+assertAdminRouteStateWiring({ adminSettingsSource, adminStoreSource, adminApiSource, appRoutesSource, frontendInitialStateSource })
 
 const requiredRadioGroups = [
 	{ field: 'user_scope_mode', values: ['all', 'groups'] },
 	{ field: 'immich_browsing_mode', values: ['personal', 'admin_managed'] },
-	{ field: 'initial_password_policy', values: ['random', 'sso_oidc'] },
 	{ field: 'quota_sync_mode', values: ['disabled', 'manual', 'event_scheduled'] },
 	{ field: 'delete_disable_policy', values: ['disable_suspend', 'delete_opt_in'] },
 ]
@@ -249,6 +254,33 @@ const requiredRadioGroups = [
 for (const group of requiredRadioGroups) {
 	assertRadioGroupBindings(adminSettingsSource, group)
 }
+
+assertRadioGroupBindings(adminSettingsSource, { field: 'initial_password_policy', values: ['random'] })
+assert.equal(adminSettingsSource.includes('value="sso_oidc"'), false, 'AdminSettings.vue must not expose an active SSO/OIDC initial password policy radio')
+assert.equal(adminSettingsSource.includes('password-policy-sso-oidc'), false, 'AdminSettings.vue must not expose the removed SSO/OIDC password policy control')
+assert.equal(adminSettingsSource.includes('Allow creating empty per-user directories'), false, 'AdminSettings.vue must not expose the removed empty-directory creation label')
+assert.equal(adminSettingsSource.includes('mkdir-policy'), false, 'AdminSettings.vue must not expose the removed empty-directory creation control')
+assert.equal(adminSettingsSource.includes('form.mkdir_policy_enabled'), false, 'AdminSettings.vue must not expose or bind the removed empty-directory creation setting')
+assert.ok(adminSettingsSource.includes('Enable automatic external storage creation and mounting'), 'AdminSettings.vue must use the renamed auto-create-and-mount label')
+for (const requiredPolicyCopy of [
+	'Default behavior is non-destructive',
+	'the app marks the mapping inactive',
+	'The Immich personal library remains Immich-owned',
+	'this app never cleans the mirror by deleting media files',
+	'App mapping: kept for audit and collision prevention',
+	'Mirror mount: not used for cleanup',
+	'Immich account: disable or suspend is attempted only when Immich exposes a supported non-destructive field',
+	'Assets and originals: preserved in Immich',
+	'Destructive opt-in is dangerous and is never the default',
+	'the backend accepts the delete_opt_in confirmation on save',
+	'Even with destructive opt-in, the app does not delete media from the Nextcloud mirror mount',
+	'mirror mount media cleanup is never performed by this app',
+]) {
+	assert.ok(adminSettingsSource.includes(requiredPolicyCopy), `Delete/disable policy copy must include: ${requiredPolicyCopy}`)
+}
+assert.ok(adminSettingsSource.includes('data-testid="delete-disable-policy-overview"'), 'Delete/disable policy must render an overview card')
+assert.ok(adminSettingsSource.includes('data-testid="delete-disable-policy-destructive-info"'), 'Delete/disable policy must render destructive opt-in details')
+assert.ok(adminSettingsSource.includes("deleteOptInConfirmed: deleteOptInConfirmed.value"), 'Delete/disable save flow must include explicit confirmation state')
 
 const resolveSavedApiKeyConfigured = new Function(`${extractNamedFunction(adminSettingsSource, 'resolveSavedApiKeyConfigured')}; return resolveSavedApiKeyConfigured`)()
 const postSaveApiKeyConfiguredAssertions = {
@@ -298,8 +330,12 @@ const evidence = {
 	command: 'node scripts/verify-admin-settings-payload.mjs',
 	status: 'passed',
 	payloadAssertions: {
-		disabledProvisioningPreservesStorageBooleans: disabledPayload.mkdir_policy_enabled === true
+		removedMkdirPolicyForcedDisabled: disabledPayload.mkdir_policy_enabled === false
+			&& enabledPayload.mkdir_policy_enabled === false
+			&& personalModePayload.mkdir_policy_enabled === false,
+		disabledProvisioningPreservesStorageBooleans: disabledPayload.mkdir_policy_enabled === false
 			&& disabledPayload.external_storage_auto_create === true,
+		disabledProvisioningPreservesAutoMountBoolean: disabledPayload.external_storage_auto_create === true,
 		blankAdminApiKeyOmitted: Object.hasOwn(disabledPayload, 'admin_api_key') === false,
 		blankApiKeyStillOmittedWithSsoPolicy: Object.hasOwn(blankApiKeyPolicyPayload, 'admin_api_key') === false,
 		pathTemplatesPreserved: disabledPayload.host_path_template === disabledForm.host_path_template
@@ -321,6 +357,7 @@ const evidence = {
 	requiredSelectors,
 	requiredFieldCodes,
 	radioGroupAssertions: Object.fromEntries(requiredRadioGroups.map(group => [group.field, group.values])),
+	adminRouteStateWiring: 'verified',
 }
 
 writeFileSync(
@@ -338,9 +375,13 @@ writeFileSync(
 		'No @update:checked bindings found in src/AdminSettings.vue.',
 		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
 		'Post-save API key configured state guardrail verified blank/no-existing false, blank/existing preservation, nonblank fallback, and response/store-confirmed states.',
-		'Initial password policy payload guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Initial password policy payload guard verified active random-only choices, legacy sso_oidc normalization to random, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
 		'Immich browsing mode payload guard verified personal/admin_managed enum validation and personal-mode centralized provisioning disablement.',
+		'Admin route/state wiring verified for config validation, dry-run, reconcile, quota, sync-state, mount health, and initial Plugin Status payloads.',
 		'Inline field error renderers verified for immich_base_url, admin_api_key, initial_password_policy, host_path_template, and nc_visible_path_template.',
+		'Removed empty-directory creation control verified absent; payload guard forces mkdir_policy_enabled false even if stale form state contains true.',
+		'Renamed external-storage auto-create control label verified: Enable automatic external storage creation and mounting.',
+		'Delete/disable policy copy verified: non-destructive default, inactive mapping status, mirror-mount no-cleanup behavior, Immich account state, asset retention, and destructive opt-in confirmation.',
 		'No local Nextcloud + Immich runtime was available to drive the browser; this file records source-level fallback evidence only.',
 		'',
 	].join('\n'),
@@ -353,12 +394,128 @@ writeFileSync(
 		'Admin settings control/payload guardrail: PASS',
 		'No @update:checked bindings found in src/AdminSettings.vue.',
 		`Radio groups verified: ${requiredRadioGroups.map(group => `${group.field} values [${group.values.join(', ')}]`).join('; ')}`,
-		'Initial password policy enum guard verified valid random/sso_oidc preservation, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
+		'Initial password policy enum guard verified active random-only choices, legacy sso_oidc normalization to random, missing/null/blank defaulting to random, and local rejection of exact [redacted] plus unknown enum values.',
 		'Immich browsing mode enum guard verified personal/admin_managed preservation and invalid value rejection.',
-		'Blank admin API key omission verified, including with sso_oidc policy.',
+		'Blank admin API key omission verified, including with legacy sso_oidc policy normalized to random.',
+		'Removed empty-directory creation control verified absent and stale mkdir_policy_enabled payloads normalized to false.',
+		'Delete/disable policy guardrail verified non-destructive default copy and explicit destructive opt-in confirmation wording.',
 		'',
 	].join('\n'),
 	'utf8',
 )
 
-console.log(`Admin settings payload verification passed (${requiredSelectors.length} selectors, ${requiredFieldCodes.length} field codes, ${Object.keys(postSaveApiKeyConfiguredAssertions).length} post-save key-state checks, ${requiredRadioGroups.length} radio groups, initial password policy enum guard).`)
+console.log(`Admin settings payload verification passed (${requiredSelectors.length} selectors, ${requiredFieldCodes.length} field codes, ${Object.keys(postSaveApiKeyConfiguredAssertions).length} post-save key-state checks, ${requiredRadioGroups.length} radio groups, initial password policy normalization guard).`)
+
+function assertAdminRouteStateWiring({ adminSettingsSource, adminStoreSource, adminApiSource, appRoutesSource, frontendInitialStateSource }) {
+	const endpoints = [
+		{
+			name: 'admin settings load',
+			apiSnippet: 'export function getAdminSettings() {\n\treturn axios.get(`${adminBaseUrl}/config`)',
+			routeSnippet: "['name' => 'admin_settings#getConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'GET']",
+			storeSnippet: 'const response = await getAdminSettings()',
+		},
+		{
+			name: 'admin settings save',
+			apiSnippet: 'export function setAdminSettings(config) {\n\treturn axios.put(`${adminBaseUrl}/config`, config)',
+			routeSnippet: "['name' => 'admin_settings#setConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'PUT']",
+			storeSnippet: 'const response = await setAdminSettings(payload)',
+		},
+		{
+			name: 'admin connection validation',
+			apiSnippet: 'export function validateAdminConnection(payload = {}) {\n\treturn axios.post(`${adminBaseUrl}/config/validate-connection`, payload)',
+			routeSnippet: "['name' => 'admin_settings#validateConnection', 'url' => '/api/v1/admin/config/validate-connection',              'verb' => 'POST']",
+			storeSnippet: 'const response = await validateAdminConnection(payload)',
+		},
+		{
+			name: 'single-user dry run',
+			apiSnippet: 'return axios.get(`${adminBaseUrl}/provisioning/dry-run/${encodeURIComponent(ncUid)}`)',
+			routeSnippet: "['name' => 'admin_provisioning#dryRun',         'url' => '/api/v1/admin/provisioning/dry-run/{ncUid}',             'verb' => 'GET']",
+			storeSnippet: 'const response = await dryRunOne(ncUid)',
+		},
+		{
+			name: 'all-user dry run',
+			apiSnippet: 'return axios.get(`${adminBaseUrl}/provisioning/dry-run`)',
+			routeSnippet: "['name' => 'admin_provisioning#dryRunAll',      'url' => '/api/v1/admin/provisioning/dry-run',                     'verb' => 'GET']",
+			storeSnippet: 'const response = await dryRunAll()',
+		},
+		{
+			name: 'single-user reconcile',
+			apiSnippet: 'return axios.post(`${adminBaseUrl}/provisioning/reconcile/${encodeURIComponent(ncUid)}`)',
+			routeSnippet: "['name' => 'admin_provisioning#reconcileOne',   'url' => '/api/v1/admin/provisioning/reconcile/{ncUid}',           'verb' => 'POST']",
+			storeSnippet: 'const response = await reconcileOne(ncUid)',
+		},
+		{
+			name: 'all-user reconcile',
+			apiSnippet: 'return axios.post(`${adminBaseUrl}/provisioning/reconcile`)',
+			routeSnippet: "['name' => 'admin_provisioning#reconcileAll',   'url' => '/api/v1/admin/provisioning/reconcile',                   'verb' => 'POST']",
+			storeSnippet: 'const response = await reconcileAll()',
+		},
+		{
+			name: 'single-user quota recompute',
+			apiSnippet: 'return axios.post(`${adminBaseUrl}/provisioning/quota/${encodeURIComponent(ncUid)}`)',
+			routeSnippet: "['name' => 'admin_provisioning#recomputeQuotaOne', 'url' => '/api/v1/admin/provisioning/quota/{ncUid}',            'verb' => 'POST']",
+			storeSnippet: 'const response = await recomputeQuotaOne(ncUid)',
+		},
+		{
+			name: 'all-user quota recompute',
+			apiSnippet: 'return axios.post(`${adminBaseUrl}/provisioning/quota`)',
+			routeSnippet: "['name' => 'admin_provisioning#recomputeQuotaAll', 'url' => '/api/v1/admin/provisioning/quota',                    'verb' => 'POST']",
+			storeSnippet: 'const response = await recomputeQuotaAll()',
+		},
+		{
+			name: 'sync-state list',
+			apiSnippet: 'return axios.get(`${adminBaseUrl}/provisioning/sync-state`, { params })',
+			routeSnippet: "['name' => 'admin_provisioning#listSyncState',  'url' => '/api/v1/admin/provisioning/sync-state',                 'verb' => 'GET']",
+			storeSnippet: 'this.syncStates.list = response.data?.sync_state ?? []',
+		},
+		{
+			name: 'mount health verification',
+			apiSnippet: 'return axios.post(`${adminBaseUrl}/provisioning/health/${encodeURIComponent(ncUid)}`)',
+			routeSnippet: "['name' => 'admin_provisioning#verifyHealth',   'url' => '/api/v1/admin/provisioning/health/{ncUid}',              'verb' => 'POST']",
+			storeSnippet: 'this.mountVerify.health = response.data?.health ?? response.data',
+		},
+	]
+
+	for (const endpoint of endpoints) {
+		assertIncludes(adminApiSource, endpoint.apiSnippet, `api.js route wrapper mismatch for ${endpoint.name}`)
+		assertIncludes(appRoutesSource, endpoint.routeSnippet, `routes.php route mismatch for ${endpoint.name}`)
+		assertIncludes(adminStoreSource, endpoint.storeSnippet, `adminProvisioning store mismatch for ${endpoint.name}`)
+	}
+
+	for (const snippet of [
+		':name="t(\'deep_integration_immich\', \'Storage Quota Synchronization Settings\')"',
+		':name="t(\'deep_integration_immich\', \'Plugin Debug\')"',
+		':name="t(\'deep_integration_immich\', \'Plugin Status\')"',
+		'const state = loadState(\'deep_integration_immich\', \'admin-config\')',
+		'if (Array.isArray(state.syncStates))',
+		'applyStatusCardsFromSyncStates(syncStates.value)',
+	]) {
+		assertIncludes(adminSettingsSource, snippet, `AdminSettings.vue must keep renamed debug/status sections wired to admin initial state: ${snippet}`)
+	}
+
+	for (const staleLabel of [
+		':name="t(\'deep_integration_immich\', \'Quota Synchronization\')"',
+		':name="t(\'deep_integration_immich\', \'Provisioning Actions\')"',
+		':name="t(\'deep_integration_immich\', \'Provisioning Status\')"',
+	]) {
+		assert.equal(adminSettingsSource.includes(staleLabel), false, `AdminSettings.vue must not surface stale admin section label: ${staleLabel}`)
+	}
+
+	for (const snippet of [
+		"'status' => $this->adminStatus($config)",
+		"'syncStates' => $this->adminSyncStates($warnings)",
+		"'capabilities' => $this->adminCapabilities($warnings)",
+		"'admin_api_key_configured' => ($config['admin_api_key_configured'] ?? false) === true",
+	]) {
+		assertIncludes(frontendInitialStateSource, snippet, `FrontendInitialStateService admin payload mismatch: ${snippet}`)
+	}
+
+	assertIncludes(appRoutesSource, "['name' => 'auth_handoff#openImmich', 'url' => '/auth/open-immich', 'verb' => 'GET']", 'T7 auto-login handoff route must exist as a GET-only route')
+	assertIncludes(frontendInitialStateSource, "'autoLoginMode' => $adminManaged ? 'server_handoff' : 'personal'", 'Initial state must advertise server-side handoff without credentials')
+	assertIncludes(navigationSource, "generateUrl('/apps/deep_integration_immich/auth/open-immich')", 'Navigation Open Immich must point admin-managed users to the server handoff route')
+	assert.equal(navigationSource.includes('sso_recommended'), false, 'Navigation must not keep old SSO/reset/contact-admin happy-path guidance')
+}
+
+function assertIncludes(source, snippet, message) {
+	assert.ok(source.includes(snippet), message)
+}
