@@ -14,6 +14,7 @@ use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\ProvisioningService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\QueuedJob;
 use OCP\IGroupManager;
 use OCP\IUserManager;
@@ -30,6 +31,7 @@ class ProvisionImmichUserJob extends QueuedJob {
         private IUserManager $userManager,
         private IGroupManager $groupManager,
         private LoggerInterface $logger,
+        private IJobList $jobList,
     ) {
         parent::__construct($timeFactory);
     }
@@ -62,7 +64,12 @@ class ProvisionImmichUserJob extends QueuedJob {
             }
 
             $result = $this->provisioningService->reconcileUser($ncUid, false);
-            return $this->normaliseReconcileResult($ncUid, $result);
+            $normalised = $this->normaliseReconcileResult($ncUid, $result);
+            if ($normalised['status'] === 'success' && ($normalised['immichUserId'] ?? null) !== null) {
+                $normalised['queued'] = $this->enqueueFollowUpJobs($ncUid);
+            }
+
+            return $normalised;
         } catch (\Throwable $e) {
             $error = $this->redact($e->getMessage());
             $this->persistStatusIfPossible($ncUid, SyncStateService::STATUS_FAILED, SyncStateService::STATUS_FAILED, $error);
@@ -182,8 +189,40 @@ class ProvisionImmichUserJob extends QueuedJob {
             'immichUserId' => $result['immichUserId'] ?? null,
             'storageLabel' => $result['storageLabel'] ?? null,
             'quotaSet' => $result['quotaSet'] ?? null,
+            'queued' => [],
             'errors' => $errors,
         ];
+    }
+
+    private function enqueueFollowUpJobs(string $ncUid): array {
+        $jobs = [ProvisionNextcloudMountJob::class];
+        if ($this->isQuotaSyncEnabled()) {
+            $jobs[] = SyncQuotaJob::class;
+        }
+
+        $queued = [];
+        foreach ($jobs as $jobClass) {
+            $argument = ['ncUid' => $ncUid];
+            if (!$this->jobList->has($jobClass, $argument)) {
+                $this->jobList->add($jobClass, $argument);
+            }
+            $queued[] = [
+                'job' => $jobClass,
+                'ncUid' => $ncUid,
+            ];
+        }
+
+        return $queued;
+    }
+
+    private function isQuotaSyncEnabled(): bool {
+        try {
+            $config = $this->adminConfigService->getAdminConfig();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return in_array((string)($config[AdminConfigService::KEY_QUOTA_SYNC_MODE] ?? 'disabled'), ['manual', 'event_scheduled'], true);
     }
 
     private function statusFromReconcile(array $result, array $errors): string {

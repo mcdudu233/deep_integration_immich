@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\BackgroundJob;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\BackgroundJob\ProvisionNextcloudMountJob;
 use OCA\IntegrationImmich\BackgroundJob\ProvisionImmichUserJob;
 use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\ProvisioningService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -25,6 +27,7 @@ class ProvisionImmichUserJobTest extends TestCase {
     private IUserManager&MockObject $userManager;
     private IGroupManager&MockObject $groupManager;
     private LoggerInterface&MockObject $logger;
+    private IJobList&MockObject $followUpJobList;
 
     protected function setUp(): void {
         parent::setUp();
@@ -36,6 +39,7 @@ class ProvisionImmichUserJobTest extends TestCase {
         $this->userManager = $this->createMock(IUserManager::class);
         $this->groupManager = $this->createMock(IGroupManager::class);
         $this->logger = $this->createMock(LoggerInterface::class);
+        $this->followUpJobList = $this->createMock(IJobList::class);
     }
 
     public function testRunsProvisioningForAllUsersScope(): void {
@@ -43,6 +47,13 @@ class ProvisionImmichUserJobTest extends TestCase {
         $this->userManager->method('get')->with('alice')->willReturn($this->user());
         $this->groupManager->expects($this->never())->method('isInGroup');
         $this->syncStateService->expects($this->never())->method('updateStatus');
+        $this->followUpJobList->expects($this->once())
+            ->method('has')
+            ->with(ProvisionNextcloudMountJob::class, ['ncUid' => 'alice'])
+            ->willReturn(false);
+        $this->followUpJobList->expects($this->once())
+            ->method('add')
+            ->with(ProvisionNextcloudMountJob::class, ['ncUid' => 'alice']);
         $this->provisioningService->expects($this->once())
             ->method('reconcileUser')
             ->with('alice', false)
@@ -65,6 +76,10 @@ class ProvisionImmichUserJobTest extends TestCase {
         $this->assertSame('immich-alice', $result['immichUserId']);
         $this->assertSame('alice', $result['storageLabel']);
         $this->assertSame(4096, $result['quotaSet']);
+        $this->assertSame([[
+            'job' => ProvisionNextcloudMountJob::class,
+            'ncUid' => 'alice',
+        ]], $result['queued']);
         $this->assertSame([], $result['errors']);
         $this->assertStringNotContainsString('password', json_encode($result, JSON_THROW_ON_ERROR));
     }
@@ -82,6 +97,7 @@ class ProvisionImmichUserJobTest extends TestCase {
                 ['bob', 'family', false],
             ]);
         $this->provisioningService->expects($this->never())->method('reconcileUser');
+        $this->followUpJobList->expects($this->never())->method('add');
         $this->syncStateService->expects($this->once())
             ->method('updateStatus')
             ->with('bob', SyncStateService::STATUS_OUT_OF_SCOPE, SyncStateService::STATUS_OUT_OF_SCOPE, null);
@@ -116,6 +132,8 @@ class ProvisionImmichUserJobTest extends TestCase {
                 'quotaSet' => null,
                 'errors' => [],
             ]);
+        $this->followUpJobList->method('has')->willReturn(false);
+        $this->followUpJobList->expects($this->once())->method('add');
 
         $result = $this->job()->runJob('alice');
 
@@ -171,6 +189,7 @@ class ProvisionImmichUserJobTest extends TestCase {
             $this->userManager,
             $this->groupManager,
             $this->logger,
+            $this->followUpJobList,
         );
     }
 
