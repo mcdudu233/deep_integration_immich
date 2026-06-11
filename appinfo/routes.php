@@ -17,6 +17,9 @@ return [
         ['name' => 'config#setConfig', 'url' => '/api/v1/config', 'verb' => 'PUT'],
         ['name' => 'config#getConfig', 'url' => '/api/v1/config', 'verb' => 'GET'],
 
+        // User auth handoff
+        ['name' => 'auth_handoff#openImmich', 'url' => '/auth/open-immich', 'verb' => 'GET'],
+
         // Admin Orchestration
         ['name' => 'admin_settings#getConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'GET'],
         ['name' => 'admin_settings#setConfig',          'url' => '/api/v1/admin/config',                                  'verb' => 'PUT'],

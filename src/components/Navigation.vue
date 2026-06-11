@@ -148,7 +148,7 @@
 
 			<NcAppNavigationItem v-if="immichUrl"
 				:name="t('deep_integration_immich', 'Open Immich')"
-				:href="immichUrl"
+				:href="openImmichUrl"
 				data-testid="nav-open-immich"
 				target="_blank"
 				rel="noopener noreferrer">
@@ -156,12 +156,6 @@
 					<OpenInNewIcon :size="20" />
 				</template>
 			</NcAppNavigationItem>
-			<NcNoteCard v-if="showSsoGuidance"
-				type="info"
-				class="immich-sso-guidance"
-				data-testid="open-immich-sso-guidance">
-				{{ t('deep_integration_immich', 'Immich does not provide an official API for Nextcloud to silently create a web login session. To open Immich without re-authentication, configure Nextcloud and Immich with the same OIDC/SSO provider.') }}
-			</NcNoteCard>
 		</template>
 	</NcAppNavigation>
 </template>
@@ -171,6 +165,7 @@ import { computed } from 'vue'
 import { NcAppNavigation, NcAppNavigationList, NcAppNavigationItem, NcNoteCard } from '@nextcloud/vue'
 import { translate as t } from '@nextcloud/l10n'
 import { useImmichStore } from '../store/immich.js'
+import { generateUrl } from '@nextcloud/router'
 
 import ImageIcon from 'vue-material-design-icons/ImageFrame.vue'
 import PhotosIcon from 'vue-material-design-icons/ImageOutline.vue'
@@ -196,14 +191,20 @@ const immichUrl = computed(() => {
 	return normalizeImmichUrl(rawUrl)
 })
 
+const openImmichUrl = computed(() => {
+	if (browsingReadiness.value.adminManaged === true) {
+		return generateUrl('/apps/deep_integration_immich/auth/open-immich')
+	}
+
+	return immichUrl.value
+})
+
 // Provisioning / mapping / mount / quota from user initial state
 const userMapping = computed(() => store.mapping ?? { status: 'missing' })
 const userMount = computed(() => store.mount ?? { status: 'unavailable' })
 const userQuota = computed(() => store.quota ?? { stale: false })
 const browsingReadiness = computed(() => store.browsingReadiness ?? { status: 'ready' })
 const showAdminManagedStatusPanel = computed(() => browsingReadiness.value.adminManaged === true)
-const showSsoGuidance = computed(() => browsingReadiness.value.adminManaged === true
-	&& browsingReadiness.value.autoLoginMode === 'sso_recommended')
 const warnings = computed(() => normalizeWarnings(store.warningDetails, store.warnings))
 
 // Display labels
@@ -524,7 +525,4 @@ function localizeStatusCode(code, params = {}, legacyMessage = '') {
 	margin: 8px 0;
 }
 
-.immich-sso-guidance {
-	margin: 0 12px 8px;
-}
 </style>
