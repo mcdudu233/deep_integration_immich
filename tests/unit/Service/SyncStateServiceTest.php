@@ -79,6 +79,8 @@ class SyncStateServiceTest extends TestCase {
         $this->service->updateMapping('alice', [
             'immichUserId' => 'immich-alice',
             'immichEmail' => 'alice@example.com',
+            'immichUsername' => 'alice-immich',
+            'immichPassword' => 'secret-credential-redacted',
             'storageLabel' => 'alice.photos',
             'ncMountId' => 42,
         ]);
@@ -87,10 +89,30 @@ class SyncStateServiceTest extends TestCase {
         $this->assertInstanceOf(SyncState::class, $state);
         $this->assertSame('immich-alice', $state->getImmichUserId());
         $this->assertSame('alice@example.com', $state->getImmichEmail());
+        $this->assertSame('alice-immich', $state->getImmichUsername());
+        $this->assertSame('secret-credential-redacted', $state->getImmichPassword());
         $this->assertSame('alice.photos', $state->getStorageLabel());
         $this->assertSame(42, $state->getNcMountId());
         $this->assertSame($state, $this->service->findByImmichUserId('immich-alice'));
         $this->assertSame($state, $this->service->findByStorageLabel('alice.photos'));
+    }
+
+    public function testJsonSerializeOmitsImmichCredentialFields(): void {
+        $state = new SyncState();
+        $state->setNcUid('alice');
+        $state->setImmichUserId('immich-alice');
+        $state->setImmichEmail('alice@example.com');
+        $state->setImmichUsername('alice-immich');
+        $state->setImmichPassword('secret-credential-redacted');
+        $state->setStorageLabel('alice');
+
+        $encoded = json_encode($state, JSON_THROW_ON_ERROR);
+
+        $this->assertArrayHasKey('immichEmail', $state->jsonSerialize());
+        $this->assertArrayNotHasKey('immichUsername', $state->jsonSerialize());
+        $this->assertArrayNotHasKey('immichPassword', $state->jsonSerialize());
+        $this->assertStringNotContainsString('alice-immich', $encoded);
+        $this->assertStringNotContainsString('secret-credential-redacted', $encoded);
     }
 
     public function testSyncStateAcceptsImmutableAndHydratedDatetimeValues(): void {

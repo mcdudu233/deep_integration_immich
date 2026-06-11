@@ -21,6 +21,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setImmichUserId(?string $immichUserId)
  * @method string|null getImmichEmail()
  * @method void setImmichEmail(?string $immichEmail)
+ * @method string|null getImmichUsername()
+ * @method void setImmichUsername(?string $immichUsername)
+ * @method string|null getImmichPassword()
+ * @method void setImmichPassword(?string $immichPassword)
  * @method string getStorageLabel()
  * @method void setStorageLabel(string $storageLabel)
  * @method int|null getNcMountId()
@@ -36,6 +40,8 @@ class SyncState extends Entity implements JsonSerializable {
     protected string $ncUid = '';
     protected ?string $immichUserId = null;
     protected ?string $immichEmail = null;
+    protected ?string $immichUsername = null;
+    protected ?string $immichPassword = null;
     protected string $storageLabel = '';
     protected ?int $ncMountId = null;
     protected string $scopeStatus = 'pending';
@@ -50,6 +56,8 @@ class SyncState extends Entity implements JsonSerializable {
         $this->addType('ncUid', 'string');
         $this->addType('immichUserId', 'string');
         $this->addType('immichEmail', 'string');
+        $this->addType('immichUsername', 'string');
+        $this->addType('immichPassword', 'string');
         $this->addType('storageLabel', 'string');
         $this->addType('ncMountId', 'integer');
         $this->addType('scopeStatus', 'string');
@@ -66,6 +74,32 @@ class SyncState extends Entity implements JsonSerializable {
 
     public function getLastQuotaSyncAt(): ?DateTimeInterface {
         return $this->lastQuotaSyncAt;
+    }
+
+    public function getImmichUsername(): ?string {
+        return $this->immichUsername;
+    }
+
+    public function setImmichUsername(mixed $immichUsername): void {
+        if ($this->immichUsername === $immichUsername) {
+            return;
+        }
+
+        $this->markFieldUpdated('immichUsername');
+        $this->immichUsername = $immichUsername === null ? null : (string)$immichUsername;
+    }
+
+    public function getImmichPassword(): ?string {
+        return $this->immichPassword;
+    }
+
+    public function setImmichPassword(mixed $immichPassword): void {
+        if ($this->immichPassword === $immichPassword) {
+            return;
+        }
+
+        $this->markFieldUpdated('immichPassword');
+        $this->immichPassword = $immichPassword === null ? null : (string)$immichPassword;
     }
 
     public function setLastQuotaSyncAt(mixed $lastQuotaSyncAt): void {

@@ -45,6 +45,8 @@ class SyncStateService {
     private const UPDATEABLE_FIELDS = [
         'immichUserId',
         'immichEmail',
+        'immichUsername',
+        'immichPassword',
         'storageLabel',
         'ncMountId',
         'scopeStatus',
@@ -195,6 +197,12 @@ class SyncStateService {
                 break;
             case 'immichEmail':
                 $syncState->setImmichEmail($this->nullableString($value, $field));
+                break;
+            case 'immichUsername':
+                $syncState->setImmichUsername($this->nullableString($value, $field));
+                break;
+            case 'immichPassword':
+                $syncState->setImmichPassword($this->nullableString($value, $field));
                 break;
             case 'storageLabel':
                 $label = $this->stringValue($value, $field);
