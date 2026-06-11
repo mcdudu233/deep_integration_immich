@@ -166,6 +166,99 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertNull($credentials['apiKey']);
     }
 
+    public function testResolveAutoLoginHandoffReturnsStoredUserCredentialsOnlyForMappedAdminManagedUser(): void {
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichUsername('alice@immich.local');
+        $state->setImmichPassword('generated-password');
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
+        ]);
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+
+        $handoff = $this->service->resolveAutoLoginHandoff('alice');
+
+        $this->assertSame(BrowsingAuthService::HANDOFF_READY, $handoff['status']);
+        $this->assertSame('https://admin.example.com', $handoff['url']);
+        $this->assertSame('alice@immich.local', $handoff['username']);
+        $this->assertSame('generated-password', $handoff['password']);
+        $this->assertSame('immich-alice', $handoff['immichUserId']);
+    }
+
+    public function testResolveAutoLoginHandoffDoesNotUsePersonalModeCredentials(): void {
+        $this->adminConfigService->method('getAdminConfig')->willReturn([
+            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
+        ]);
+        $this->adminConfigService->expects($this->never())->method('isConfigured');
+        $this->syncStateService->expects($this->never())->method('findByUid');
+
+        $handoff = $this->service->resolveAutoLoginHandoff('alice');
+
+        $this->assertSame(BrowsingAuthService::HANDOFF_PERSONAL_MODE, $handoff['status']);
+        $this->assertNull($handoff['username']);
+        $this->assertNull($handoff['password']);
+    }
+
+    public function testResolveAutoLoginHandoffRejectsMappedUsersWithoutStoredPassword(): void {
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichUsername('alice@immich.local');
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+
+        $handoff = $this->service->resolveAutoLoginHandoff('alice');
+
+        $this->assertSame(BrowsingAuthService::HANDOFF_CREDENTIALS_MISSING, $handoff['status']);
+        $this->assertNull($handoff['password']);
+    }
+
+    public function testCreateImmichLoginSessionPostsCredentialsServerSideAndReturnsCookieOnly(): void {
+        $handoff = [
+            'status' => BrowsingAuthService::HANDOFF_READY,
+            'url' => 'https://admin.example.com/',
+            'username' => 'alice@immich.local',
+            'password' => 'generated-password',
+            'immichUserId' => 'immich-alice',
+        ];
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('post')
+            ->with('https://admin.example.com/api/auth/login', $this->callback(function (array $options): bool {
+                $this->assertSame('application/json', $options['headers']['Content-Type']);
+                $this->assertSame('application/json', $options['headers']['Accept']);
+                $this->assertStringContainsString('alice@immich.local', $options['body']);
+                $this->assertStringContainsString('generated-password', $options['body']);
+                return true;
+            }))
+            ->willReturn($this->jsonResponse([], 'immich_session=session-value; Path=/; HttpOnly'));
+
+        $session = $this->service->createImmichLoginSession($handoff);
+
+        $this->assertTrue($session['success']);
+        $this->assertSame('https://admin.example.com', $session['redirectUrl']);
+        $this->assertSame('immich_session=session-value; Path=/; HttpOnly', $session['setCookie']);
+    }
+
+    public function testCreateImmichLoginSessionRefusesTokenOnlyResponses(): void {
+        $handoff = [
+            'status' => BrowsingAuthService::HANDOFF_READY,
+            'url' => 'https://admin.example.com',
+            'username' => 'alice@immich.local',
+            'password' => 'generated-password',
+            'immichUserId' => 'immich-alice',
+        ];
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('post')
+            ->willReturn($this->jsonResponse(['accessToken' => 'token-redacted']));
+
+        $session = $this->service->createImmichLoginSession($handoff);
+
+        $this->assertFalse($session['success']);
+        $this->assertSame('https://admin.example.com', $session['redirectUrl']);
+        $this->assertNull($session['setCookie']);
+    }
+
     public function testAssertAssetOwnershipUsesAdminCredentialsAndAcceptsMatchingOwner(): void {
         $assetId = '11111111-1111-1111-1111-111111111111';
         $this->adminConfigService->method('isConfigured')->willReturn(true);
@@ -209,11 +302,11 @@ class BrowsingAuthServiceTest extends TestCase {
         return $syncState;
     }
 
-    private function jsonResponse(array $body): IResponse&MockObject {
+    private function jsonResponse(array $body, string $setCookie = ''): IResponse&MockObject {
         $response = $this->createMock(IResponse::class);
         $response->method('getStatusCode')->willReturn(200);
         $response->method('getBody')->willReturn(json_encode($body, JSON_THROW_ON_ERROR));
-        $response->method('getHeader')->willReturn('');
+        $response->method('getHeader')->willReturnCallback(static fn(string $header): string => $header === 'Set-Cookie' ? $setCookie : '');
         return $response;
     }
 }

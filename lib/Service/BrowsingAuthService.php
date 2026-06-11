@@ -21,6 +21,13 @@ class BrowsingAuthService {
     public const MODE_ADMIN_PROXY = 'admin_proxy';
     public const MODE_UNAVAILABLE = 'unavailable';
 
+    public const HANDOFF_READY = 'ready';
+    public const HANDOFF_PERSONAL_MODE = 'personal_mode';
+    public const HANDOFF_ADMIN_CONFIG_MISSING = 'admin_config_missing';
+    public const HANDOFF_UNMAPPED = 'unmapped';
+    public const HANDOFF_CREDENTIALS_MISSING = 'credentials_missing';
+    public const HANDOFF_LOGIN_FAILED = 'login_failed';
+
     private const CONFIG_SERVER_URL = 'server_url';
     private const CONFIG_API_KEY = 'api_key';
 
@@ -56,6 +63,111 @@ class BrowsingAuthService {
             'url' => $this->adminConfigService->getImmichBaseUrl(),
             'apiKey' => $this->adminConfigService->getAdminApiKey(),
             'immichUserId' => $syncState->getImmichUserId(),
+        ];
+    }
+
+    /**
+     * @return array{status: string, url: string, username: string|null, password: string|null, immichUserId: string|null}
+     */
+    public function resolveAutoLoginHandoff(string $ncUid): array {
+        if ($this->browsingMode() === AdminConfigService::BROWSING_MODE_PERSONAL) {
+            return $this->handoffUnavailable(self::HANDOFF_PERSONAL_MODE);
+        }
+
+        if (!$this->adminConfigService->isConfigured()) {
+            return $this->handoffUnavailable(self::HANDOFF_ADMIN_CONFIG_MISSING);
+        }
+
+        $syncState = $this->syncStateService->findByUid($ncUid);
+        if (!$this->mappingAllowsBrowsing($syncState)) {
+            return $this->handoffUnavailable(self::HANDOFF_UNMAPPED);
+        }
+
+        $username = trim((string)$syncState->getImmichUsername());
+        $password = (string)$syncState->getImmichPassword();
+        if ($username === '' || $password === '') {
+            return $this->handoffUnavailable(self::HANDOFF_CREDENTIALS_MISSING);
+        }
+
+        return [
+            'status' => self::HANDOFF_READY,
+            'url' => $this->adminConfigService->getImmichBaseUrl(),
+            'username' => $username,
+            'password' => $password,
+            'immichUserId' => $syncState->getImmichUserId(),
+        ];
+    }
+
+    /**
+     * @param array{status: string, url: string, username: string|null, password: string|null, immichUserId: string|null} $handoff
+     * @return array{success: bool, redirectUrl: string, setCookie: string|null}
+     */
+    public function createImmichLoginSession(array $handoff): array {
+        if (($handoff['status'] ?? '') !== self::HANDOFF_READY) {
+            throw new \InvalidArgumentException('Immich auto-login handoff is not ready.');
+        }
+
+        $baseUrl = rtrim((string)$handoff['url'], '/');
+        $client = $this->clientService->newClient();
+
+        try {
+            $response = $client->post($baseUrl . '/api/auth/login', [
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'body' => json_encode([
+                    'email' => (string)$handoff['username'],
+                    'password' => (string)$handoff['password'],
+                ], JSON_THROW_ON_ERROR),
+                'http_errors' => false,
+                'timeout' => 30,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Immich auto-login request failed: ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'immichUserId' => (string)($handoff['immichUserId'] ?? ''),
+            ]);
+
+            return [
+                'success' => false,
+                'redirectUrl' => $baseUrl,
+                'setCookie' => null,
+            ];
+        }
+
+        $statusCode = $response->getStatusCode();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $this->logger->warning('Immich auto-login returned HTTP ' . $statusCode, [
+                'app' => Application::APP_ID,
+                'immichUserId' => (string)($handoff['immichUserId'] ?? ''),
+            ]);
+
+            return [
+                'success' => false,
+                'redirectUrl' => $baseUrl,
+                'setCookie' => null,
+            ];
+        }
+
+        $setCookie = $response->getHeader('Set-Cookie') ?: null;
+        if (!is_string($setCookie) || trim($setCookie) === '') {
+            $this->logger->warning('Immich auto-login succeeded without a browser session cookie; refusing to expose token-based credentials.', [
+                'app' => Application::APP_ID,
+                'immichUserId' => (string)($handoff['immichUserId'] ?? ''),
+            ]);
+
+            return [
+                'success' => false,
+                'redirectUrl' => $baseUrl,
+                'setCookie' => null,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'redirectUrl' => $baseUrl,
+            'setCookie' => $setCookie,
         ];
     }
 
@@ -133,6 +245,19 @@ class BrowsingAuthService {
             'mode' => self::MODE_UNAVAILABLE,
             'url' => '',
             'apiKey' => null,
+            'immichUserId' => null,
+        ];
+    }
+
+    /**
+     * @return array{status: string, url: string, username: null, password: null, immichUserId: null}
+     */
+    private function handoffUnavailable(string $status): array {
+        return [
+            'status' => $status,
+            'url' => '',
+            'username' => null,
+            'password' => null,
             'immichUserId' => null,
         ];
     }
