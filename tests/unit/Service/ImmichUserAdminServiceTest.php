@@ -108,6 +108,31 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->assertArrayNotHasKey('password', $created);
     }
 
+    public function testCreateUserWithCredentialsReturnsGeneratedPasswordForServerSidePersistenceOnly(): void {
+        $this->client->expects($this->once())
+            ->method('post')
+            ->willReturnCallback(function (string $url, array $options): mixed {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+
+                return $this->response(201, [
+                    'id' => 'immich-alice',
+                    'email' => 'alice@example.com',
+                    'password' => 'remote-echo-must-not-win',
+                    'generatedPasswordLength' => strlen((string)$payload['password']),
+                ]);
+            });
+
+        $created = $this->service->createUserWithCredentials([
+            'email' => 'alice@example.com',
+            'name' => 'Alice',
+        ]);
+
+        $this->assertSame('immich-alice', $created['id']);
+        $this->assertIsString($created['password']);
+        $this->assertNotSame('remote-echo-must-not-win', $created['password']);
+        $this->assertSame(32, strlen($created['password']));
+    }
+
     public function testCreateUserIncludesQuotaWithoutCapabilityGate(): void {
         $this->client->expects($this->once())
             ->method('post')
@@ -125,13 +150,13 @@ class ImmichUserAdminServiceTest extends TestCase {
         ]);
     }
 
-    public function testCreateUserDoesNotForcePasswordChangeInSsoMode(): void {
+    public function testCreateUserAlwaysRequiresPasswordChangeForLegacySsoPolicy(): void {
         $this->adminConfigService->method('getInitialPasswordPolicy')->willReturn('sso_oidc');
         $this->client->expects($this->once())
             ->method('post')
             ->with('https://photos.example.com/api/admin/users', $this->callback(function (array $options): bool {
                 $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
-                $this->assertFalse($payload['shouldChangePassword']);
+                $this->assertTrue($payload['shouldChangePassword']);
                 $this->assertIsString($payload['password']);
                 return true;
             }))

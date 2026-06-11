@@ -109,7 +109,7 @@ class ProvisioningService {
                 $fields['quotaSizeInBytes'] = $quotaSet;
             }
 
-            $immichUser = $this->immichUserAdminService->createUser($fields);
+            $immichUser = $this->immichUserAdminService->createUserWithCredentials($fields);
             $created = true;
         }
 
@@ -140,7 +140,7 @@ class ProvisioningService {
         }
 
         $mappingChanged = $this->didChangeMapping($state, $immichUserId, $email, $storageLabel);
-        $this->persistActiveMapping($ncUid, $immichUserId, $email, $storageLabel, $quotaEnabled);
+        $this->persistActiveMapping($ncUid, $immichUserId, $email, $storageLabel, $quotaEnabled, $created ? $this->createdPassword($immichUser) : null);
 
         $action = $created ? 'created' : ($mappingChanged || $quotaEnabled ? 'updated' : 'unchanged');
         return $this->result($ncUid, $action, $immichUserId, $storageLabel, $quotaSet, $errors, false);
@@ -163,15 +163,20 @@ class ProvisioningService {
         return $fields;
     }
 
-    private function persistActiveMapping(string $ncUid, string $immichUserId, string $email, string $storageLabel, bool $quotaEnabled): void {
+    private function persistActiveMapping(string $ncUid, string $immichUserId, string $email, string $storageLabel, bool $quotaEnabled, ?string $createdPassword): void {
         $fields = [
             'immichUserId' => $immichUserId,
             'immichEmail' => $email,
+            'immichUsername' => $email,
             'storageLabel' => $storageLabel,
             'scopeStatus' => SyncStateService::STATUS_ACTIVE,
             'lastSyncStatus' => SyncStateService::STATUS_ACTIVE,
             'lastError' => null,
         ];
+
+        if ($createdPassword !== null) {
+            $fields['immichPassword'] = $createdPassword;
+        }
 
         if ($quotaEnabled) {
             $fields['lastQuotaSyncAt'] = new DateTimeImmutable();
@@ -252,6 +257,11 @@ class ProvisioningService {
         }
 
         return $id;
+    }
+
+    private function createdPassword(array $immichUser): ?string {
+        $password = $immichUser['password'] ?? null;
+        return is_string($password) && $password !== '' ? $password : null;
     }
 
     private function assertMappingStorageLabelIsRepairable(?SyncState $state, string $expectedStorageLabel): void {

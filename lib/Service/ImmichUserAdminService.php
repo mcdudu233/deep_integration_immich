@@ -84,12 +84,18 @@ class ImmichUserAdminService {
     }
 
     public function createUser(array $fields): array {
+        return $this->withoutPassword($this->createUserWithCredentials($fields));
+    }
+
+    public function createUserWithCredentials(array $fields): array {
         $payload = $this->normaliseUserPayload($fields, true);
         $payload['password'] = $this->generateInitialPassword();
         $payload['shouldChangePassword'] = $fields['shouldChangePassword'] ?? $this->shouldChangePasswordAfterCreation();
 
         $created = $this->request('POST', '/admin/users', ['body' => $payload]);
-        return $this->withoutPassword($created);
+        $created['password'] = $payload['password'];
+
+        return $created;
     }
 
     public function updateUser(string $immichUserId, array $fields): array {
@@ -309,7 +315,7 @@ class ImmichUserAdminService {
     }
 
     private function shouldChangePasswordAfterCreation(): bool {
-        return $this->adminConfigService->getInitialPasswordPolicy() !== 'sso_oidc';
+        return true;
     }
 
     private function withoutPassword(array $user): array {

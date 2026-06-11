@@ -77,7 +77,7 @@ class ProvisioningServiceTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->immichUserAdminService->method('findUserForNcUid')->with('alice', 'alice@immich.local', 'alice')->willReturn(null);
         $this->immichUserAdminService->expects($this->once())
-            ->method('createUser')
+            ->method('createUserWithCredentials')
             ->with($this->callback(function (array $fields): bool {
                 $this->assertSame('alice@immich.local', $fields['email']);
                 $this->assertSame('Alice Example', $fields['name']);
@@ -85,12 +85,14 @@ class ProvisioningServiceTest extends TestCase {
                 $this->assertSame(9876, $fields['quotaSizeInBytes']);
                 return true;
             }))
-            ->willReturn(['id' => 'immich-alice']);
+            ->willReturn(['id' => 'immich-alice', 'password' => 'generated-password']);
         $this->syncStateService->expects($this->once())
             ->method('updateMapping')
             ->with('alice', $this->callback(function (array $fields): bool {
                 $this->assertSame('immich-alice', $fields['immichUserId']);
                 $this->assertSame('alice@immich.local', $fields['immichEmail']);
+                $this->assertSame('alice@immich.local', $fields['immichUsername']);
+                $this->assertSame('generated-password', $fields['immichPassword']);
                 $this->assertSame('alice', $fields['storageLabel']);
                 $this->assertSame(SyncStateService::STATUS_ACTIVE, $fields['scopeStatus']);
                 $this->assertSame(SyncStateService::STATUS_ACTIVE, $fields['lastSyncStatus']);
@@ -115,12 +117,12 @@ class ProvisioningServiceTest extends TestCase {
 		$this->quotaSyncService->method('getLastError')->willReturn(null);
 		$this->immichUserAdminService->method('findUserForNcUid')->with('alice', 'alice@immich.local', 'nc-alice')->willReturn(null);
 		$this->immichUserAdminService->expects($this->once())
-			->method('createUser')
+			->method('createUserWithCredentials')
 			->with($this->callback(function (array $fields): bool {
 				$this->assertSame('nc-alice', $fields['storageLabel']);
 				return true;
 			}))
-			->willReturn(['id' => 'immich-alice']);
+			->willReturn(['id' => 'immich-alice', 'password' => 'generated-password']);
 		$this->syncStateService->expects($this->once())
 			->method('updateMapping')
 			->with('alice', $this->callback(function (array $fields): bool {
