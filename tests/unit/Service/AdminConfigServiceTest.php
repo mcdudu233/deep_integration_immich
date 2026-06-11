@@ -89,8 +89,8 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('/srv/immich/originals/library/{storageLabel}', $config['host_path_template']);
         $this->assertSame('/mnt/immich-library/{storageLabel}', $config['nc_visible_path_template']);
         $this->assertSame('Immich/{uid}', $config['mount_name_template']);
-        $this->assertSame('sso_oidc', $config['initial_password_policy']);
-        $this->assertSame('sso_oidc', $this->service->getInitialPasswordPolicy());
+        $this->assertSame('random', $config['initial_password_policy']);
+        $this->assertSame('random', $this->service->getInitialPasswordPolicy());
         $this->assertSame('event_scheduled', $config['quota_sync_mode']);
         $this->assertSame(512, $config['quota_reserve_bytes']);
         $this->assertTrue($config['external_storage_auto_create']);
@@ -145,7 +145,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('encrypted:test-api-key-redacted', $this->appValues['admin_api_key']);
     }
 
-    public function testDisabledProvisioningStorageFlagsStillRequirePathTemplates(): void {
+    public function testDisabledProvisioningStorageFlagsStillRequirePathTemplatesAndForceRemovedMkdirPolicyOffWhileAutoCreateStaysOn(): void {
         $errors = $this->service->validateAdminConfig([
             'provisioning_enabled' => false,
             'mkdir_policy_enabled' => true,
@@ -168,10 +168,38 @@ class AdminConfigServiceTest extends TestCase {
         $config = $this->service->getAdminConfig();
 
         $this->assertFalse($config['provisioning_enabled']);
-        $this->assertTrue($config['mkdir_policy_enabled']);
+        $this->assertFalse($config['mkdir_policy_enabled']);
         $this->assertTrue($config['external_storage_auto_create']);
         $this->assertSame('/srv/immich/originals/library/{storageLabel}', $config['host_path_template']);
         $this->assertSame('/mnt/immich-library/{storageLabel}', $config['nc_visible_path_template']);
+    }
+
+    public function testRemovedMkdirPolicyDoesNotRequirePathTemplatesOrPersist(): void {
+        $errors = $this->service->validateAdminConfig([
+            'provisioning_enabled' => false,
+            'mkdir_policy_enabled' => true,
+            'external_storage_auto_create' => false,
+            'host_path_template' => ' ',
+            'nc_visible_path_template' => "\t",
+        ]);
+
+        $this->assertArrayNotHasKey('host_path_template', $errors);
+        $this->assertArrayNotHasKey('nc_visible_path_template', $errors);
+
+        $this->service->setAdminConfig([
+            'provisioning_enabled' => false,
+            'mkdir_policy_enabled' => true,
+            'external_storage_auto_create' => false,
+            'host_path_template' => ' ',
+            'nc_visible_path_template' => "\t",
+        ]);
+
+        $config = $this->service->getAdminConfig();
+
+        $this->assertFalse($config['mkdir_policy_enabled']);
+        $this->assertFalse($config['external_storage_auto_create']);
+        $this->assertSame('', $config['host_path_template']);
+        $this->assertSame('', $config['nc_visible_path_template']);
     }
 
     public function testDisabledProvisioningAllowsBlankPathTemplatesWhenStorageFlagsAreDisabled(): void {
@@ -316,6 +344,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame(['http', 'https'], $details['immich_base_url']['params']['allowed_schemes']);
         $this->assertSame('Immich base URL must be a valid http or https URL with a host.', $messages['immich_base_url']);
         $this->assertSame('Immich browsing mode must be personal or admin_managed.', $messages['immich_browsing_mode']);
+        $this->assertSame(['random'], $details['initial_password_policy']['params']['allowed_values']);
         $this->assertIsString($messages['host_path_template']);
         $this->assertStringNotContainsString('test-api-key-redacted', $encodedDetails);
     }
@@ -459,5 +488,20 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('1', $this->appValues['export_copy_enabled']);
         $this->assertSame('1', $this->appValues['import_to_immich_enabled']);
         $this->assertSame('1', $this->appValues['immich_delete_enabled']);
+    }
+
+    public function testLegacySsoOidcPasswordPolicyNormalizesToRandomOnSaveAndRead(): void {
+        $this->appValues['initial_password_policy'] = 'sso_oidc';
+
+        $config = $this->service->getAdminConfig();
+
+        $this->assertSame('random', $config['initial_password_policy']);
+
+        $this->service->setAdminConfig([
+            'initial_password_policy' => 'sso_oidc',
+        ]);
+
+        $this->assertSame('random', $this->appValues['initial_password_policy']);
+        $this->assertSame('random', $this->service->getInitialPasswordPolicy());
     }
 }

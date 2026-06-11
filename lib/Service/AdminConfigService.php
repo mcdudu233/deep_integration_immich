@@ -108,7 +108,7 @@ class AdminConfigService {
     private const VALID_BROWSING_MODES = [self::BROWSING_MODE_PERSONAL, self::BROWSING_MODE_ADMIN_MANAGED];
     private const VALID_QUOTA_SYNC_MODES = ['disabled', 'manual', 'event_scheduled'];
     private const VALID_DELETE_DISABLE_POLICIES = ['disable_suspend', 'delete_opt_in'];
-    private const VALID_INITIAL_PASSWORD_POLICIES = ['random', 'sso_oidc'];
+    private const VALID_INITIAL_PASSWORD_POLICIES = ['random'];
     private const VALID_PLACEHOLDERS = ['uid', 'storageLabel'];
 
     public function __construct(
@@ -138,8 +138,7 @@ class AdminConfigService {
     }
 
     public function getInitialPasswordPolicy(): string {
-        $policy = $this->getAppString(self::KEY_INITIAL_PASSWORD_POLICY, 'random');
-        return in_array($policy, self::VALID_INITIAL_PASSWORD_POLICIES, true) ? $policy : 'random';
+        return $this->normaliseInitialPasswordPolicy($this->getAppString(self::KEY_INITIAL_PASSWORD_POLICY, 'random'));
     }
 
     public function isExportCopyEnabled(): bool {
@@ -276,11 +275,12 @@ class AdminConfigService {
             );
         }
 
-        if (!in_array((string)$values[self::KEY_INITIAL_PASSWORD_POLICY], self::VALID_INITIAL_PASSWORD_POLICIES, true)) {
+        $initialPasswordPolicy = $this->normaliseInitialPasswordPolicy((string)$values[self::KEY_INITIAL_PASSWORD_POLICY]);
+        if (!in_array($initialPasswordPolicy, self::VALID_INITIAL_PASSWORD_POLICIES, true)) {
             $errors[self::KEY_INITIAL_PASSWORD_POLICY] = $this->validationDetail(
                 self::KEY_INITIAL_PASSWORD_POLICY,
                 self::VALIDATION_INVALID_ENUM,
-                'Initial password policy must be random or sso_oidc.',
+                'Initial password policy must be random.',
                 ['allowed_values' => self::VALID_INITIAL_PASSWORD_POLICIES]
             );
         }
@@ -331,7 +331,7 @@ class AdminConfigService {
             self::KEY_USER_SCOPE_GROUPS => $this->getAppGroups(),
             self::KEY_STORAGE_LABEL_TEMPLATE => $this->getAppString(self::KEY_STORAGE_LABEL_TEMPLATE, '{uid}'),
             self::KEY_EMAIL_TEMPLATE => $this->getAppString(self::KEY_EMAIL_TEMPLATE, '{uid}@immich.local'),
-            self::KEY_INITIAL_PASSWORD_POLICY => $this->getAppString(self::KEY_INITIAL_PASSWORD_POLICY, 'random'),
+            self::KEY_INITIAL_PASSWORD_POLICY => $this->normaliseInitialPasswordPolicy($this->getAppString(self::KEY_INITIAL_PASSWORD_POLICY, 'random')),
             self::KEY_HOST_PATH_TEMPLATE => $this->getAppString(self::KEY_HOST_PATH_TEMPLATE, ''),
             self::KEY_NC_VISIBLE_PATH_TEMPLATE => $this->getAppString(self::KEY_NC_VISIBLE_PATH_TEMPLATE, ''),
             self::KEY_MOUNT_NAME_TEMPLATE => $this->getAppString(self::KEY_MOUNT_NAME_TEMPLATE, 'Immich Photos'),
@@ -358,7 +358,7 @@ class AdminConfigService {
             self::KEY_USER_SCOPE_GROUPS => $this->parseGroups($values[self::KEY_USER_SCOPE_GROUPS]) ?? [],
             self::KEY_STORAGE_LABEL_TEMPLATE => trim((string)$values[self::KEY_STORAGE_LABEL_TEMPLATE]),
             self::KEY_EMAIL_TEMPLATE => trim((string)$values[self::KEY_EMAIL_TEMPLATE]),
-            self::KEY_INITIAL_PASSWORD_POLICY => (string)$values[self::KEY_INITIAL_PASSWORD_POLICY],
+            self::KEY_INITIAL_PASSWORD_POLICY => $this->normaliseInitialPasswordPolicy((string)$values[self::KEY_INITIAL_PASSWORD_POLICY]),
             self::KEY_HOST_PATH_TEMPLATE => trim((string)$values[self::KEY_HOST_PATH_TEMPLATE]),
             self::KEY_NC_VISIBLE_PATH_TEMPLATE => trim((string)$values[self::KEY_NC_VISIBLE_PATH_TEMPLATE]),
             self::KEY_MOUNT_NAME_TEMPLATE => trim((string)$values[self::KEY_MOUNT_NAME_TEMPLATE]),
@@ -373,15 +373,25 @@ class AdminConfigService {
         ];
     }
 
-    private function normaliseEffectivePathFeatureFlags(array $values): array {
-        if (($values[self::KEY_IMMICH_BROWSING_MODE] ?? self::BROWSING_MODE_ADMIN_MANAGED) === self::BROWSING_MODE_PERSONAL) {
-            $values[self::KEY_PROVISIONING_ENABLED] = false;
-            $values[self::KEY_MKDIR_POLICY_ENABLED] = false;
-            $values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;
-            $values[self::KEY_QUOTA_SYNC_MODE] = 'disabled';
+	private function normaliseEffectivePathFeatureFlags(array $values): array {
+		$values[self::KEY_MKDIR_POLICY_ENABLED] = false;
+
+		if (($values[self::KEY_IMMICH_BROWSING_MODE] ?? self::BROWSING_MODE_ADMIN_MANAGED) === self::BROWSING_MODE_PERSONAL) {
+			$values[self::KEY_PROVISIONING_ENABLED] = false;
+			$values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE] = false;
+			$values[self::KEY_QUOTA_SYNC_MODE] = 'disabled';
         }
 
         return $values;
+    }
+
+    private function normaliseInitialPasswordPolicy(string $policy): string {
+        $policy = trim($policy);
+        if ($policy === '' || $policy === 'sso_oidc') {
+            return 'random';
+        }
+
+        return $policy;
     }
 
     private function serialiseValue(string $key, mixed $value): string {

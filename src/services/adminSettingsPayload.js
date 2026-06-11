@@ -21,7 +21,7 @@ const KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES = Object.freeze([
 	'invalid_boolean',
 ])
 
-const VALID_INITIAL_PASSWORD_POLICIES = Object.freeze(['random', 'sso_oidc'])
+const VALID_INITIAL_PASSWORD_POLICIES = Object.freeze(['random'])
 const VALID_IMMICH_BROWSING_MODES = Object.freeze(['personal', 'admin_managed'])
 const REDACTED_MARKERS = Object.freeze(['[redacted]'])
 
@@ -74,7 +74,11 @@ function normalizeInitialPasswordPolicy(value) {
 		return 'random'
 	}
 
-	const policy = String(value)
+	const policy = String(value).trim()
+	if (policy === 'sso_oidc') {
+		return 'random'
+	}
+
 	if (VALID_INITIAL_PASSWORD_POLICIES.includes(policy)) {
 		return policy
 	}
@@ -82,7 +86,7 @@ function normalizeInitialPasswordPolicy(value) {
 	throw new AdminConfigPayloadValidationError({
 		field: 'initial_password_policy',
 		code: 'invalid_enum',
-		message: 'Initial password policy must be random or sso_oidc.',
+		message: 'Initial password policy must be random.',
 		params: {
 			allowed: VALID_INITIAL_PASSWORD_POLICIES.slice(),
 			redacted: REDACTED_MARKERS.includes(policy),
@@ -128,10 +132,10 @@ function buildAdminConfigPayload(formState, options = {}) {
 	payload.immich_browsing_mode = normalizeImmichBrowsingMode(payload.immich_browsing_mode)
 	if (payload.immich_browsing_mode === 'personal') {
 		payload.provisioning_enabled = false
-		payload.mkdir_policy_enabled = false
 		payload.external_storage_auto_create = false
 		payload.quota_sync_mode = 'disabled'
 	}
+	payload.mkdir_policy_enabled = false
 
 	if (payload.provisioning_enabled !== true) {
 		payload.provisioning_enabled = false
