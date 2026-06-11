@@ -362,7 +362,11 @@ class AdminProvisioningController extends Controller {
     }
 
     private function redactString(string $value): string {
-        return preg_replace('/(api[_-]?key|token|password|secret|authorization)(\s*[=:]\s*)[^\s,;]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/([?&](?:api[_-]?key|token|password|secret|authorization|immich[_-]?username|immich[_-]?password|immichUsername|immichPassword)=)[^&\s]+/i', '$1[redacted]', $value) ?? $value;
+        $value = preg_replace('/("(?:password|admin_api_key|immich_username|immich_password|immichUsername|immichPassword|apiKey|api_key|x-api-key|token|secret|authorization)"\s*:\s*")[^"]+(")/i', '$1[redacted]$2', $value) ?? $value;
+        $value = preg_replace('/\b(authorization)(\s*[=:]\s*)bearer\s+[^\s,;}]+/i', '$1$2[redacted]', $value) ?? $value;
+        $value = preg_replace('/\bbearer\s+[^\s,;}]+/i', 'Bearer [redacted]', $value) ?? $value;
+        return preg_replace('/(api[_-]?key|token|password|secret|authorization|immich[_-]?username|immich[_-]?password|immichUsername|immichPassword)(\s*[=:]\s*)[^\s,;}&]+/i', '$1$2[redacted]', $value) ?? $value;
     }
 
     private function formatDateTime(?DateTimeInterface $dateTime): ?string {
@@ -374,6 +378,7 @@ class AdminProvisioningController extends Controller {
             return false;
         }
 
-        return preg_match('/(^|[_-])(api[_-]?key|token|password|secret|authorization)($|[_-])/i', $key) === 1;
+        return preg_match('/(^|[_-])(api[_-]?key|apikey|token|password|secret|authorization|immich[_-]?username|immich[_-]?password)($|[_-])/i', $key) === 1
+            || preg_match('/^(?:apiKey|immichUsername|immichPassword)$/i', $key) === 1;
     }
 }

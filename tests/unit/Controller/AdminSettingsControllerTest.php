@@ -57,12 +57,14 @@ class AdminSettingsControllerTest extends TestCase {
         $this->assertArrayNotHasKey('admin_api_key', $data['config']);
     }
 
-    public function testGetConfigPreservesSsoOidcPasswordPolicyAndRedactsCredentialFields(): void {
+    public function testGetConfigNormalizesLegacyPasswordPolicyAndRedactsCredentialFields(): void {
         $this->adminConfigService->method('getAdminConfig')->willReturn([
             'immich_base_url' => 'https://photos.example.com',
-            'initial_password_policy' => 'sso_oidc',
+            'initial_password_policy' => 'random',
             'admin_api_key' => 'test-admin-api-key-redacted',
             'immich_admin_api_key' => 'test-immich-admin-api-key-redacted',
+            'immich_username' => 'test-immich-username-redacted',
+            'immich_password' => 'test-immich-password-redacted',
             'api_key' => 'test-api-key-redacted',
             'x-api-key' => 'test-x-api-key-redacted',
             'token' => 'test-token-redacted',
@@ -81,11 +83,13 @@ class AdminSettingsControllerTest extends TestCase {
 
         $this->assertSame(Http::STATUS_OK, $response->getStatus());
         $this->assertTrue($data['success']);
-        $this->assertSame('sso_oidc', $config['initial_password_policy']);
+        $this->assertSame('random', $config['initial_password_policy']);
         $this->assertTrue($config['admin_api_key_configured']);
         $this->assertTrue($config['api_key_set']);
         $this->assertArrayNotHasKey('admin_api_key', $config);
         $this->assertSame('[redacted]', $config['immich_admin_api_key']);
+        $this->assertSame('[redacted]', $config['immich_username']);
+        $this->assertSame('[redacted]', $config['immich_password']);
         $this->assertSame('[redacted]', $config['api_key']);
         $this->assertSame('[redacted]', $config['x-api-key']);
         $this->assertSame('[redacted]', $config['token']);
@@ -95,6 +99,8 @@ class AdminSettingsControllerTest extends TestCase {
         $this->assertSame('[redacted]', $config['backup_password']);
         $this->assertStringNotContainsString('test-admin-api-key-redacted', $encoded);
         $this->assertStringNotContainsString('test-immich-admin-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-immich-username-redacted', $encoded);
+        $this->assertStringNotContainsString('test-immich-password-redacted', $encoded);
         $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
         $this->assertStringNotContainsString('test-x-api-key-redacted', $encoded);
         $this->assertStringNotContainsString('test-token-redacted', $encoded);
@@ -181,10 +187,8 @@ class AdminSettingsControllerTest extends TestCase {
                 'initial_password_policy' => [
                     'field' => 'initial_password_policy',
                     'code' => AdminConfigService::VALIDATION_INVALID_ENUM,
-                    'message' => 'Initial password policy must be one of: random, sso_oidc.',
-                    'params' => [
-                        'allowed_values' => ['random', 'sso_oidc'],
-                    ],
+                    'message' => 'Initial password policy must be random.',
+                    'params' => ['allowed_values' => ['random']],
                 ],
             ]);
         $this->adminConfigService->expects($this->never())->method('setAdminConfig');
@@ -204,10 +208,10 @@ class AdminSettingsControllerTest extends TestCase {
         $this->assertSame('immich_base_url', $data['error']['details']['fieldDetails'][0]['field']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_URL, $data['error']['details']['fieldDetails'][0]['code']);
         $this->assertSame(['http', 'https'], $data['error']['details']['fieldDetails'][0]['params']['allowed_schemes']);
-        $this->assertSame('Initial password policy must be one of: random, sso_oidc.', $data['error']['details']['fields']['initial_password_policy']);
+        $this->assertSame('Initial password policy must be random.', $data['error']['details']['fields']['initial_password_policy']);
         $this->assertSame('initial_password_policy', $data['error']['details']['fieldDetails'][1]['field']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_ENUM, $data['error']['details']['fieldDetails'][1]['code']);
-        $this->assertSame(['random', 'sso_oidc'], $data['error']['details']['fieldDetails'][1]['params']['allowed_values']);
+        $this->assertSame(['random'], $data['error']['details']['fieldDetails'][1]['params']['allowed_values']);
         $this->assertSame('[redacted]', $data['error']['details']['fieldDetails'][0]['params']['admin_api_key']);
         $this->assertSame('[redacted]', $data['error']['details']['fieldDetails'][0]['params']['authorization']);
         $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
@@ -320,6 +324,8 @@ class AdminSettingsControllerTest extends TestCase {
             'delete_disable_policy' => 'disable_suspend',
             'external_storage_auto_create' => false,
             'admin_api_key_configured' => false,
+            'immich_username' => '[redacted]',
+            'immich_password' => '[redacted]',
         ];
     }
 
