@@ -99,7 +99,7 @@ class PageControllerStateTest extends TestCase {
 		$this->assertNull($data['quota']['computedImmichQuota']);
         $this->assertSame('admin_managed_ready', $data['browsingReadiness']['status']);
         $this->assertSame('success', $data['browsingReadiness']['severity']);
-        $this->assertSame('sso_recommended', $data['browsingReadiness']['autoLoginMode']);
+        $this->assertSame('server_handoff', $data['browsingReadiness']['autoLoginMode']);
         $this->assertNull($data['browsingReadiness']['messageKey']);
         $this->assertNull($data['browsingReadiness']['localizedMessage']);
         $this->assertFalse($data['browsingReadiness']['showAppBanner']);

@@ -86,7 +86,7 @@ export const useImmichStore = defineStore('immich', {
         browsingReadiness: {
             status: 'ready',
             severity: 'info',
-            autoLoginMode: 'sso_recommended',
+            autoLoginMode: 'server_handoff',
             messageKey: null,
             localizedMessage: null,
             showAppBanner: false,
@@ -174,7 +174,7 @@ export const useImmichStore = defineStore('immich', {
                 this.browsingReadiness = {
                     status: typeof state.browsingReadiness.status === 'string' ? state.browsingReadiness.status : 'ready',
                     severity: typeof state.browsingReadiness.severity === 'string' ? state.browsingReadiness.severity : 'info',
-                    autoLoginMode: typeof state.browsingReadiness.autoLoginMode === 'string' ? state.browsingReadiness.autoLoginMode : 'sso_recommended',
+                    autoLoginMode: typeof state.browsingReadiness.autoLoginMode === 'string' ? state.browsingReadiness.autoLoginMode : 'server_handoff',
                     messageKey: typeof state.browsingReadiness.messageKey === 'string' ? state.browsingReadiness.messageKey : null,
                     localizedMessage: typeof state.browsingReadiness.localizedMessage === 'string' ? state.browsingReadiness.localizedMessage : null,
                     showAppBanner: state.browsingReadiness.showAppBanner === true,

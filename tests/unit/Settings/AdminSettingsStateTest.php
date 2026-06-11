@@ -44,8 +44,10 @@ class AdminSettingsStateTest extends TestCase {
         $this->adminConfigService->method('getAdminConfig')->willReturn([
             AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
             AdminConfigService::KEY_ADMIN_API_KEY => 'secret-admin-key',
-            AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'sso_oidc',
+            AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'random',
             AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
+            'immich_username' => 'test-immich-username-redacted',
+            'immich_password' => 'test-immich-password-redacted',
             'admin_api_key_configured' => true,
             AdminConfigService::KEY_PROVISIONING_ENABLED => true,
             AdminConfigService::KEY_USER_SCOPE_MODE => 'groups',
@@ -102,10 +104,12 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertSame('https://photos.example.com', $provided['server_url']);
         $this->assertTrue($provided['api_key_set']);
         $this->assertSame('https://photos.example.com', $provided['settings'][AdminConfigService::KEY_IMMICH_BASE_URL]);
-        $this->assertSame('sso_oidc', $provided['settings'][AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);
+        $this->assertSame('random', $provided['settings'][AdminConfigService::KEY_INITIAL_PASSWORD_POLICY]);
         $this->assertSame(AdminConfigService::BROWSING_MODE_ADMIN_MANAGED, $provided['settings'][AdminConfigService::KEY_IMMICH_BROWSING_MODE]);
         $this->assertTrue($provided['settings']['admin_api_key_configured']);
         $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $provided['settings']);
+        $this->assertSame('[redacted]', $provided['settings']['immich_username']);
+        $this->assertSame('[redacted]', $provided['settings']['immich_password']);
         $this->assertSame(['enabled' => true, 'scope' => 'groups', 'scopedGroups' => ['photos']], $provided['status']['provisioning']);
         $this->assertTrue($provided['status']['credentials']['admin_api_key_configured']);
 		$this->assertTrue($provided['status']['actions']['exportCopyEnabled']);
@@ -138,6 +142,8 @@ class AdminSettingsStateTest extends TestCase {
             AdminConfigService::KEY_IMMICH_BASE_URL => 'https://photos.example.com',
             AdminConfigService::KEY_INITIAL_PASSWORD_POLICY => 'random',
             AdminConfigService::KEY_ADMIN_API_KEY => 'test-admin-api-key-redacted',
+            'immich_username' => 'test-immich-username-redacted',
+            'immich_password' => 'test-immich-password-redacted',
             'immich_admin_api_key' => 'test-immich-admin-api-key-redacted',
             'api_key' => 'test-api-key-redacted',
             'x-api-key' => 'test-x-api-key-redacted',
@@ -170,6 +176,8 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertTrue($settings['admin_api_key_configured']);
         $this->assertTrue($settings['api_key_set']);
         $this->assertArrayNotHasKey(AdminConfigService::KEY_ADMIN_API_KEY, $settings);
+        $this->assertSame('[redacted]', $settings['immich_username']);
+        $this->assertSame('[redacted]', $settings['immich_password']);
         $this->assertSame('[redacted]', $settings['immich_admin_api_key']);
         $this->assertSame('[redacted]', $settings['api_key']);
         $this->assertSame('[redacted]', $settings['x-api-key']);
@@ -179,6 +187,8 @@ class AdminSettingsStateTest extends TestCase {
         $this->assertSame('[redacted]', $settings['password']);
         $this->assertSame('[redacted]', $settings['backup_password']);
         $this->assertStringNotContainsString('test-admin-api-key-redacted', $encoded);
+        $this->assertStringNotContainsString('test-immich-username-redacted', $encoded);
+        $this->assertStringNotContainsString('test-immich-password-redacted', $encoded);
         $this->assertStringNotContainsString('test-immich-admin-api-key-redacted', $encoded);
         $this->assertStringNotContainsString('test-api-key-redacted', $encoded);
         $this->assertStringNotContainsString('test-x-api-key-redacted', $encoded);

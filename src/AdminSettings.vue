@@ -142,9 +142,9 @@
 			</div>
 		</NcSettingsSection>
 
-		<!-- ═══ Section 2: Provisioning ═══════════════════════════════════ -->
+		<!-- ═══ Section 2: User Assignment ════════════════════════════════ -->
 		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'User Provisioning')"
+			:name="t('deep_integration_immich', 'User Assignment Settings')"
 			:description="t('deep_integration_immich', 'Control how Nextcloud users are mirrored into Immich')">
 			<div class="immich-settings-form">
 				<div class="field" data-testid="provisioning-enabled">
@@ -194,16 +194,9 @@
 						{{ t('deep_integration_immich', 'Only users belonging to at least one of these groups will be provisioned.') }}
 					</p>
 				</div>
-			</div>
-		</NcSettingsSection>
 
-		<!-- ═══ Section 3: Templates ══════════════════════════════════════ -->
-		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'Templates')"
-			:description="t('deep_integration_immich', 'Configure naming and path templates for Immich users and mounts')">
-			<div class="immich-settings-form">
 				<NcNoteCard type="info">
-					{{ t('deep_integration_immich', 'Available placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the storage label template after assets exist may require a migration.') }}
+					{{ t('deep_integration_immich', 'Available assignment placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the storage label template after assets exist may require a migration.') }}
 				</NcNoteCard>
 
 				<div class="field">
@@ -235,15 +228,6 @@
 								{{ t('deep_integration_immich', 'Random generated password') }}
 							</NcCheckboxRadioSwitch>
 						</label>
-						<label class="control-hit-target" @click.capture.stop.prevent="form.initial_password_policy = 'sso_oidc'">
-							<NcCheckboxRadioSwitch v-model="form.initial_password_policy"
-								name="initial_password_policy"
-								value="sso_oidc"
-								type="radio"
-								data-testid="password-policy-sso-oidc">
-								{{ t('deep_integration_immich', 'SSO/OIDC mode') }}
-							</NcCheckboxRadioSwitch>
-						</label>
 					</div>
 					<p v-if="fieldErrorMessage('initial_password_policy')"
 						class="validation-error-inline"
@@ -251,9 +235,20 @@
 						{{ fieldErrorMessage('initial_password_policy') }}
 					</p>
 					<p class="hint">
-						{{ t('deep_integration_immich', 'Random mode creates an initial Immich password that is not shown after user creation. Use SSO/OIDC mode only when Immich and Nextcloud share authentication.') }}
+						{{ t('deep_integration_immich', 'The app creates a random initial Immich password for each provisioned user. The password is not shown after user creation.') }}
 					</p>
 				</div>
+			</div>
+		</NcSettingsSection>
+
+		<!-- ═══ Section 3: Storage ═════════════════════════════════════════ -->
+				<NcSettingsSection v-if="isAdminManagedMode"
+			:name="t('deep_integration_immich', 'Storage Settings')"
+			:description="t('deep_integration_immich', 'Control storage paths and external storage mount provisioning')">
+			<div class="immich-settings-form">
+				<NcNoteCard type="info">
+					{{ t('deep_integration_immich', 'Available storage placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Local External Storage must point outside Nextcloud\'s data directory and stay read-only.') }}
+				</NcNoteCard>
 
 				<div class="field">
 					<NcTextField v-model="form.mount_name_template"
@@ -294,31 +289,12 @@
 						{{ t('deep_integration_immich', 'The path visible inside the Nextcloud container that maps to the host path. Must be outside Nextcloud\'s data directory.') }}
 					</p>
 				</div>
-			</div>
-		</NcSettingsSection>
-
-		<!-- ═══ Section 4: Storage ═════════════════════════════════════════ -->
-		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'Storage Settings')"
-			:description="t('deep_integration_immich', 'Control directory creation and external storage mount provisioning')">
-			<div class="immich-settings-form">
-				<div class="field">
-					<label class="control-hit-target" @click.capture.stop.prevent="form.mkdir_policy_enabled = !form.mkdir_policy_enabled">
-						<NcCheckboxRadioSwitch v-model="form.mkdir_policy_enabled"
-							data-testid="mkdir-policy">
-							{{ t('deep_integration_immich', 'Allow creating empty per-user directories') }}
-						</NcCheckboxRadioSwitch>
-					</label>
-					<p class="hint">
-						{{ t('deep_integration_immich', 'If enabled, the app may create empty directories under the configured base path when a user\'s Immich library folder does not exist yet. Only directories are created, never media files.') }}
-					</p>
-				</div>
 
 				<div class="field">
 					<label class="control-hit-target" @click.capture.stop.prevent="form.external_storage_auto_create = !form.external_storage_auto_create">
 						<NcCheckboxRadioSwitch v-model="form.external_storage_auto_create"
 							data-testid="auto-create-external-storage">
-							{{ t('deep_integration_immich', 'Auto-create external storage mounts') }}
+							{{ t('deep_integration_immich', 'Enable automatic external storage creation and mounting') }}
 						</NcCheckboxRadioSwitch>
 					</label>
 					<p class="hint">
@@ -334,9 +310,9 @@
 			</div>
 		</NcSettingsSection>
 
-		<!-- ═══ Section 5: Quota Sync ══════════════════════════════════════ -->
+		<!-- ═══ Section 4: Quota Sync ══════════════════════════════════════ -->
 		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'Quota Synchronization')"
+			:name="t('deep_integration_immich', 'Storage Quota Synchronization Settings')"
 			:description="t('deep_integration_immich', 'Control how Immich user quotas are derived from Nextcloud quotas')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -400,11 +376,17 @@
 			</div>
 		</NcSettingsSection>
 
-		<!-- ═══ Section 6: Delete/Disable Policy ═══════════════════════════ -->
+		<!-- ═══ Section 5: Delete/Disable Policy ═══════════════════════════ -->
 		<NcSettingsSection v-if="isAdminManagedMode"
 			:name="t('deep_integration_immich', 'Delete / Disable Policy')"
-			:description="t('deep_integration_immich', 'What happens to the Immich user when a Nextcloud user is deleted or disabled')">
+			:description="t('deep_integration_immich', 'Define how mapped Immich accounts, app mappings, and mirror mounts behave when Nextcloud users become inactive')">
 			<div class="immich-settings-form">
+				<NcNoteCard type="info"
+					data-testid="delete-disable-policy-overview">
+					<p>{{ t('deep_integration_immich', 'Default behavior is non-destructive: when a Nextcloud user is disabled, deleted, or leaves the provisioning scope, the app marks the mapping inactive and tries to disable or suspend the mapped Immich user if the running Immich API supports it.') }}</p>
+					<p>{{ t('deep_integration_immich', 'The Immich personal library remains Immich-owned. The Nextcloud mirror mount may be marked unavailable or reconciled for that user, but this app never cleans the mirror by deleting media files and never writes, moves, or removes Immich originals through the mount.') }}</p>
+				</NcNoteCard>
+
 				<div class="field">
 					<label class="field-label">{{ t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled') }}</label>
 					<div class="radio-group" data-testid="delete-disable-policy-selector">
@@ -432,14 +414,27 @@
 				<NcNoteCard v-if="form.delete_disable_policy === 'disable_suspend'"
 					type="info"
 					data-testid="delete-disable-policy-info">
-					{{ t('deep_integration_immich', 'When a Nextcloud user is deleted or disabled, the corresponding Immich user will be suspended if supported. Assets are never deleted automatically.') }}
+					<p>{{ t('deep_integration_immich', 'Non-destructive policy details:') }}</p>
+					<ul>
+						<li>{{ t('deep_integration_immich', 'App mapping: kept for audit and collision prevention, with status set to disabled, deleted, out of scope, or failed until an administrator reconciles it.') }}</li>
+						<li>{{ t('deep_integration_immich', 'Mirror mount: not used for cleanup; external storage availability may be removed, disabled, or reported stale by provisioning checks, but media inside the mount is not deleted by this app.') }}</li>
+						<li>{{ t('deep_integration_immich', 'Immich account: disable or suspend is attempted only when Immich exposes a supported non-destructive field; otherwise the mapping records a pending failure instead of deleting the account.') }}</li>
+						<li>{{ t('deep_integration_immich', 'Assets and originals: preserved in Immich. Administrators must handle any retention workflow in Immich, not by editing the Nextcloud mirror mount.') }}</li>
+					</ul>
+				</NcNoteCard>
+
+				<NcNoteCard v-if="form.delete_disable_policy === 'delete_opt_in'"
+					type="error"
+					data-testid="delete-disable-policy-destructive-info">
+					<p>{{ t('deep_integration_immich', 'Destructive opt-in is dangerous and is never the default. It can delete the mapped Immich user and assets only after this policy is explicitly selected, the confirmation checkbox is checked, and the backend accepts the delete_opt_in confirmation on save.') }}</p>
+					<p>{{ t('deep_integration_immich', 'Even with destructive opt-in, the app does not delete media from the Nextcloud mirror mount. Immich remains the owner of originals, and any deletion is performed through Immich admin APIs according to the saved policy.') }}</p>
 				</NcNoteCard>
 
 				<div v-if="form.delete_disable_policy === 'delete_opt_in'" class="field">
 					<label class="control-hit-target" @click.capture.stop.prevent="deleteOptInConfirmed = !deleteOptInConfirmed">
 						<NcCheckboxRadioSwitch v-model="deleteOptInConfirmed"
 							data-testid="delete-opt-in-confirm">
-							{{ t('deep_integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted') }}
+							{{ t('deep_integration_immich', 'I understand this can permanently delete mapped Immich users and their assets only through Immich, and that mirror mount media cleanup is never performed by this app') }}
 						</NcCheckboxRadioSwitch>
 					</label>
 				</div>
@@ -447,14 +442,14 @@
 				<NcNoteCard v-if="form.delete_disable_policy === 'delete_opt_in' && !deleteOptInConfirmed"
 					type="error"
 					data-testid="delete-disable-policy-warning">
-					{{ t('deep_integration_immich', 'You must confirm the destructive policy before it can be saved. This action cannot be undone.') }}
+					{{ t('deep_integration_immich', 'You must confirm the destructive policy before it can be saved. Without explicit confirmation the backend rejects delete_opt_in and keeps the non-destructive policy in effect.') }}
 				</NcNoteCard>
 			</div>
 		</NcSettingsSection>
 
-		<!-- ═══ Section 7: Actions ═════════════════════════════════════════ -->
+		<!-- ═══ Section 6: Debug ═══════════════════════════════════════════ -->
 		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'Provisioning Actions')"
+			:name="t('deep_integration_immich', 'Plugin Debug')"
 			:description="t('deep_integration_immich', 'Dry-run, reconcile, and recompute quota for Immich users')">
 			<div class="immich-settings-form">
 				<div class="field">
@@ -566,9 +561,9 @@
 			</div>
 		</NcSettingsSection>
 
-		<!-- ═══ Section 8: Status ══════════════════════════════════════════ -->
+		<!-- ═══ Section 7: Status ══════════════════════════════════════════ -->
 		<NcSettingsSection v-if="isAdminManagedMode"
-			:name="t('deep_integration_immich', 'Provisioning Status')"
+			:name="t('deep_integration_immich', 'Plugin Status')"
 			:description="t('deep_integration_immich', 'Current sync state, mount health, and quota status for provisioned users')">
 			<div class="immich-settings-form">
 				<!-- Warnings -->
@@ -771,7 +766,6 @@ const form = reactive({
 	mount_name_template: 'Immich Photos',
 	host_path_template: '',
 	nc_visible_path_template: '',
-	mkdir_policy_enabled: false,
 	external_storage_auto_create: false,
 	quota_sync_mode: 'disabled',
 	quota_reserve_bytes: 268435456,
@@ -887,7 +881,6 @@ function applyConfigToForm(cfg) {
 	if (cfg.mount_name_template !== undefined) form.mount_name_template = cfg.mount_name_template
 	if (cfg.host_path_template !== undefined) form.host_path_template = cfg.host_path_template
 	if (cfg.nc_visible_path_template !== undefined) form.nc_visible_path_template = cfg.nc_visible_path_template
-	if (cfg.mkdir_policy_enabled !== undefined) form.mkdir_policy_enabled = cfg.mkdir_policy_enabled
 	if (cfg.external_storage_auto_create !== undefined) form.external_storage_auto_create = cfg.external_storage_auto_create
 	if (cfg.quota_sync_mode !== undefined) form.quota_sync_mode = cfg.quota_sync_mode
 	if (cfg.quota_reserve_bytes !== undefined) form.quota_reserve_bytes = cfg.quota_reserve_bytes
@@ -1327,8 +1320,8 @@ function localizeAdminConfigValidationMessage(message) {
 		return t('deep_integration_immich', 'Value must be boolean.')
 	case 'Quota sync mode must be disabled, manual, or event_scheduled.':
 		return t('deep_integration_immich', 'Quota sync mode must be disabled, manual, or event_scheduled.')
-	case 'Initial password policy must be random or sso_oidc.':
-		return t('deep_integration_immich', 'Initial password policy must be random or sso_oidc.')
+	case 'Initial password policy must be random.':
+		return t('deep_integration_immich', 'Initial password policy must be random.')
 	case 'Quota reserve bytes must be an integer greater than or equal to 0.':
 		return t('deep_integration_immich', 'Quota reserve bytes must be an integer greater than or equal to 0.')
 	case 'Delete/disable policy must be disable_suspend or delete_opt_in.':
@@ -1364,12 +1357,11 @@ function labelForConfigField(field) {
 	case 'mount_name_template': return t('deep_integration_immich', 'Mount name template')
 	case 'host_path_template': return t('deep_integration_immich', 'Host path template')
 	case 'nc_visible_path_template': return t('deep_integration_immich', 'Nextcloud-visible path template')
-	case 'mkdir_policy_enabled': return t('deep_integration_immich', 'Allow creating empty per-user directories')
-	case 'external_storage_auto_create': return t('deep_integration_immich', 'Auto-create external storage mounts')
+	case 'external_storage_auto_create': return t('deep_integration_immich', 'Enable automatic external storage creation and mounting')
 	case 'quota_sync_mode': return t('deep_integration_immich', 'Quota sync mode')
 	case 'quota_reserve_bytes': return t('deep_integration_immich', 'Safety reserve (MiB)')
 	case 'delete_disable_policy': return t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled')
-	case 'delete_opt_in_confirmed': return t('deep_integration_immich', 'I understand this will permanently delete Immich users and their assets when the corresponding Nextcloud user is deleted')
+	case 'delete_opt_in_confirmed': return t('deep_integration_immich', 'I understand this can permanently delete mapped Immich users and their assets only through Immich, and that mirror mount media cleanup is never performed by this app')
 	default: return field || t('deep_integration_immich', 'Unknown field')
 	}
 }
