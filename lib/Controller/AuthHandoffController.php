@@ -35,20 +35,28 @@ class AuthHandoffController extends Controller {
             return $this->safeError('not_authenticated', 'Sign in to Nextcloud before opening Immich.', Http::STATUS_UNAUTHORIZED);
         }
 
-        $handoff = $this->browsingAuthService->resolveAutoLoginHandoff($this->userId);
+        $handoff = $this->browsingAuthService->resolveLegacyPasswordLoginHandoff($this->userId);
         if (($handoff['status'] ?? '') !== BrowsingAuthService::HANDOFF_READY) {
             return $this->safeError((string)($handoff['status'] ?? 'unavailable'), $this->messageForStatus((string)($handoff['status'] ?? 'unavailable')), Http::STATUS_PRECONDITION_FAILED);
         }
 
-        $session = $this->browsingAuthService->createImmichLoginSession($handoff);
-        if ($session['success'] !== true) {
+        $redirectUrl = rtrim((string)($handoff['url'] ?? ''), '/');
+        if (!$this->isSafeRedirectUrl($redirectUrl)) {
             return $this->safeError(BrowsingAuthService::HANDOFF_LOGIN_FAILED, 'Immich auto-login is temporarily unavailable. Try again later or ask an administrator to reconcile your Immich account.', Http::STATUS_BAD_GATEWAY);
         }
 
-        $response = new RedirectResponse($session['redirectUrl']);
-        if (is_string($session['setCookie']) && trim($session['setCookie']) !== '') {
-            $response->addHeader('Set-Cookie', $session['setCookie']);
+        $session = $this->browsingAuthService->createImmichLoginSession($handoff);
+        if (!($session['success'] ?? false) || !is_string($session['setCookie'] ?? null)) {
+            return $this->safeError(BrowsingAuthService::HANDOFF_LOGIN_FAILED, 'Immich auto-login is temporarily unavailable. Try again later or ask an administrator to reconcile your Immich account.', Http::STATUS_BAD_GATEWAY);
         }
+
+        $setCookie = $this->sharedParentDomainCookie((string)$session['setCookie'], $redirectUrl);
+        if ($setCookie === null) {
+            return $this->safeError(BrowsingAuthService::HANDOFF_LOGIN_FAILED, 'Immich auto-login requires Nextcloud and Immich to share the same parent domain.', Http::STATUS_BAD_GATEWAY);
+        }
+
+        $response = new RedirectResponse($redirectUrl);
+        $response->addHeader('Set-Cookie', $setCookie);
 
         return $response;
     }
@@ -71,5 +79,100 @@ class AuthHandoffController extends Controller {
             BrowsingAuthService::HANDOFF_CREDENTIALS_MISSING => 'Immich auto-login credentials are not available for this mapped user.',
             default => 'Immich auto-login is unavailable for this account.',
         };
+    }
+
+    private function isSafeRedirectUrl(string $url): bool {
+        $parsed = parse_url($url);
+        return is_array($parsed)
+            && in_array(strtolower((string)($parsed['scheme'] ?? '')), ['http', 'https'], true)
+            && trim((string)($parsed['host'] ?? '')) !== ''
+            && !isset($parsed['user'])
+            && !isset($parsed['pass'])
+            && !isset($parsed['fragment']);
+    }
+
+    private function sharedParentDomainCookie(string $setCookie, string $immichUrl): ?string {
+        $immichHost = $this->hostFromUrl($immichUrl);
+        $nextcloudHost = $this->normalizeHost($this->request->getServerHost());
+        if ($immichHost === null || $nextcloudHost === null) {
+            return null;
+        }
+
+        $parentDomain = $this->sharedParentDomain($nextcloudHost, $immichHost);
+        if ($parentDomain === null) {
+            return null;
+        }
+
+        $parts = array_map('trim', explode(';', $setCookie));
+        $nameValue = array_shift($parts);
+        if (!is_string($nameValue) || $nameValue === '' || !str_contains($nameValue, '=')) {
+            return null;
+        }
+
+        $attributes = [];
+        foreach ($parts as $part) {
+            if ($part === '') {
+                continue;
+            }
+
+            [$name, $value] = array_pad(explode('=', $part, 2), 2, null);
+            if (strcasecmp($name, 'Domain') === 0) {
+                $cookieDomain = $this->normalizeHost((string)$value);
+                if ($cookieDomain === null || (!$this->domainMatches($cookieDomain, $immichHost) && $cookieDomain !== $parentDomain)) {
+                    return null;
+                }
+                continue;
+            }
+
+            $attributes[] = $part;
+        }
+
+        $attributes[] = 'Domain=' . $parentDomain;
+
+        return $nameValue . '; ' . implode('; ', $attributes);
+    }
+
+    private function hostFromUrl(string $url): ?string {
+        $parsed = parse_url($url);
+        if (!is_array($parsed)) {
+            return null;
+        }
+
+        return $this->normalizeHost((string)($parsed['host'] ?? ''));
+    }
+
+    private function normalizeHost(string $host): ?string {
+        $host = strtolower(trim($host));
+        $host = preg_replace('/:\d+$/', '', $host) ?? '';
+        $host = trim($host, '.');
+        if ($host === '' || filter_var($host, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+
+        return $host;
+    }
+
+    private function sharedParentDomain(string $firstHost, string $secondHost): ?string {
+        $firstLabels = array_reverse(explode('.', $firstHost));
+        $secondLabels = array_reverse(explode('.', $secondHost));
+        $shared = [];
+
+        foreach ($firstLabels as $index => $label) {
+            if (($secondLabels[$index] ?? null) !== $label) {
+                break;
+            }
+
+            $shared[] = $label;
+        }
+
+        if (count($shared) < 2 || count($shared) === count($firstLabels) || count($shared) === count($secondLabels)) {
+            return null;
+        }
+
+        return implode('.', array_reverse($shared));
+    }
+
+    private function domainMatches(string $cookieDomain, string $host): bool {
+        return $host === $cookieDomain || str_ends_with($host, '.' . $cookieDomain);
     }
 }

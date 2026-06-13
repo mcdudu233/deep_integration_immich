@@ -27,7 +27,7 @@ class AuthHandoffControllerTest extends TestCase {
         $this->request = $this->createMock(IRequest::class);
     }
 
-    public function testOpenImmichRedirectsAfterServerSideLogin(): void {
+    public function testOpenImmichRedirectsWithSharedParentDomainCookie(): void {
         $handoff = [
             'status' => BrowsingAuthService::HANDOFF_READY,
             'url' => 'https://photos.example.com',
@@ -36,7 +36,7 @@ class AuthHandoffControllerTest extends TestCase {
             'immichUserId' => 'immich-alice',
         ];
         $this->browsingAuthService->expects($this->once())
-            ->method('resolveAutoLoginHandoff')
+            ->method('resolveLegacyPasswordLoginHandoff')
             ->with('alice')
             ->willReturn($handoff);
         $this->browsingAuthService->expects($this->once())
@@ -45,17 +45,43 @@ class AuthHandoffControllerTest extends TestCase {
             ->willReturn([
                 'success' => true,
                 'redirectUrl' => 'https://photos.example.com',
-                'setCookie' => 'immich_session=session-value; Path=/; HttpOnly',
+                'setCookie' => 'immich_access_token=session-value; Path=/; HttpOnly; SameSite=Lax',
             ]);
+        $this->request->method('getServerHost')->willReturn('cloud.example.com');
 
         $response = $this->controller('alice')->openImmich();
 
         $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertSame('https://photos.example.com', $response->getRedirectURL());
+        $this->assertSame('immich_access_token=session-value; Path=/; HttpOnly; SameSite=Lax; Domain=example.com', $response->getHeaders()['Set-Cookie']);
         $this->assertStringNotContainsString('generated-password', json_encode($response, JSON_THROW_ON_ERROR));
     }
 
+    public function testOpenImmichRejectsUnrelatedParentDomainCookie(): void {
+        $handoff = [
+            'status' => BrowsingAuthService::HANDOFF_READY,
+            'url' => 'https://photos.example.net/',
+            'username' => 'alice@immich.local',
+            'password' => 'generated-password',
+            'immichUserId' => 'immich-alice',
+        ];
+        $this->browsingAuthService->method('resolveLegacyPasswordLoginHandoff')->with('alice')->willReturn($handoff);
+        $this->browsingAuthService->method('createImmichLoginSession')->willReturn([
+            'success' => true,
+            'redirectUrl' => 'https://photos.example.net',
+            'setCookie' => 'immich_access_token=session-value; Path=/; HttpOnly',
+        ]);
+        $this->request->method('getServerHost')->willReturn('cloud.example.com');
+
+        $response = $this->controller('alice')->openImmich();
+
+        $this->assertInstanceOf(JSONResponse::class, $response);
+        $this->assertSame(Http::STATUS_BAD_GATEWAY, $response->getStatus());
+        $this->assertSame(BrowsingAuthService::HANDOFF_LOGIN_FAILED, $response->getData()['error']['code']);
+    }
+
     public function testOpenImmichReturnsSafeErrorForMissingCredentials(): void {
-        $this->browsingAuthService->method('resolveAutoLoginHandoff')->with('alice')->willReturn([
+        $this->browsingAuthService->method('resolveLegacyPasswordLoginHandoff')->with('alice')->willReturn([
             'status' => BrowsingAuthService::HANDOFF_CREDENTIALS_MISSING,
             'url' => '',
             'username' => null,
@@ -72,20 +98,16 @@ class AuthHandoffControllerTest extends TestCase {
         $this->assertStringNotContainsString('password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
     }
 
-    public function testOpenImmichReturnsSafeErrorWhenLoginFails(): void {
+    public function testOpenImmichRejectsUnsafeRedirectTargets(): void {
         $handoff = [
             'status' => BrowsingAuthService::HANDOFF_READY,
-            'url' => 'https://photos.example.com',
+            'url' => 'javascript:alert(1)',
             'username' => 'alice@immich.local',
             'password' => 'generated-password',
             'immichUserId' => 'immich-alice',
         ];
-        $this->browsingAuthService->method('resolveAutoLoginHandoff')->with('alice')->willReturn($handoff);
-        $this->browsingAuthService->method('createImmichLoginSession')->with($handoff)->willReturn([
-            'success' => false,
-            'redirectUrl' => 'https://photos.example.com',
-            'setCookie' => null,
-        ]);
+        $this->browsingAuthService->method('resolveLegacyPasswordLoginHandoff')->with('alice')->willReturn($handoff);
+        $this->browsingAuthService->expects($this->never())->method('createImmichLoginSession');
 
         $response = $this->controller('alice')->openImmich();
 
