@@ -13,6 +13,7 @@ use DateTimeImmutable;
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Db\SyncState;
 use OCP\IUserManager;
+use OCP\Security\ICrypto;
 use Psr\Log\LoggerInterface;
 
 class ProvisioningService {
@@ -30,6 +31,7 @@ class ProvisioningService {
         private PathTemplateService $pathTemplateService,
         private AdminConfigService $adminConfigService,
         private IUserManager $userManager,
+        private ICrypto $crypto,
         private LoggerInterface $logger,
         private ?object $lockFactory = null,
         ?QuotaSyncService $quotaSyncService = null,
@@ -92,6 +94,7 @@ class ProvisioningService {
 
         $immichUser = $this->immichUserAdminService->findUserForNcUid($ncUid, $email, $storageLabel);
         $created = false;
+        $createdPassword = null;
 
         if ($immichUser === null) {
             $fields = [
@@ -110,6 +113,7 @@ class ProvisioningService {
             }
 
             $immichUser = $this->immichUserAdminService->createUserWithCredentials($fields);
+            $createdPassword = $this->createdPassword($immichUser);
             $created = true;
         }
 
@@ -140,7 +144,12 @@ class ProvisioningService {
         }
 
         $mappingChanged = $this->didChangeMapping($state, $immichUserId, $email, $storageLabel);
-        $this->persistActiveMapping($ncUid, $immichUserId, $email, $storageLabel, $quotaEnabled, $created ? $this->createdPassword($immichUser) : null);
+        if ($createdPassword !== null) {
+            $this->persistActiveMapping($ncUid, $immichUserId, $email, $storageLabel, $quotaEnabled, $createdPassword, null);
+        }
+        $passwordForApiKey = $createdPassword ?? $this->storedPassword($state);
+        $apiKey = $this->userApiKeyForMapping($state, $email, $passwordForApiKey, $ncUid);
+        $this->persistActiveMapping($ncUid, $immichUserId, $email, $storageLabel, $quotaEnabled, $createdPassword, $apiKey);
 
         $action = $created ? 'created' : ($mappingChanged || $quotaEnabled ? 'updated' : 'unchanged');
         return $this->result($ncUid, $action, $immichUserId, $storageLabel, $quotaSet, $errors, false);
@@ -163,7 +172,7 @@ class ProvisioningService {
         return $fields;
     }
 
-    private function persistActiveMapping(string $ncUid, string $immichUserId, string $email, string $storageLabel, bool $quotaEnabled, ?string $createdPassword): void {
+    private function persistActiveMapping(string $ncUid, string $immichUserId, string $email, string $storageLabel, bool $quotaEnabled, ?string $createdPassword, ?string $apiKey): void {
         $fields = [
             'immichUserId' => $immichUserId,
             'immichEmail' => $email,
@@ -176,6 +185,10 @@ class ProvisioningService {
 
         if ($createdPassword !== null) {
             $fields['immichPassword'] = $createdPassword;
+        }
+
+        if ($apiKey !== null) {
+            $fields['immichApiKey'] = $this->crypto->encrypt($apiKey);
         }
 
         if ($quotaEnabled) {
@@ -262,6 +275,28 @@ class ProvisioningService {
     private function createdPassword(array $immichUser): ?string {
         $password = $immichUser['password'] ?? null;
         return is_string($password) && $password !== '' ? $password : null;
+    }
+
+    private function storedPassword(?SyncState $state): ?string {
+        if ($state === null) {
+            return null;
+        }
+
+        $password = $state->getImmichPassword();
+        return is_string($password) && $password !== '' ? $password : null;
+    }
+
+    private function userApiKeyForMapping(?SyncState $state, string $email, ?string $password, string $ncUid): ?string {
+        $existingApiKey = $state?->getImmichApiKey();
+        if (is_string($existingApiKey) && $existingApiKey !== '') {
+            return null;
+        }
+
+        if ($password === null) {
+            throw new \RuntimeException('Stored Immich password is missing; cannot create a per-user API key for Nextcloud user "' . $ncUid . '".');
+        }
+
+        return $this->immichUserAdminService->createUserApiKey($email, $password);
     }
 
     private function assertMappingStorageLabelIsRepairable(?SyncState $state, string $expectedStorageLabel): void {

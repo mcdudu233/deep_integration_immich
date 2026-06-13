@@ -14,6 +14,7 @@ use OCA\IntegrationImmich\Service\QuotaSyncService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCP\Security\ICrypto;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LoggerInterface;
 use Test\TestCase;
@@ -24,6 +25,7 @@ class ProvisioningServiceTest extends TestCase {
     private PathTemplateService $pathTemplateService;
     private AdminConfigService&MockObject $adminConfigService;
     private IUserManager&MockObject $userManager;
+    private ICrypto&MockObject $crypto;
     private QuotaSyncService&MockObject $quotaSyncService;
     private TestLockService $lockService;
     private array $adminConfig;
@@ -42,6 +44,8 @@ class ProvisioningServiceTest extends TestCase {
 		];
         $this->adminConfigService->method('getAdminConfig')->willReturnCallback(fn(): array => $this->adminConfig);
         $this->userManager = $this->createMock(IUserManager::class);
+        $this->crypto = $this->createMock(ICrypto::class);
+        $this->crypto->method('encrypt')->willReturnCallback(static fn(string $value): string => 'encrypted:' . $value);
         $this->quotaSyncService = $this->createMock(QuotaSyncService::class);
         $this->lockService = new TestLockService();
     }
@@ -86,13 +90,24 @@ class ProvisioningServiceTest extends TestCase {
                 return true;
             }))
             ->willReturn(['id' => 'immich-alice', 'password' => 'generated-password']);
-        $this->syncStateService->expects($this->once())
+        $this->immichUserAdminService->expects($this->once())
+            ->method('createUserApiKey')
+            ->with('alice@immich.local', 'generated-password')
+            ->willReturn('user-api-key');
+        $mappingUpdates = 0;
+        $this->syncStateService->expects($this->exactly(2))
             ->method('updateMapping')
-            ->with('alice', $this->callback(function (array $fields): bool {
+            ->with('alice', $this->callback(function (array $fields) use (&$mappingUpdates): bool {
+                $mappingUpdates++;
                 $this->assertSame('immich-alice', $fields['immichUserId']);
                 $this->assertSame('alice@immich.local', $fields['immichEmail']);
                 $this->assertSame('alice@immich.local', $fields['immichUsername']);
                 $this->assertSame('generated-password', $fields['immichPassword']);
+                if ($mappingUpdates === 1) {
+                    $this->assertArrayNotHasKey('immichApiKey', $fields);
+                } else {
+                    $this->assertSame('encrypted:user-api-key', $fields['immichApiKey']);
+                }
                 $this->assertSame('alice', $fields['storageLabel']);
                 $this->assertSame(SyncStateService::STATUS_ACTIVE, $fields['scopeStatus']);
                 $this->assertSame(SyncStateService::STATUS_ACTIVE, $fields['lastSyncStatus']);
@@ -123,7 +138,8 @@ class ProvisioningServiceTest extends TestCase {
 				return true;
 			}))
 			->willReturn(['id' => 'immich-alice', 'password' => 'generated-password']);
-		$this->syncStateService->expects($this->once())
+		$this->immichUserAdminService->method('createUserApiKey')->willReturn('user-api-key');
+		$this->syncStateService->expects($this->exactly(2))
 			->method('updateMapping')
 			->with('alice', $this->callback(function (array $fields): bool {
 				$this->assertSame('nc-alice', $fields['storageLabel']);
@@ -224,6 +240,7 @@ class ProvisioningServiceTest extends TestCase {
             'storageLabel' => 'alice',
         ]);
         $this->immichUserAdminService->method('getUserQuotaUsage')->with('immich-alice')->willReturn(200);
+        $state->setImmichApiKey('existing-user-api-key');
         $this->immichUserAdminService->expects($this->once())
             ->method('updateUser')
             ->with('immich-alice', $this->callback(function (array $fields): bool {
@@ -294,6 +311,7 @@ class ProvisioningServiceTest extends TestCase {
 
     public function testRefusesImmichStorageLabelChangeEvenWhenNoAssetsExist(): void {
         $state = $this->state('alice', 'immich-alice', 'alice@example.com', 'alice');
+        $state->setImmichApiKey('existing-user-api-key');
         $this->userManager->method('get')->with('alice')->willReturn($this->user('alice@example.com', 'Alice'));
         $this->syncStateService->method('getOrCreateForUid')->with('alice')->willReturn($state);
         $this->quotaSyncService->method('computeQuota')->willReturn(1000);
@@ -389,6 +407,7 @@ class ProvisioningServiceTest extends TestCase {
             $this->pathTemplateService,
             $this->adminConfigService,
             $this->userManager,
+            $this->crypto,
             $this->createMock(LoggerInterface::class),
             new \stdClass(),
             $this->quotaSyncService,
