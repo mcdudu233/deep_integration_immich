@@ -9,7 +9,7 @@
 			:description="t('deep_integration_immich', 'Configure the Immich server URL and admin credentials')">
 			<div class="immich-settings-form">
 				<div class="field" data-testid="immich-browsing-mode">
-					<label class="field-label">{{ t('deep_integration_immich', 'Immich browsing mode') }}</label>
+					<label class="field-label">{{ t('deep_integration_immich', 'Immich connection mode') }}</label>
 					<div class="radio-group">
 						<label class="control-hit-target" @click.capture.stop.prevent="form.immich_browsing_mode = 'personal'">
 							<NcCheckboxRadioSwitch v-model="form.immich_browsing_mode"
@@ -151,7 +151,7 @@
 					<label class="control-hit-target" @click.capture.stop.prevent="form.provisioning_enabled = !form.provisioning_enabled">
 						<NcCheckboxRadioSwitch v-model="form.provisioning_enabled"
 							data-testid="provisioning-enabled-toggle">
-							{{ t('deep_integration_immich', 'Enable user provisioning') }}
+							{{ t('deep_integration_immich', 'Enable automatic user account allocation') }}
 						</NcCheckboxRadioSwitch>
 					</label>
 				</div>
@@ -196,12 +196,12 @@
 				</div>
 
 				<NcNoteCard type="info">
-					{{ t('deep_integration_immich', 'Available assignment placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the storage label template after assets exist may require a migration.') }}
+					{{ t('deep_integration_immich', 'Available assignment placeholders: {uid} (Nextcloud user ID), {storageLabel} (sanitized user ID). Changing the user identification template after assets exist may require a migration.') }}
 				</NcNoteCard>
 
 				<div class="field">
 					<NcTextField v-model="form.storage_label_template"
-						:label="t('deep_integration_immich', 'Storage label template')"
+						:label="t('deep_integration_immich', 'User identification template')"
 						placeholder="{uid}"
 						data-testid="storage-label-template" />
 				</div>
@@ -1310,8 +1310,8 @@ function localizeAdminConfigValidationMessage(message) {
 	switch (message) {
 	case 'Immich base URL must be a valid http or https URL with a host.':
 		return t('deep_integration_immich', 'Immich base URL must be a valid http or https URL with a host.')
-	case 'Immich browsing mode must be personal or admin_managed.':
-		return t('deep_integration_immich', 'Immich browsing mode must be personal or admin_managed.')
+	case 'Immich connection mode must be personal or admin_managed.':
+		return t('deep_integration_immich', 'Immich connection mode must be personal or admin_managed.')
 	case 'User scope mode must be all or groups.':
 		return t('deep_integration_immich', 'User scope mode must be all or groups.')
 	case 'User scope groups must be a JSON array of non-empty group IDs.':
@@ -1347,11 +1347,11 @@ function labelForConfigField(field) {
 	switch (field) {
 	case 'immich_base_url': return t('deep_integration_immich', 'Immich server URL')
 	case 'admin_api_key': return t('deep_integration_immich', 'Admin API key')
-	case 'immich_browsing_mode': return t('deep_integration_immich', 'Immich browsing mode')
-	case 'provisioning_enabled': return t('deep_integration_immich', 'Enable user provisioning')
+	case 'immich_browsing_mode': return t('deep_integration_immich', 'Immich connection mode')
+	case 'provisioning_enabled': return t('deep_integration_immich', 'Enable automatic user account allocation')
 	case 'user_scope_mode': return t('deep_integration_immich', 'User scope')
 	case 'user_scope_groups': return t('deep_integration_immich', 'Selected groups')
-	case 'storage_label_template': return t('deep_integration_immich', 'Storage label template')
+	case 'storage_label_template': return t('deep_integration_immich', 'User identification template')
 	case 'email_template': return t('deep_integration_immich', 'Email fallback template')
 	case 'initial_password_policy': return t('deep_integration_immich', 'Initial password policy')
 	case 'mount_name_template': return t('deep_integration_immich', 'Mount name template')

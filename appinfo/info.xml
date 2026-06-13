@@ -40,9 +40,9 @@ Seamlessly integrates your [Immich](https://immich.app) photo library into Nextc
     </dependencies>
     <navigations>
         <navigation>
-            <name>Immich</name>
+            <name>Photos</name>
             <route>deep_integration_immich.page.index</route>
-            <order>5</order>
+            <order>4</order>
             <icon>app.svg</icon>
         </navigation>
     </navigations>
