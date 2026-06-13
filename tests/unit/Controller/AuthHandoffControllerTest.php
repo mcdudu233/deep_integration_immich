@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Controller;
 
 use OCA\IntegrationImmich\Controller\AuthHandoffController;
+use OCA\IntegrationImmich\Http\SharedCookieRedirectResponse;
 use OCA\IntegrationImmich\Service\BrowsingAuthService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -51,9 +52,13 @@ class AuthHandoffControllerTest extends TestCase {
 
         $response = $this->controller('alice')->openImmich();
 
-        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertInstanceOf(SharedCookieRedirectResponse::class, $response);
         $this->assertSame('https://photos.example.com', $response->getRedirectURL());
-        $this->assertSame('immich_access_token=session-value; Path=/; HttpOnly; SameSite=Lax; Domain=example.com', $response->getHeaders()['Set-Cookie']);
+        $this->assertSame([
+            'immich_access_token=session-value; Path=/; HttpOnly; SameSite=Lax; Domain=example.com',
+            'immich_auth_type=password; Path=/; HttpOnly; SameSite=Lax; Domain=example.com',
+            'immich_is_authenticated=true; Path=/; SameSite=Lax; Domain=example.com',
+        ], $response->getSetCookies());
         $this->assertStringNotContainsString('generated-password', json_encode($response, JSON_THROW_ON_ERROR));
     }
 

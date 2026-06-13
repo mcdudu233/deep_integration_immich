@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\Http\SharedCookieRedirectResponse;
 use OCA\IntegrationImmich\Service\BrowsingAuthService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -50,15 +51,12 @@ class AuthHandoffController extends Controller {
             return $this->safeError(BrowsingAuthService::HANDOFF_LOGIN_FAILED, 'Immich auto-login is temporarily unavailable. Try again later or ask an administrator to reconcile your Immich account.', Http::STATUS_BAD_GATEWAY);
         }
 
-        $setCookie = $this->sharedParentDomainCookie((string)$session['setCookie'], $redirectUrl);
-        if ($setCookie === null) {
+        $setCookies = $this->sharedParentDomainCookies((string)$session['setCookie'], $redirectUrl);
+        if ($setCookies === null) {
             return $this->safeError(BrowsingAuthService::HANDOFF_LOGIN_FAILED, 'Immich auto-login requires Nextcloud and Immich to share the same parent domain.', Http::STATUS_BAD_GATEWAY);
         }
 
-        $response = new RedirectResponse($redirectUrl);
-        $response->addHeader('Set-Cookie', $setCookie);
-
-        return $response;
+        return new SharedCookieRedirectResponse($redirectUrl, $setCookies);
     }
 
     private function safeError(string $code, string $message, int $status): JSONResponse {
@@ -91,7 +89,10 @@ class AuthHandoffController extends Controller {
             && !isset($parsed['fragment']);
     }
 
-    private function sharedParentDomainCookie(string $setCookie, string $immichUrl): ?string {
+    /**
+     * @return string[]|null
+     */
+    private function sharedParentDomainCookies(string $setCookie, string $immichUrl): ?array {
         $immichHost = $this->hostFromUrl($immichUrl);
         $nextcloudHost = $this->normalizeHost($this->request->getServerHost());
         if ($immichHost === null || $nextcloudHost === null) {
@@ -129,7 +130,20 @@ class AuthHandoffController extends Controller {
 
         $attributes[] = 'Domain=' . $parentDomain;
 
-        return $nameValue . '; ' . implode('; ', $attributes);
+        $cookieAttributes = implode('; ', $attributes);
+
+        return [
+            $nameValue . '; ' . $cookieAttributes,
+            'immich_auth_type=password; ' . $cookieAttributes,
+            'immich_is_authenticated=true; ' . $this->nonHttpOnlyAttributes($attributes),
+        ];
+    }
+
+    /**
+     * @param string[] $attributes
+     */
+    private function nonHttpOnlyAttributes(array $attributes): string {
+        return implode('; ', array_values(array_filter($attributes, static fn(string $attribute): bool => strcasecmp($attribute, 'HttpOnly') !== 0)));
     }
 
     private function hostFromUrl(string $url): ?string {
