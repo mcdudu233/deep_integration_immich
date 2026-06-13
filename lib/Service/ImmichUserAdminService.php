@@ -106,6 +106,51 @@ class ImmichUserAdminService {
         return $this->withoutPassword($updated);
     }
 
+    public function createUserApiKey(string $email, string $password, string $name = 'Nextcloud Immich integration'): string {
+        $session = $this->loginAsUser($email, $password);
+        $headers = $this->sessionHeaders($session);
+        $response = $this->requestWithHeaders('POST', '/api-keys', [
+            'headers' => $headers,
+            'body' => [
+                'name' => $name,
+                'permissions' => ['all'],
+            ],
+        ]);
+
+        $apiKey = $this->extractCreatedApiKey($response);
+        if ($apiKey === null) {
+            throw new \RuntimeException('Immich API key creation response did not include a secret key.');
+        }
+
+        return $apiKey;
+    }
+
+    public function validateUserLogin(string $email, string $password): array {
+        try {
+            $session = $this->loginAsUser($email, $password);
+            $this->sessionHeaders($session);
+
+            return ['success' => true];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public function validateUserApiKey(string $apiKey): array {
+        try {
+            $response = $this->requestWithHeaders('POST', '/auth/validateToken', [
+                'headers' => [
+                    'x-api-key' => $apiKey,
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            return ['success' => true, 'data' => $response];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     public function disableUser(string $immichUserId): array {
         throw new \RuntimeException('Immich admin API does not expose a non-destructive disable/suspend field for this version.');
     }
@@ -198,6 +243,33 @@ class ImmichUserAdminService {
     }
 
     private function request(string $method, string $endpoint, array $options = [], ?string $baseUrl = null, ?string $apiKey = null): array {
+        $headers = [
+            'x-api-key' => $apiKey ?? $this->adminApiKey(),
+            'Accept' => 'application/json',
+        ];
+
+        return $this->requestWithHeaders($method, $endpoint, ['headers' => $headers] + $options, $baseUrl);
+    }
+
+    private function loginAsUser(string $email, string $password): array {
+        $response = $this->requestWithHeaders('POST', '/auth/login', [
+            'headers' => [
+                'Accept' => 'application/json',
+            ],
+            'body' => [
+                'email' => $email,
+                'password' => $password,
+            ],
+            'captureSetCookie' => true,
+        ]);
+
+        return [
+            'accessToken' => $this->extractAccessToken($response),
+            'setCookie' => is_string($response['_setCookie'] ?? null) ? $response['_setCookie'] : null,
+        ];
+    }
+
+    private function requestWithHeaders(string $method, string $endpoint, array $options = [], ?string $baseUrl = null): array {
         $client = $this->clientService->newClient();
         $url = rtrim($baseUrl ?? $this->adminBaseUrl(), '/') . '/api' . $endpoint;
         if (isset($options['query']) && !empty($options['query'])) {
@@ -205,10 +277,7 @@ class ImmichUserAdminService {
         }
 
         $requestOptions = [
-            'headers' => [
-                'x-api-key' => $apiKey ?? $this->adminApiKey(),
-                'Accept' => 'application/json',
-            ],
+            'headers' => $options['headers'] ?? ['Accept' => 'application/json'],
             'timeout' => 60,
             'http_errors' => false,
         ];
@@ -240,7 +309,12 @@ class ImmichUserAdminService {
             }
 
             $decoded = json_decode($response->getBody(), true);
-            return is_array($decoded) ? $decoded : [];
+            $result = is_array($decoded) ? $decoded : [];
+            if (($options['captureSetCookie'] ?? false) === true) {
+                $result['_setCookie'] = $response->getHeader('Set-Cookie') ?: null;
+            }
+
+            return $result;
         } catch (\Exception $e) {
             $this->logger->error('Immich admin API request failed: ' . $e->getMessage(), [
                 'app' => Application::APP_ID,
@@ -300,6 +374,60 @@ class ImmichUserAdminService {
         }
 
         return '';
+    }
+
+    private function sessionHeaders(array $session): array {
+        $headers = [
+            'Accept' => 'application/json',
+        ];
+
+        $accessToken = $session['accessToken'] ?? null;
+        if (is_string($accessToken) && $accessToken !== '') {
+            $headers['Authorization'] = 'Bearer ' . $accessToken;
+            return $headers;
+        }
+
+        $setCookie = $session['setCookie'] ?? null;
+        if (is_string($setCookie) && trim($setCookie) !== '') {
+            $headers['Cookie'] = $this->cookieHeader($setCookie);
+            return $headers;
+        }
+
+        throw new \RuntimeException('Immich user login did not return a usable session token or cookie.');
+    }
+
+    private function extractAccessToken(array $response): ?string {
+        foreach (['accessToken', 'access_token', 'token'] as $key) {
+            $value = $response[$key] ?? null;
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractCreatedApiKey(array $response): ?string {
+        foreach (['secret', 'apiKey', 'api_key', 'key'] as $key) {
+            $value = $response[$key] ?? null;
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function cookieHeader(string $setCookie): string {
+        $cookies = [];
+        foreach (explode(',', $setCookie) as $cookie) {
+            $pair = trim(explode(';', $cookie, 2)[0]);
+            if ($pair !== '' && str_contains($pair, '=')) {
+                $cookies[] = $pair;
+            }
+        }
+
+        return implode('; ', $cookies);
     }
 
     private function normaliseUsers(array $users): array {

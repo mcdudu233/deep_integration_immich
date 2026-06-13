@@ -284,6 +284,31 @@ class ImmichUserAdminServiceTest extends TestCase {
         ]);
     }
 
+    public function testCreateUserApiKeyLogsInAndCreatesKeyWithBearerToken(): void {
+        $this->client->expects($this->exactly(2))
+            ->method('post')
+            ->willReturnCallback(function (string $url, array $options): IResponse {
+                if ($url === 'https://photos.example.com/api/auth/login') {
+                    $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                    $this->assertSame('alice@example.com', $payload['email']);
+                    $this->assertSame('generated-password', $payload['password']);
+                    $this->assertArrayNotHasKey('x-api-key', $options['headers']);
+                    return $this->response(200, ['accessToken' => 'user-session-token']);
+                }
+
+                $this->assertSame('https://photos.example.com/api/api-keys', $url);
+                $this->assertSame('Bearer user-session-token', $options['headers']['Authorization']);
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertSame('Nextcloud Immich integration', $payload['name']);
+                $this->assertSame(['all'], $payload['permissions']);
+                return $this->response(201, ['secret' => 'user-api-key']);
+            });
+
+        $apiKey = $this->service->createUserApiKey('alice@example.com', 'generated-password');
+
+        $this->assertSame('user-api-key', $apiKey);
+    }
+
     public function testDeleteUserRequiresExplicitAdminPolicy(): void {
         $this->adminConfigService->method('allowsDestructiveUserDelete')->willReturn(false);
         $this->client->expects($this->never())->method('delete');
@@ -317,6 +342,7 @@ class ImmichUserAdminServiceTest extends TestCase {
         $response = $this->createMock(IResponse::class);
         $response->method('getStatusCode')->willReturn($statusCode);
         $response->method('getBody')->willReturn(json_encode($body, JSON_THROW_ON_ERROR));
+        $response->method('getHeader')->willReturn('');
         return $response;
     }
 }
