@@ -98,7 +98,7 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertNull($credentials['immichUserId']);
     }
 
-    public function testResolveCredentialsIgnoresPersonalApiKeyInAdminManagedMode(): void {
+    public function testResolveCredentialsUsesProvisionedUserApiKeyInAdminManagedMode(): void {
         $this->userValues['alice'] = [
             'server_url' => 'https://personal.example.com/',
             'api_key' => 'encrypted:personal-key',
@@ -108,29 +108,46 @@ class BrowsingAuthServiceTest extends TestCase {
         ]);
         $this->adminConfigService->method('isConfigured')->willReturn(true);
         $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
-        $this->adminConfigService->method('getAdminApiKey')->willReturn('admin-key');
-        $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->syncState('alice', 'immich-alice'));
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichApiKey('encrypted:user-api-key');
+        $this->adminConfigService->expects($this->never())->method('getAdminApiKey');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
 
         $credentials = $this->service->resolveCredentials('alice');
 
         $this->assertSame(BrowsingAuthService::MODE_ADMIN_PROXY, $credentials['mode']);
         $this->assertSame('https://admin.example.com', $credentials['url']);
-        $this->assertSame('admin-key', $credentials['apiKey']);
+        $this->assertSame('user-api-key', $credentials['apiKey']);
         $this->assertSame('immich-alice', $credentials['immichUserId']);
+        $this->assertTrue($credentials['usesUserApiKey']);
     }
 
-    public function testResolveCredentialsUsesAdminProxyWhenPersonalKeyIsAbsentAndMappingExists(): void {
+    public function testResolveCredentialsUsesAdminManagedUserApiKeyWhenPersonalKeyIsAbsentAndMappingExists(): void {
         $this->adminConfigService->method('isConfigured')->willReturn(true);
         $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
-        $this->adminConfigService->method('getAdminApiKey')->willReturn('admin-key');
-        $this->syncStateService->method('findByUid')->with('alice')->willReturn($this->syncState('alice', 'immich-alice'));
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichApiKey('encrypted:user-api-key');
+        $this->adminConfigService->expects($this->never())->method('getAdminApiKey');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
 
         $credentials = $this->service->resolveCredentials('alice');
 
         $this->assertSame(BrowsingAuthService::MODE_ADMIN_PROXY, $credentials['mode']);
         $this->assertSame('https://admin.example.com', $credentials['url']);
-        $this->assertSame('admin-key', $credentials['apiKey']);
+        $this->assertSame('user-api-key', $credentials['apiKey']);
         $this->assertSame('immich-alice', $credentials['immichUserId']);
+        $this->assertTrue($credentials['usesUserApiKey']);
+    }
+
+    public function testResolveCredentialsReturnsUnavailableWhenProvisionedUserApiKeyIsMissing(): void {
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $state = $this->syncState('alice', 'immich-alice');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+
+        $credentials = $this->service->resolveCredentials('alice');
+
+        $this->assertSame(BrowsingAuthService::MODE_UNAVAILABLE, $credentials['mode']);
+        $this->assertNull($credentials['apiKey']);
     }
 
     public function testResolveCredentialsReturnsUnavailableWhenMappingIsMissing(): void {
@@ -166,10 +183,8 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertNull($credentials['apiKey']);
     }
 
-    public function testResolveAutoLoginHandoffReturnsStoredUserCredentialsOnlyForMappedAdminManagedUser(): void {
+    public function testResolveAutoLoginHandoffReturnsImmichUrlForMappedAdminManagedUser(): void {
         $state = $this->syncState('alice', 'immich-alice');
-        $state->setImmichUsername('alice@immich.local');
-        $state->setImmichPassword('generated-password');
         $this->adminConfigService->method('getAdminConfig')->willReturn([
             AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
         ]);
@@ -181,8 +196,8 @@ class BrowsingAuthServiceTest extends TestCase {
 
         $this->assertSame(BrowsingAuthService::HANDOFF_READY, $handoff['status']);
         $this->assertSame('https://admin.example.com', $handoff['url']);
-        $this->assertSame('alice@immich.local', $handoff['username']);
-        $this->assertSame('generated-password', $handoff['password']);
+        $this->assertNull($handoff['username']);
+        $this->assertNull($handoff['password']);
         $this->assertSame('immich-alice', $handoff['immichUserId']);
     }
 
@@ -200,13 +215,13 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertNull($handoff['password']);
     }
 
-    public function testResolveAutoLoginHandoffRejectsMappedUsersWithoutStoredPassword(): void {
+    public function testLegacyPasswordLoginHandoffRejectsMappedUsersWithoutStoredPassword(): void {
         $state = $this->syncState('alice', 'immich-alice');
         $state->setImmichUsername('alice@immich.local');
         $this->adminConfigService->method('isConfigured')->willReturn(true);
         $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
 
-        $handoff = $this->service->resolveAutoLoginHandoff('alice');
+        $handoff = $this->service->resolveLegacyPasswordLoginHandoff('alice');
 
         $this->assertSame(BrowsingAuthService::HANDOFF_CREDENTIALS_MISSING, $handoff['status']);
         $this->assertNull($handoff['password']);

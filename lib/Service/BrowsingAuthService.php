@@ -42,7 +42,7 @@ class BrowsingAuthService {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool}
      */
     public function resolveCredentials(string $ncUid): array {
         if ($this->browsingMode() === AdminConfigService::BROWSING_MODE_PERSONAL) {
@@ -58,11 +58,17 @@ class BrowsingAuthService {
             return $this->unavailableCredentials();
         }
 
+        $apiKey = $this->mappedUserApiKey($syncState);
+        if ($apiKey === null) {
+            return $this->unavailableCredentials();
+        }
+
         return [
             'mode' => self::MODE_ADMIN_PROXY,
             'url' => $this->adminConfigService->getImmichBaseUrl(),
-            'apiKey' => $this->adminConfigService->getAdminApiKey(),
+            'apiKey' => $apiKey,
             'immichUserId' => $syncState->getImmichUserId(),
+            'usesUserApiKey' => true,
         ];
     }
 
@@ -70,6 +76,28 @@ class BrowsingAuthService {
      * @return array{status: string, url: string, username: string|null, password: string|null, immichUserId: string|null}
      */
     public function resolveAutoLoginHandoff(string $ncUid): array {
+        if ($this->browsingMode() === AdminConfigService::BROWSING_MODE_PERSONAL) {
+            $credentials = $this->resolvePersonalCredentials($ncUid);
+            if ($credentials === null) {
+                return $this->handoffUnavailable(self::HANDOFF_PERSONAL_MODE);
+            }
+
+            return $this->handoffReady($credentials['url'], null, null, null);
+        }
+
+        if (!$this->adminConfigService->isConfigured()) {
+            return $this->handoffUnavailable(self::HANDOFF_ADMIN_CONFIG_MISSING);
+        }
+
+        $syncState = $this->syncStateService->findByUid($ncUid);
+        if (!$this->mappingAllowsBrowsing($syncState)) {
+            return $this->handoffUnavailable(self::HANDOFF_UNMAPPED);
+        }
+
+        return $this->handoffReady($this->adminConfigService->getImmichBaseUrl(), null, null, $syncState->getImmichUserId());
+    }
+
+    public function resolveLegacyPasswordLoginHandoff(string $ncUid): array {
         if ($this->browsingMode() === AdminConfigService::BROWSING_MODE_PERSONAL) {
             return $this->handoffUnavailable(self::HANDOFF_PERSONAL_MODE);
         }
@@ -207,7 +235,7 @@ class BrowsingAuthService {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|null
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool}|null
      */
     private function resolvePersonalCredentials(string $ncUid): ?array {
         $url = rtrim(trim((string)$this->config->getUserValue($ncUid, Application::APP_ID, self::CONFIG_SERVER_URL, '')), '/');
@@ -238,7 +266,7 @@ class BrowsingAuthService {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: null, immichUserId: null}
+     * @return array{mode: string, url: string, apiKey: null, immichUserId: null, usesUserApiKey?: bool}
      */
     private function unavailableCredentials(): array {
         return [
@@ -262,6 +290,19 @@ class BrowsingAuthService {
         ];
     }
 
+    /**
+     * @return array{status: string, url: string, username: string|null, password: string|null, immichUserId: string|null}
+     */
+    private function handoffReady(string $url, ?string $username, ?string $password, ?string $immichUserId): array {
+        return [
+            'status' => self::HANDOFF_READY,
+            'url' => $url,
+            'username' => $username,
+            'password' => $password,
+            'immichUserId' => $immichUserId,
+        ];
+    }
+
     private function mappingAllowsBrowsing(?SyncState $syncState): bool {
         if ($syncState === null || trim((string)$syncState->getImmichUserId()) === '') {
             return false;
@@ -271,6 +312,23 @@ class BrowsingAuthService {
             SyncStateService::STATUS_DISABLED,
             SyncStateService::STATUS_DELETED,
         ], true);
+    }
+
+    private function mappedUserApiKey(SyncState $syncState): ?string {
+        $apiKey = $syncState->getImmichApiKey();
+        if (!is_string($apiKey) || $apiKey === '') {
+            return null;
+        }
+
+        try {
+            return $this->crypto->decrypt($apiKey);
+        } catch (\Throwable) {
+            $this->logger->warning('ICrypto decrypt failed for provisioned Immich api key; assuming legacy plaintext value. Reconcile this user to re-save the key encrypted.', [
+                'app' => Application::APP_ID,
+                'immichUserId' => (string)$syncState->getImmichUserId(),
+            ]);
+            return $apiKey;
+        }
     }
 
     private function adminAssetService(): ImmichAssetService {
