@@ -222,6 +222,20 @@ class PeopleControllerOwnershipTest extends TestCase {
         $this->assertInstanceOf(DataDownloadResponse::class, $response);
     }
 
+    public function testThumbnailUsesProvisionedUserApiKeyWithoutLegacyOwnershipFiltering(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->adminManagedUserCredentials());
+        $this->browsingAuthService->expects($this->never())->method('assetBelongsToUser');
+        $this->browsingAuthService->expects($this->never())->method('assertAssetOwnership');
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('get')
+            ->willReturn($this->binaryResponse('image-bytes', 'image/jpeg'));
+
+        $response = $this->controller->thumbnail(self::PERSON_ONE);
+
+        $this->assertInstanceOf(DataDownloadResponse::class, $response);
+    }
+
     private function personalCredentials(): array {
         return [
             'mode' => BrowsingAuthService::MODE_PERSONAL,
@@ -237,6 +251,16 @@ class PeopleControllerOwnershipTest extends TestCase {
             'url' => 'https://admin.example.com',
             'apiKey' => 'admin-key',
             'immichUserId' => 'immich-alice',
+        ];
+    }
+
+    private function adminManagedUserCredentials(): array {
+        return [
+            'mode' => BrowsingAuthService::MODE_ADMIN_PROXY,
+            'url' => 'https://admin.example.com',
+            'apiKey' => 'user-key',
+            'immichUserId' => 'immich-alice',
+            'usesUserApiKey' => true,
         ];
     }
 

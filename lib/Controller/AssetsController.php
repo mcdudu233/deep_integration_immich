@@ -483,7 +483,7 @@ class AssetsController extends Controller {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|JSONResponse
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool}|JSONResponse
      */
     private function resolveBrowsingCredentials(): array|JSONResponse {
         if ($this->userId === null) {
@@ -515,7 +515,7 @@ class AssetsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function assetService(array $credentials): ImmichAssetService {
         return new ImmichAssetService(
@@ -526,10 +526,10 @@ class AssetsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function ensureAssetOwnership(array $credentials, string $assetId): ?JSONResponse {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return null;
         }
 
@@ -542,7 +542,7 @@ class AssetsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      * @param string[] $assetIds
      */
     private function ensureAssetIdsOwnership(array $credentials, array $assetIds): ?JSONResponse {
@@ -561,10 +561,10 @@ class AssetsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function assetResponseIsAuthorized(array $credentials, array $asset, string $assetId): bool {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return true;
         }
 
@@ -578,10 +578,10 @@ class AssetsController extends Controller {
 
     /**
      * @param array<int, mixed> $assets
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterAssetListForBrowsing(array $assets, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $assets;
         }
 
@@ -623,7 +623,7 @@ class AssetsController extends Controller {
 
     /**
      * @param array<int, mixed> $buckets
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterTimelineBucketsForBrowsing(
         ImmichAssetService $assetService,
@@ -634,7 +634,7 @@ class AssetsController extends Controller {
         ?string $assetType,
         bool $isFavorite,
     ): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $buckets;
         }
 
@@ -723,5 +723,13 @@ class AssetsController extends Controller {
 
         // Fallback: append a unique suffix to guarantee uniqueness
         return $name . ' (' . uniqid('', true) . ')' . $ext;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
+     */
+    private function requiresServerSideOwnershipChecks(array $credentials): bool {
+        return ($credentials['mode'] ?? '') === BrowsingAuthService::MODE_ADMIN_PROXY
+            && ($credentials['usesUserApiKey'] ?? false) !== true;
     }
 }

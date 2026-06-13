@@ -128,7 +128,7 @@ class PeopleController extends Controller {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|JSONResponse
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool}|JSONResponse
      */
     private function resolveBrowsingCredentials(): array|JSONResponse {
         if ($this->userId === null) {
@@ -160,7 +160,7 @@ class PeopleController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function assetService(array $credentials): ImmichAssetService {
         return new ImmichAssetService(
@@ -176,10 +176,10 @@ class PeopleController extends Controller {
 
     /**
      * @param array<int, mixed> $people
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterPeopleForBrowsing(ImmichAssetService $assetService, array $people, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $people;
         }
 
@@ -206,11 +206,11 @@ class PeopleController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      * @return array<int, array<string, mixed>>
      */
     private function personAssetsForBrowsing(ImmichAssetService $assetService, array $credentials, string $personId): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $assetService->getPersonAssets($personId);
         }
 
@@ -225,10 +225,10 @@ class PeopleController extends Controller {
 
     /**
      * @param array<int, mixed> $assets
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterAssetListForBrowsing(array $assets, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $assets;
         }
 
@@ -307,5 +307,13 @@ class PeopleController extends Controller {
         }
 
         return null;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
+     */
+    private function requiresServerSideOwnershipChecks(array $credentials): bool {
+        return ($credentials['mode'] ?? '') === BrowsingAuthService::MODE_ADMIN_PROXY
+            && ($credentials['usesUserApiKey'] ?? false) !== true;
     }
 }

@@ -214,6 +214,27 @@ class AlbumsControllerOwnershipTest extends TestCase {
         $this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
     }
 
+    public function testThumbnailUsesProvisionedUserApiKeyWithoutLegacyOwnershipFiltering(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->adminManagedUserCredentials());
+        $this->browsingAuthService->expects($this->never())->method('assetBelongsToUser');
+        $this->browsingAuthService->expects($this->never())->method('assertAssetOwnership');
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->exactly(2))
+            ->method('get')
+            ->willReturnOnConsecutiveCalls(
+                $this->jsonResponse([
+                    'id' => self::ALBUM_ONE,
+                    'ownerId' => 'immich-alice',
+                    'albumThumbnailAssetId' => self::ASSET_ONE,
+                ]),
+                $this->binaryResponse('image-bytes', 'image/jpeg'),
+            );
+
+        $response = $this->controller->thumbnail(self::ALBUM_ONE);
+
+        $this->assertSame(Http::STATUS_OK, $response->getStatus());
+    }
+
     private function personalCredentials(): array {
         return [
             'mode' => BrowsingAuthService::MODE_PERSONAL,
@@ -232,11 +253,29 @@ class AlbumsControllerOwnershipTest extends TestCase {
         ];
     }
 
+    private function adminManagedUserCredentials(): array {
+        return [
+            'mode' => BrowsingAuthService::MODE_ADMIN_PROXY,
+            'url' => 'https://admin.example.com',
+            'apiKey' => 'user-key',
+            'immichUserId' => 'immich-alice',
+            'usesUserApiKey' => true,
+        ];
+    }
+
     private function jsonResponse(array $body): IResponse&MockObject {
         $response = $this->createMock(IResponse::class);
         $response->method('getStatusCode')->willReturn(200);
         $response->method('getBody')->willReturn(json_encode($body, JSON_THROW_ON_ERROR));
         $response->method('getHeader')->willReturn('');
+        return $response;
+    }
+
+    private function binaryResponse(string $body, string $contentType): IResponse&MockObject {
+        $response = $this->createMock(IResponse::class);
+        $response->method('getStatusCode')->willReturn(200);
+        $response->method('getBody')->willReturn($body);
+        $response->method('getHeader')->with('Content-Type')->willReturn($contentType);
         return $response;
     }
 }

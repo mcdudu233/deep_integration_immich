@@ -164,6 +164,23 @@ class AssetsControllerOwnershipTest extends TestCase {
         $this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
     }
 
+    public function testThumbnailUsesProvisionedUserApiKeyWithoutLegacyOwnershipPrecheck(): void {
+        $this->browsingAuthService->method('resolveCredentials')->willReturn($this->adminManagedUserCredentials());
+        $this->browsingAuthService->expects($this->never())->method('assertAssetOwnership');
+        $this->clientService->method('newClient')->willReturn($this->client);
+        $this->client->expects($this->once())
+            ->method('get')
+            ->with('https://admin.example.com/api/assets/' . self::ASSET_ONE . '/thumbnail?size=thumbnail', $this->callback(function (array $options): bool {
+                $this->assertSame('user-key', $options['headers']['x-api-key']);
+                return true;
+            }))
+            ->willReturn($this->binaryResponse('image-bytes'));
+
+        $response = $this->controller->thumbnail(self::ASSET_ONE);
+
+        $this->assertSame(Http::STATUS_OK, $response->getStatus());
+    }
+
     public function testOriginalChecksOwnershipBeforeStreamingBinary(): void {
         $this->browsingAuthService->method('resolveCredentials')->willReturn($this->adminProxyCredentials());
         $this->browsingAuthService->method('assertAssetOwnership')->with('immich-alice', self::ASSET_ONE)->willReturn(false);
@@ -261,6 +278,16 @@ class AssetsControllerOwnershipTest extends TestCase {
         ];
     }
 
+    private function adminManagedUserCredentials(): array {
+        return [
+            'mode' => BrowsingAuthService::MODE_ADMIN_PROXY,
+            'url' => 'https://admin.example.com',
+            'apiKey' => 'user-key',
+            'immichUserId' => 'immich-alice',
+            'usesUserApiKey' => true,
+        ];
+    }
+
     private function unavailableCredentials(): array {
         return [
             'mode' => BrowsingAuthService::MODE_UNAVAILABLE,
@@ -277,4 +304,13 @@ class AssetsControllerOwnershipTest extends TestCase {
         $response->method('getHeader')->willReturn('');
         return $response;
     }
+
+    private function binaryResponse(string $body): IResponse&MockObject {
+        $response = $this->createMock(IResponse::class);
+        $response->method('getStatusCode')->willReturn(200);
+        $response->method('getBody')->willReturn($body);
+        $response->method('getHeader')->willReturnCallback(static fn(string $header): string => $header === 'Content-Type' ? 'image/jpeg' : '');
+        return $response;
+    }
+
 }

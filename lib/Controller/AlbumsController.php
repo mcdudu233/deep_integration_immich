@@ -324,7 +324,7 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null}|JSONResponse
+     * @return array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool}|JSONResponse
      */
     private function resolveBrowsingCredentials(): array|JSONResponse {
         if ($this->userId === null) {
@@ -356,7 +356,7 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function assetService(array $credentials): ImmichAssetService {
         return new ImmichAssetService(
@@ -367,10 +367,10 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function ensureAlbumOwnershipById(ImmichAssetService $assetService, array $credentials, string $albumId): ?JSONResponse {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return null;
         }
 
@@ -383,10 +383,10 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function ensureAssetOwnership(array $credentials, string $assetId): ?JSONResponse {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return null;
         }
 
@@ -399,7 +399,7 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      * @param string[] $assetIds
      */
     private function ensureAssetIdsOwnership(array $credentials, array $assetIds): ?JSONResponse {
@@ -418,10 +418,10 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function albumResponseIsAuthorized(array $credentials, array $album): bool {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return true;
         }
 
@@ -456,10 +456,10 @@ class AlbumsController extends Controller {
 
     /**
      * @param array<int, mixed> $albums
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterAlbumListForBrowsing(ImmichAssetService $assetService, array $albums, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $albums;
         }
 
@@ -502,10 +502,10 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function sanitizeAlbumForBrowsing(array $album, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $album;
         }
 
@@ -522,10 +522,10 @@ class AlbumsController extends Controller {
 
     /**
      * @param array<int, mixed> $assets
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function filterAssetListForBrowsing(array $assets, array $credentials): array {
-        if (($credentials['mode'] ?? '') !== BrowsingAuthService::MODE_ADMIN_PROXY) {
+        if (!$this->requiresServerSideOwnershipChecks($credentials)) {
             return $assets;
         }
 
@@ -545,7 +545,7 @@ class AlbumsController extends Controller {
     }
 
     /**
-     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null} $credentials
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
      */
     private function ownedThumbnailAssetId(array $album, array $credentials): ?string {
         $thumbnailAssetId = $album['albumThumbnailAssetId'] ?? null;
@@ -597,5 +597,13 @@ class AlbumsController extends Controller {
         }
 
         return null;
+    }
+
+    /**
+     * @param array{mode: string, url: string, apiKey: string|null, immichUserId: string|null, usesUserApiKey?: bool} $credentials
+     */
+    private function requiresServerSideOwnershipChecks(array $credentials): bool {
+        return ($credentials['mode'] ?? '') === BrowsingAuthService::MODE_ADMIN_PROXY
+            && ($credentials['usesUserApiKey'] ?? false) !== true;
     }
 }
