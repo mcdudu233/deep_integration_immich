@@ -47,6 +47,7 @@ class SyncStateService {
         'immichEmail',
         'immichUsername',
         'immichPassword',
+        'immichApiKey',
         'storageLabel',
         'ncMountId',
         'scopeStatus',
@@ -203,6 +204,9 @@ class SyncStateService {
                 break;
             case 'immichPassword':
                 $syncState->setImmichPassword($this->nullableString($value, $field));
+                break;
+            case 'immichApiKey':
+                $syncState->setImmichApiKey($this->nullableString($value, $field));
                 break;
             case 'storageLabel':
                 $label = $this->stringValue($value, $field);

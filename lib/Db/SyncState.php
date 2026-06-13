@@ -25,6 +25,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setImmichUsername(?string $immichUsername)
  * @method string|null getImmichPassword()
  * @method void setImmichPassword(?string $immichPassword)
+ * @method string|null getImmichApiKey()
+ * @method void setImmichApiKey(?string $immichApiKey)
  * @method string getStorageLabel()
  * @method void setStorageLabel(string $storageLabel)
  * @method int|null getNcMountId()
@@ -42,6 +44,7 @@ class SyncState extends Entity implements JsonSerializable {
     protected ?string $immichEmail = null;
     protected ?string $immichUsername = null;
     protected ?string $immichPassword = null;
+    protected ?string $immichApiKey = null;
     protected string $storageLabel = '';
     protected ?int $ncMountId = null;
     protected string $scopeStatus = 'pending';
@@ -58,6 +61,7 @@ class SyncState extends Entity implements JsonSerializable {
         $this->addType('immichEmail', 'string');
         $this->addType('immichUsername', 'string');
         $this->addType('immichPassword', 'string');
+        $this->addType('immichApiKey', 'string');
         $this->addType('storageLabel', 'string');
         $this->addType('ncMountId', 'integer');
         $this->addType('scopeStatus', 'string');
@@ -100,6 +104,19 @@ class SyncState extends Entity implements JsonSerializable {
 
         $this->markFieldUpdated('immichPassword');
         $this->immichPassword = $immichPassword === null ? null : (string)$immichPassword;
+    }
+
+    public function getImmichApiKey(): ?string {
+        return $this->immichApiKey;
+    }
+
+    public function setImmichApiKey(mixed $immichApiKey): void {
+        if ($this->immichApiKey === $immichApiKey) {
+            return;
+        }
+
+        $this->markFieldUpdated('immichApiKey');
+        $this->immichApiKey = $immichApiKey === null ? null : (string)$immichApiKey;
     }
 
     public function setLastQuotaSyncAt(mixed $lastQuotaSyncAt): void {
