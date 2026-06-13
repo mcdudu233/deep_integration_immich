@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Controller;
 
 use OCA\IntegrationImmich\Controller\ConfigController;
+use OCA\IntegrationImmich\Db\SyncState;
 use OCA\IntegrationImmich\Service\ActionPolicyService;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\ImmichUserAdminService;
+use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
+use OCP\Security\ICrypto;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LoggerInterface;
 use Test\TestCase;
@@ -18,6 +23,10 @@ class ConfigControllerTest extends TestCase {
 	private ConfigController $controller;
 	private ImmichService&MockObject $immichService;
 	private ActionPolicyService&MockObject $actionPolicyService;
+	private AdminConfigService&MockObject $adminConfigService;
+	private SyncStateService&MockObject $syncStateService;
+	private ImmichUserAdminService&MockObject $immichUserAdminService;
+	private ICrypto&MockObject $crypto;
 	private IRequest&MockObject $request;
 	private LoggerInterface&MockObject $logger;
 
@@ -26,6 +35,10 @@ class ConfigControllerTest extends TestCase {
 
 		$this->immichService = $this->createMock(ImmichService::class);
 		$this->actionPolicyService = $this->createMock(ActionPolicyService::class);
+		$this->adminConfigService = $this->createMock(AdminConfigService::class);
+		$this->syncStateService = $this->createMock(SyncStateService::class);
+		$this->immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
+		$this->crypto = $this->createMock(ICrypto::class);
 		$this->request = $this->createMock(IRequest::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->actionPolicyService->method('getCapabilityFlags')->with('testuser')->willReturn([
@@ -34,11 +47,27 @@ class ConfigControllerTest extends TestCase {
 			'immichDeleteEnabled' => false,
 			'mirrorMountPaths' => [],
 		]);
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
+		]);
+		$this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://photos.example.com');
+		$this->crypto->method('decrypt')->willReturnCallback(static function (string $value): string {
+			if (str_starts_with($value, 'encrypted:')) {
+				return substr($value, strlen('encrypted:'));
+			}
+
+			throw new \RuntimeException('not encrypted');
+		});
+		$this->crypto->method('encrypt')->willReturnCallback(static fn(string $value): string => 'encrypted:' . $value);
 
 		$this->controller = new ConfigController(
 			$this->request,
 			$this->immichService,
 			$this->actionPolicyService,
+			$this->adminConfigService,
+			$this->syncStateService,
+			$this->immichUserAdminService,
+			$this->crypto,
 			'testuser',
 			$this->logger,
 		);
@@ -56,6 +85,31 @@ class ConfigControllerTest extends TestCase {
 		$this->assertTrue($data['api_key_set']);
 		$this->assertSame(false, $data['actionCapabilities']['exportCopyEnabled']);
 		$this->assertArrayNotHasKey('api_key_masked', $data);
+		$this->assertFalse($data['admin_managed_connection']['enabled']);
+	}
+
+	public function testGetConfigReturnsAdminManagedMappedConnectionDefaults(): void {
+		$state = new SyncState();
+		$state->setNcUid('testuser');
+		$state->setImmichUserId('immich-user');
+		$state->setImmichUsername('alice@immich.local');
+		$state->setImmichPassword('generated-password');
+		$state->setImmichApiKey('encrypted:user-api-key');
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
+		]);
+		$this->syncStateService->method('findByUid')->with('testuser')->willReturn($state);
+
+		$response = $this->controller->getConfig();
+		$connection = $response->getData()['admin_managed_connection'];
+
+		$this->assertTrue($connection['enabled']);
+		$this->assertTrue($connection['mapped']);
+		$this->assertSame('https://photos.example.com', $connection['server_url']);
+		$this->assertSame('alice@immich.local', $connection['username']);
+		$this->assertSame('generated-password', $connection['password']);
+		$this->assertSame('user-api-key', $connection['api_key']);
+		$this->assertTrue($connection['api_key_set']);
 	}
 
 	public function testGetConfigReturnsApiKeyNotSetWhenEmpty(): void {
@@ -143,6 +197,70 @@ class ConfigControllerTest extends TestCase {
 		$this->assertSame('Connection refused with api_key=[redacted]', $data['error']['details']['detail']);
 		$this->assertSame('Connection refused with api_key=[redacted]', $data['detail']);
 		$this->assertStringNotContainsString('test-api-key-redacted', $encoded);
+	}
+
+	public function testSetAdminManagedConnectionValidatesBothCredentialsBeforeSaving(): void {
+		$state = new SyncState();
+		$state->setNcUid('testuser');
+		$state->setImmichUserId('immich-user');
+		$state->setImmichApiKey('encrypted:old-api-key');
+		$this->request->method('getParam')->willReturnMap([
+			['immich_username', null, 'alice@immich.local'],
+			['immich_password', null, 'generated-password'],
+			['immich_api_key', null, 'new-api-key'],
+			['immich_username', '', 'alice@immich.local'],
+			['immich_password', '', 'generated-password'],
+			['immich_api_key', '', 'new-api-key'],
+		]);
+		$this->syncStateService->method('findByUid')->with('testuser')->willReturn($state);
+		$this->immichUserAdminService->expects($this->once())
+			->method('validateUserLogin')
+			->with('alice@immich.local', 'generated-password')
+			->willReturn(['success' => true]);
+		$this->immichUserAdminService->expects($this->once())
+			->method('validateUserApiKey')
+			->with('new-api-key')
+			->willReturn(['success' => true]);
+		$this->syncStateService->expects($this->once())
+			->method('updateMapping')
+			->with('testuser', [
+				'immichUsername' => 'alice@immich.local',
+				'immichPassword' => 'generated-password',
+				'immichApiKey' => 'encrypted:new-api-key',
+			]);
+
+		$response = $this->controller->setConfig();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+	}
+
+	public function testSetAdminManagedConnectionRejectsInvalidApiKeyWithoutSaving(): void {
+		$state = new SyncState();
+		$state->setNcUid('testuser');
+		$state->setImmichUserId('immich-user');
+		$this->request->method('getParam')->willReturnMap([
+			['immich_username', null, 'alice@immich.local'],
+			['immich_password', null, 'generated-password'],
+			['immich_api_key', null, 'bad-api-key'],
+			['immich_username', '', 'alice@immich.local'],
+			['immich_password', '', 'generated-password'],
+			['immich_api_key', '', 'bad-api-key'],
+		]);
+		$this->syncStateService->method('findByUid')->with('testuser')->willReturn($state);
+		$this->immichUserAdminService->method('validateUserLogin')->willReturn(['success' => true]);
+		$this->immichUserAdminService->method('validateUserApiKey')->willReturn([
+			'success' => false,
+			'error' => 'Invalid api_key=bad-api-key',
+		]);
+		$this->syncStateService->expects($this->never())->method('updateMapping');
+
+		$response = $this->controller->setConfig();
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('immich_api_key_validation_failed', $data['error']['code']);
+		$this->assertSame('Invalid api_key=[redacted]', $data['error']['details']['detail']);
 	}
 
 }

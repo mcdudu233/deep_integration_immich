@@ -12,13 +12,17 @@ namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Service\ActionPolicyService;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\ImmichUserAdminService;
+use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
+use OCP\Security\ICrypto;
 use Psr\Log\LoggerInterface;
 
 class ConfigController extends Controller {
@@ -26,6 +30,10 @@ class ConfigController extends Controller {
         IRequest $request,
         private ImmichService $immichService,
         private ActionPolicyService $actionPolicyService,
+        private AdminConfigService $adminConfigService,
+        private SyncStateService $syncStateService,
+        private ImmichUserAdminService $immichUserAdminService,
+        private ICrypto $crypto,
         private ?string $userId,
         private LoggerInterface $logger,
     ) {
@@ -39,11 +47,16 @@ class ConfigController extends Controller {
             'server_url' => $this->immichService->getServerUrl(),
             'api_key_set' => $this->immichService->getApiKey() !== '',
             'actionCapabilities' => $this->actionPolicyService->getCapabilityFlags($this->userId),
+            'admin_managed_connection' => $this->adminManagedConnectionState(),
         ]);
     }
 
     #[NoAdminRequired]
     public function setConfig(): JSONResponse {
+        if ($this->isAdminManagedConnectionUpdate()) {
+            return $this->setAdminManagedConnection();
+        }
+
         $serverUrl = $this->request->getParam('server_url');
         $apiKey = $this->request->getParam('api_key');
         $validate = $this->request->getParam('validate', false);
@@ -99,6 +112,117 @@ class ConfigController extends Controller {
         }
 
         return new JSONResponse(['success' => true]);
+    }
+
+    private function setAdminManagedConnection(): JSONResponse {
+        if ($this->userId === null || trim($this->userId) === '') {
+            return new JSONResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+
+        $state = $this->syncStateService->findByUid($this->userId);
+        if ($state === null || trim((string)$state->getImmichUserId()) === '') {
+            return $this->errorResponse('mapping_missing', 'No active Immich mapping exists for this Nextcloud user.', Http::STATUS_PRECONDITION_FAILED);
+        }
+
+        $username = trim((string)$this->request->getParam('immich_username', ''));
+        $password = (string)$this->request->getParam('immich_password', '');
+        $apiKey = trim((string)$this->request->getParam('immich_api_key', ''));
+        $storedApiKey = $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
+        $effectiveApiKey = $apiKey !== '' ? $apiKey : $storedApiKey;
+
+        if ($username === '' || $password === '' || $effectiveApiKey === '') {
+            return $this->errorResponse('connection_fields_required', 'Immich username, password, and API key are required.', Http::STATUS_BAD_REQUEST);
+        }
+
+        $loginValidation = $this->immichUserAdminService->validateUserLogin($username, $password);
+        if (($loginValidation['success'] ?? false) !== true) {
+            return $this->errorResponse('immich_login_validation_failed', 'Immich username/password validation failed.', Http::STATUS_BAD_REQUEST, [
+                'detail' => $this->redactString((string)($loginValidation['error'] ?? 'unknown')),
+            ]);
+        }
+
+        $apiKeyValidation = $this->immichUserAdminService->validateUserApiKey($effectiveApiKey);
+        if (($apiKeyValidation['success'] ?? false) !== true) {
+            return $this->errorResponse('immich_api_key_validation_failed', 'Immich API key validation failed.', Http::STATUS_BAD_REQUEST, [
+                'detail' => $this->redactString((string)($apiKeyValidation['error'] ?? 'unknown')),
+            ]);
+        }
+
+        $fields = [
+            'immichUsername' => $username,
+            'immichPassword' => $password,
+        ];
+        if ($apiKey !== '') {
+            $fields['immichApiKey'] = $this->crypto->encrypt($apiKey);
+        }
+
+        $this->syncStateService->updateMapping($this->userId, $fields);
+
+        return new JSONResponse([
+            'success' => true,
+            'admin_managed_connection' => [
+                'enabled' => true,
+                'server_url' => $this->adminConfigService->getImmichBaseUrl(),
+                'username' => $username,
+                'password' => $password,
+                'api_key_set' => true,
+            ],
+        ]);
+    }
+
+    private function isAdminManagedConnectionUpdate(): bool {
+        foreach (['immich_username', 'immich_password', 'immich_api_key'] as $key) {
+            if ($this->request->getParam($key, null) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function adminManagedConnectionState(): array {
+        $config = $this->adminConfigService->getAdminConfig();
+        $adminManaged = ($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) === AdminConfigService::BROWSING_MODE_ADMIN_MANAGED;
+        if (!$adminManaged || $this->userId === null) {
+            return ['enabled' => false];
+        }
+
+        $state = $this->syncStateService->findByUid($this->userId);
+        if ($state === null) {
+            return [
+                'enabled' => true,
+                'mapped' => false,
+                'server_url' => $this->adminConfigService->getImmichBaseUrl(),
+                'username' => '',
+                'password' => '',
+                'api_key' => '',
+                'api_key_set' => false,
+            ];
+        }
+
+        $apiKey = $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
+
+        return [
+            'enabled' => true,
+            'mapped' => trim((string)$state->getImmichUserId()) !== '',
+            'server_url' => $this->adminConfigService->getImmichBaseUrl(),
+            'username' => (string)($state->getImmichUsername() ?? ''),
+            'password' => (string)($state->getImmichPassword() ?? ''),
+            'api_key' => $apiKey,
+            'api_key_set' => $apiKey !== '',
+        ];
+    }
+
+    private function decryptNullable(string $value): string {
+        if ($value === '') {
+            return '';
+        }
+
+        try {
+            return $this->crypto->decrypt($value);
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     private function errorResponse(string $code, string $message, int $status, array $details = [], array $legacy = []): JSONResponse {

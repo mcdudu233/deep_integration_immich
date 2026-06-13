@@ -39,11 +39,6 @@ class SettingsRegistrationTest extends TestCase {
         $immichService = $this->createMock(ImmichService::class);
         $immichService->method('getServerUrl')->willReturn('https://photos.example.com');
         $immichService->method('getApiKey')->willReturn('');
-        $adminConfigService = $this->createMock(AdminConfigService::class);
-        $adminConfigService->method('getAdminConfig')->willReturn([
-            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
-            AdminConfigService::KEY_PROVISIONING_ENABLED => false,
-        ]);
         $frontendInitialStateService = $this->createMock(FrontendInitialStateService::class);
         $frontendInitialStateService->method('buildAdminState')->willReturn([
             'server_url' => 'https://photos.example.com',
@@ -71,7 +66,7 @@ class SettingsRegistrationTest extends TestCase {
             });
 
         $adminSettings = new AdminSettings($frontendInitialStateService, $initialState);
-        $personalSettings = new PersonalSettings($immichService, $adminConfigService, $frontendInitialStateService, $initialState, $userSession);
+        $personalSettings = new PersonalSettings($immichService, $frontendInitialStateService, $initialState, $userSession);
 
         $this->assertSame(AdminSection::SECTION_ID, $adminSettings->getSection());
         $this->assertSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
@@ -101,34 +96,24 @@ class SettingsRegistrationTest extends TestCase {
         $this->assertSame('personalSettings', $personalForm->getTemplateName());
     }
 
-    public function testPersonalSettingsSectionIsHiddenWhenAdminManagedModeIsEnabled(): void {
+    public function testPersonalSettingsSectionIsVisibleWhenAdminManagedModeIsEnabled(): void {
         $immichService = $this->createMock(ImmichService::class);
-        $adminConfigService = $this->createMock(AdminConfigService::class);
-        $adminConfigService->method('getAdminConfig')->willReturn([
-            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
-            AdminConfigService::KEY_PROVISIONING_ENABLED => true,
-        ]);
         $frontendInitialStateService = $this->createMock(FrontendInitialStateService::class);
         $initialState = $this->createMock(IInitialState::class);
         $userSession = $this->createMock(IUserSession::class);
 
-        $personalSettings = new PersonalSettings($immichService, $adminConfigService, $frontendInitialStateService, $initialState, $userSession);
+        $personalSettings = new PersonalSettings($immichService, $frontendInitialStateService, $initialState, $userSession);
 
-        $this->assertNotSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
+        $this->assertSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
     }
 
     public function testPersonalSettingsSectionIsVisibleInPersonalModeEvenWhenProvisioningIsEnabled(): void {
         $immichService = $this->createMock(ImmichService::class);
-        $adminConfigService = $this->createMock(AdminConfigService::class);
-        $adminConfigService->method('getAdminConfig')->willReturn([
-            AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_PERSONAL,
-            AdminConfigService::KEY_PROVISIONING_ENABLED => true,
-        ]);
         $frontendInitialStateService = $this->createMock(FrontendInitialStateService::class);
         $initialState = $this->createMock(IInitialState::class);
         $userSession = $this->createMock(IUserSession::class);
 
-        $personalSettings = new PersonalSettings($immichService, $adminConfigService, $frontendInitialStateService, $initialState, $userSession);
+        $personalSettings = new PersonalSettings($immichService, $frontendInitialStateService, $initialState, $userSession);
 
         $this->assertSame(PersonalSection::SECTION_ID, $personalSettings->getSection());
     }

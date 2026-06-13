@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Settings;
 
 use OCA\IntegrationImmich\AppInfo\Application;
-use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\FrontendInitialStateService;
 use OCA\IntegrationImmich\Service\ImmichService;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -20,11 +19,8 @@ use OCP\IUserSession;
 use OCP\Settings\ISettings;
 
 class PersonalSettings implements ISettings {
-    private const HIDDEN_SECTION_ID = 'deep_integration_immich-personal-hidden';
-
     public function __construct(
         private ImmichService $immichService,
-        private AdminConfigService $adminConfigService,
         private FrontendInitialStateService $frontendInitialStateService,
         private IInitialState $initialState,
         private IUserSession $userSession,
@@ -42,11 +38,6 @@ class PersonalSettings implements ISettings {
     }
 
     public function getSection(): string {
-        $config = $this->adminConfigService->getAdminConfig();
-        if (($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) === AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) {
-            return self::HIDDEN_SECTION_ID;
-        }
-
         return PersonalSection::SECTION_ID;
     }
 
