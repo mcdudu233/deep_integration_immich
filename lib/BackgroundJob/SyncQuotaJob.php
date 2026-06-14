@@ -181,6 +181,7 @@ class SyncQuotaJob extends QueuedJob {
             'non_immich_used' => $quotaDetails['nonImmichUsed'] ?? null,
             'reserve' => $quotaDetails['reserve'] ?? 0,
             'computed_immich_quota' => $quotaDetails['computedImmichQuota'] ?? null,
+            'usage_refresh' => $quotaDetails['usageRefresh'] ?? null,
         ];
     }
 

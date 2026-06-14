@@ -18,6 +18,7 @@ class QuotaSyncService {
     private mixed $usageProvider;
     private ?string $lastError = null;
     private bool $lastQuotaUnlimited = false;
+    private ?array $lastUsageRefresh = null;
 
     public function __construct(
         private IUserManager $userManager,
@@ -25,6 +26,7 @@ class QuotaSyncService {
         private LoggerInterface $logger,
         private ?IRootFolder $rootFolder = null,
         ?callable $usageProvider = null,
+        private ?NextcloudUsageRefreshService $usageRefreshService = null,
     ) {
         $this->usageProvider = $usageProvider;
     }
@@ -36,6 +38,7 @@ class QuotaSyncService {
 	public function computeQuota(string $ncUid, ?int $immichUsage): ?int {
 		$this->lastError = null;
 		$this->lastQuotaUnlimited = false;
+		$this->refreshNextcloudUsage($ncUid);
 
 		try {
 			if ($immichUsage === null) {
@@ -79,7 +82,7 @@ class QuotaSyncService {
     }
 
     /**
-	 * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, immichUsage: int|null, immichAvailable: int|null, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null}
+	 * @return array{ncQuota: int|null, ncUsed: int|null, ncRemaining: int|null, immichUsage: int|null, immichAvailable: int|null, nonImmichUsed: int|null, reserve: int, computedImmichQuota: int|null, unlimited: bool, error: string|null, usageRefresh: array|null}
 	 */
 	public function computeQuotaDetails(string $ncUid, ?int $immichUsage): array {
 		$computedQuota = $this->computeQuota($ncUid, $immichUsage);
@@ -102,6 +105,7 @@ class QuotaSyncService {
             'computedImmichQuota' => $computedQuota,
             'unlimited' => $this->wasLastQuotaUnlimited() || ($ncQuota === null && $this->getLastError() === null),
             'error' => $this->getLastError(),
+			'usageRefresh' => $this->lastUsageRefresh,
 		];
 	}
 
@@ -141,6 +145,20 @@ class QuotaSyncService {
 
     public function wasLastQuotaUnlimited(): bool {
         return $this->lastQuotaUnlimited && $this->lastError === null;
+    }
+
+    public function getLastUsageRefresh(): ?array {
+        return $this->lastUsageRefresh;
+    }
+
+    private function refreshNextcloudUsage(string $ncUid): void {
+        $this->lastUsageRefresh = null;
+
+        if ($this->usageRefreshService === null) {
+            return;
+        }
+
+        $this->lastUsageRefresh = $this->usageRefreshService->refresh($ncUid);
     }
 
     private function parseQuota(mixed $quota): ?int {

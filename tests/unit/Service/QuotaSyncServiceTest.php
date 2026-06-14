@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Tests\Unit\Service;
 
 use OCA\IntegrationImmich\Service\AdminConfigService;
+use OCA\IntegrationImmich\Service\NextcloudUsageRefreshService;
 use OCA\IntegrationImmich\Service\QuotaSyncService;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -128,13 +129,38 @@ class QuotaSyncServiceTest extends TestCase {
         $this->assertNull($service->getLastError());
     }
 
-    private function service(callable $usageProvider): QuotaSyncService {
+    public function testUsageRefreshRunsBeforeQuotaDetailsAndExposesMetadata(): void {
+        $this->userManager->method('get')->with('alice')->willReturn($this->userWithQuota('1000'));
+        $refreshService = $this->createMock(NextcloudUsageRefreshService::class);
+        $refreshService->expects($this->once())
+            ->method('refresh')
+            ->with('alice')
+            ->willReturn([
+                'status' => 'ok',
+                'warningCode' => null,
+                'remediation' => null,
+                'error' => null,
+                'size' => 700,
+                'listingCount' => 2,
+            ]);
+        $service = $this->service(fn(): int => 700, $refreshService);
+
+        $details = $service->computeQuotaDetails('alice', 200);
+
+        $this->assertSame(400, $details['computedImmichQuota']);
+        $this->assertSame('ok', $details['usageRefresh']['status']);
+        $this->assertSame(2, $details['usageRefresh']['listingCount']);
+        $this->assertSame($details['usageRefresh'], $service->getLastUsageRefresh());
+    }
+
+    private function service(callable $usageProvider, ?NextcloudUsageRefreshService $usageRefreshService = null): QuotaSyncService {
         return new QuotaSyncService(
             $this->userManager,
             $this->adminConfigService,
             $this->createMock(LoggerInterface::class),
             null,
             $usageProvider,
+            $usageRefreshService,
         );
     }
 
