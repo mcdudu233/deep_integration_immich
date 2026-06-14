@@ -360,6 +360,24 @@
 					</p>
 				</div>
 
+				<div v-if="form.quota_sync_mode === 'event_scheduled'" class="field">
+					<NcTextField v-model="form.quota_sync_interval_seconds"
+						:label="t('deep_integration_immich', 'Scheduled sync interval (seconds)')"
+						placeholder="3600"
+						data-testid="quota-sync-interval-seconds"
+						type="number"
+						:min="300"
+						:max="604800" />
+					<p v-if="fieldErrorMessage('quota_sync_interval_seconds')"
+						class="validation-error-inline"
+						data-testid="quota-sync-interval-field-error">
+						{{ fieldErrorMessage('quota_sync_interval_seconds') }}
+					</p>
+					<p class="hint">
+						{{ t('deep_integration_immich', 'How often the scheduled quota sync job refreshes Nextcloud usage and updates Immich quotas. Allowed range: 300 to 604800 seconds.') }}
+					</p>
+				</div>
+
 				<NcNoteCard v-if="form.quota_sync_mode !== 'disabled'"
 					type="warning"
 					data-testid="quota-warning-section">
@@ -768,6 +786,7 @@ const form = reactive({
 	nc_visible_path_template: '',
 	external_storage_auto_create: false,
 	quota_sync_mode: 'disabled',
+	quota_sync_interval_seconds: 3600,
 	quota_reserve_bytes: 268435456,
 	delete_disable_policy: 'disable_suspend',
 })
@@ -883,6 +902,7 @@ function applyConfigToForm(cfg) {
 	if (cfg.nc_visible_path_template !== undefined) form.nc_visible_path_template = cfg.nc_visible_path_template
 	if (cfg.external_storage_auto_create !== undefined) form.external_storage_auto_create = cfg.external_storage_auto_create
 	if (cfg.quota_sync_mode !== undefined) form.quota_sync_mode = cfg.quota_sync_mode
+	if (cfg.quota_sync_interval_seconds !== undefined) form.quota_sync_interval_seconds = cfg.quota_sync_interval_seconds
 	if (cfg.quota_reserve_bytes !== undefined) form.quota_reserve_bytes = cfg.quota_reserve_bytes
 	if (cfg.delete_disable_policy !== undefined) {
 		form.delete_disable_policy = cfg.delete_disable_policy
@@ -1133,6 +1153,7 @@ function quotaCardFromState(row) {
 	if (!quota || typeof quota !== 'object') {
 		return null
 	}
+	const usageRefresh = quota.usageRefresh ?? quota.usage_refresh ?? null
 
 	return {
 		ncUid: row.ncUid || row.nc_uid || '',
@@ -1145,8 +1166,8 @@ function quotaCardFromState(row) {
 		computedImmichQuota: quota.computedImmichQuota ?? null,
 		lastSyncAt: quota.lastSyncAt ?? row.lastQuotaSyncAt ?? null,
 		warning: quota.warning ?? null,
-		warningCode: quota.warningCode ?? null,
-		warningParams: quota.warningParams ?? {},
+		warningCode: quota.warningCode ?? usageRefresh?.warningCode ?? null,
+		warningParams: quota.warningParams ?? usageRefresh ?? {},
 	}
 }
 
@@ -1222,6 +1243,8 @@ function localizeStatusCode(code, params = {}, legacyMessage = '') {
 		return t('deep_integration_immich', 'Nextcloud quota is unlimited; Immich quota sync will leave the Immich quota unlimited.')
 	case 'quota_stale':
 		return t('deep_integration_immich', 'Quota has not been synced yet; values may be stale until the next quota sync job runs.')
+	case 'usage_refresh_failed':
+		return t('deep_integration_immich', 'Nextcloud usage refresh failed before quota sync. If external storage usage appears stale, schedule files_external:scan outside the app.')
 	case 'action_capabilities_unavailable':
 		return t('deep_integration_immich', 'Immich action capabilities are temporarily unavailable.')
 	case 'sync_state_list_unavailable':
@@ -1287,6 +1310,8 @@ function localizeAdminConfigFieldError(error) {
 		return t('deep_integration_immich', 'Destructive delete policy requires explicit delete_opt_in confirmation.')
 	case 'invalid_quota_reserve':
 		return t('deep_integration_immich', 'Quota reserve bytes must be an integer greater than or equal to 0.')
+	case 'invalid_quota_sync_interval':
+		return t('deep_integration_immich', 'Quota sync interval must be an integer between 300 and 604800 seconds.')
 	case 'invalid_boolean':
 		return t('deep_integration_immich', 'Value must be boolean.')
 	default:
@@ -1324,6 +1349,8 @@ function localizeAdminConfigValidationMessage(message) {
 		return t('deep_integration_immich', 'Initial password policy must be random.')
 	case 'Quota reserve bytes must be an integer greater than or equal to 0.':
 		return t('deep_integration_immich', 'Quota reserve bytes must be an integer greater than or equal to 0.')
+	case 'Quota sync interval seconds must be an integer between 300 and 604800.':
+		return t('deep_integration_immich', 'Quota sync interval must be an integer between 300 and 604800 seconds.')
 	case 'Delete/disable policy must be disable_suspend or delete_opt_in.':
 		return t('deep_integration_immich', 'Delete/disable policy must be disable_suspend or delete_opt_in.')
 	case 'Destructive delete policy requires explicit delete_opt_in confirmation.':
@@ -1359,6 +1386,7 @@ function labelForConfigField(field) {
 	case 'nc_visible_path_template': return t('deep_integration_immich', 'Nextcloud-visible path template')
 	case 'external_storage_auto_create': return t('deep_integration_immich', 'Enable automatic external storage creation and mounting')
 	case 'quota_sync_mode': return t('deep_integration_immich', 'Quota sync mode')
+	case 'quota_sync_interval_seconds': return t('deep_integration_immich', 'Scheduled sync interval (seconds)')
 	case 'quota_reserve_bytes': return t('deep_integration_immich', 'Safety reserve (MiB)')
 	case 'delete_disable_policy': return t('deep_integration_immich', 'Policy when a Nextcloud user is deleted or disabled')
 	case 'delete_opt_in_confirmed': return t('deep_integration_immich', 'I understand this can permanently delete mapped Immich users and their assets only through Immich, and that mirror mount media cleanup is never performed by this app')
