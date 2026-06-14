@@ -18,6 +18,7 @@ const KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES = Object.freeze([
 	'missing_path_template',
 	'delete_opt_in_confirmation_required',
 	'invalid_quota_reserve',
+	'invalid_quota_sync_interval',
 	'invalid_boolean',
 ])
 
@@ -111,6 +112,23 @@ function normalizeImmichBrowsingMode(value) {
 	})
 }
 
+function normalizeQuotaSyncInterval(value, quotaSyncMode) {
+	const interval = value === null || value === undefined || String(value).trim() === ''
+		? 3600
+		: Number(String(value).trim())
+
+	if (!Number.isInteger(interval) || interval < 300 || interval > 604800) {
+		throw new AdminConfigPayloadValidationError({
+			field: 'quota_sync_interval_seconds',
+			code: 'invalid_quota_sync_interval',
+			message: 'Quota sync interval seconds must be an integer between 300 and 604800.',
+			params: { min: 300, max: 604800, quotaSyncMode },
+		})
+	}
+
+	return interval
+}
+
 function isAdminConfigPayloadValidationError(error) {
 	return error instanceof AdminConfigPayloadValidationError
 		|| error?.name === 'AdminConfigPayloadValidationError'
@@ -130,6 +148,7 @@ function buildAdminConfigPayload(formState, options = {}) {
 
 	payload.initial_password_policy = normalizeInitialPasswordPolicy(payload.initial_password_policy)
 	payload.immich_browsing_mode = normalizeImmichBrowsingMode(payload.immich_browsing_mode)
+	payload.quota_sync_interval_seconds = normalizeQuotaSyncInterval(payload.quota_sync_interval_seconds, payload.quota_sync_mode)
 	if (payload.immich_browsing_mode === 'personal') {
 		payload.provisioning_enabled = false
 		payload.external_storage_auto_create = false

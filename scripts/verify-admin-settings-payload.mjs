@@ -230,6 +230,7 @@ const requiredFieldCodes = [
 	'missing_path_template',
 	'delete_opt_in_confirmation_required',
 	'invalid_quota_reserve',
+	'invalid_quota_sync_interval',
 	'invalid_boolean',
 ]
 assert.deepEqual(KNOWN_ADMIN_CONFIG_FIELD_ERROR_CODES, requiredFieldCodes)
