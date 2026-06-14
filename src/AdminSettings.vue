@@ -238,6 +238,18 @@
 						{{ t('deep_integration_immich', 'The app creates a random initial Immich password for each provisioned user. The password is not shown after user creation.') }}
 					</p>
 				</div>
+
+				<div class="actions">
+					<NcButton type="primary"
+						:disabled="saving"
+						data-testid="user-assignment-save-button"
+						@click="saveSettings">
+						<template #icon>
+							<NcLoadingIcon v-if="saving" :size="20" />
+						</template>
+						{{ t('deep_integration_immich', 'Save') }}
+					</NcButton>
+				</div>
 			</div>
 		</NcSettingsSection>
 
@@ -307,6 +319,18 @@
 					data-testid="admin-general-warning-external-storage-auto-create">
 					{{ t('deep_integration_immich', 'Auto-creating external storage mounts depends on Nextcloud\'s files_external API stability. If the API is unavailable or insufficient, the app will report the required manual steps instead of guessing at private Nextcloud internals.') }}
 				</NcNoteCard>
+
+				<div class="actions">
+					<NcButton type="primary"
+						:disabled="saving"
+						data-testid="storage-settings-save-button"
+						@click="saveSettings">
+						<template #icon>
+							<NcLoadingIcon v-if="saving" :size="20" />
+						</template>
+						{{ t('deep_integration_immich', 'Save') }}
+					</NcButton>
+				</div>
 			</div>
 		</NcSettingsSection>
 
@@ -391,6 +415,35 @@
 					<br>
 					<code>'quota_include_external_storage' => true</code>
 				</NcNoteCard>
+
+				<div class="actions">
+					<NcButton type="primary"
+						:disabled="saving"
+						data-testid="quota-settings-save-button"
+						@click="saveSettings">
+						<template #icon>
+							<NcLoadingIcon v-if="saving" :size="20" />
+						</template>
+						{{ t('deep_integration_immich', 'Save') }}
+					</NcButton>
+
+					<NcButton v-if="form.quota_sync_mode !== 'disabled'"
+						type="secondary"
+						:disabled="store.quotaRecompute.loading"
+						data-testid="quota-sync-now-button"
+						@click="syncQuotasNow">
+						<template #icon>
+							<NcLoadingIcon v-if="store.quotaRecompute.loading" :size="20" />
+						</template>
+						{{ t('deep_integration_immich', 'Sync now') }}
+					</NcButton>
+				</div>
+
+				<NcNoteCard v-if="quotaSyncMessage"
+					:type="quotaSyncMessageType"
+					data-testid="quota-sync-message">
+					{{ quotaSyncMessage }}
+				</NcNoteCard>
 			</div>
 		</NcSettingsSection>
 
@@ -462,6 +515,18 @@
 					data-testid="delete-disable-policy-warning">
 					{{ t('deep_integration_immich', 'You must confirm the destructive policy before it can be saved. Without explicit confirmation the backend rejects delete_opt_in and keeps the non-destructive policy in effect.') }}
 				</NcNoteCard>
+
+				<div class="actions">
+					<NcButton type="primary"
+						:disabled="saving"
+						data-testid="delete-policy-save-button"
+						@click="saveSettings">
+						<template #icon>
+							<NcLoadingIcon v-if="saving" :size="20" />
+						</template>
+						{{ t('deep_integration_immich', 'Save') }}
+					</NcButton>
+				</div>
 			</div>
 		</NcSettingsSection>
 
@@ -818,6 +883,8 @@ const warnings = ref([])
 const syncStates = ref([])
 const mountHealthCards = ref([])
 const quotaStatusCards = ref([])
+const quotaSyncMessage = ref('')
+const quotaSyncMessageType = ref('success')
 
 // ── Computed ──────────────────────────────────────────────────────────
 const quotaReserveDisplay = computed({
@@ -1087,6 +1154,19 @@ async function recomputeQuotaAllUsers() {
 	} catch (e) {
 		actionMessage.value = store.quotaRecompute.error || t('deep_integration_immich', 'Quota recompute failed')
 		actionMessageType.value = 'error'
+	}
+}
+
+async function syncQuotasNow() {
+	quotaSyncMessage.value = ''
+	try {
+		await store.recomputeQuotaForAll()
+		await refreshSyncStates()
+		quotaSyncMessage.value = t('deep_integration_immich', 'Quota sync started for all mapped users')
+		quotaSyncMessageType.value = 'success'
+	} catch (e) {
+		quotaSyncMessage.value = store.quotaRecompute.error || t('deep_integration_immich', 'Quota sync failed')
+		quotaSyncMessageType.value = 'error'
 	}
 }
 
