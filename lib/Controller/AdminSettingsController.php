@@ -36,6 +36,7 @@ class AdminSettingsController extends Controller {
         AdminConfigService::KEY_MOUNT_NAME_TEMPLATE,
         AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
         AdminConfigService::KEY_QUOTA_SYNC_MODE,
+        AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS,
         AdminConfigService::KEY_QUOTA_RESERVE_BYTES,
         AdminConfigService::KEY_DELETE_DISABLE_POLICY,
         AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
@@ -60,6 +61,7 @@ class AdminSettingsController extends Controller {
         AdminConfigService::KEY_MKDIR_POLICY_ENABLED,
         AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE,
         AdminConfigService::KEY_QUOTA_RESERVE_BYTES,
+        AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS,
         'admin_api_key_configured',
         'api_key_set',
     ];

@@ -29,6 +29,7 @@ class AdminConfigService {
     public const KEY_MOUNT_NAME_TEMPLATE = 'mount_name_template';
     public const KEY_MKDIR_POLICY_ENABLED = 'mkdir_policy_enabled';
     public const KEY_QUOTA_SYNC_MODE = 'quota_sync_mode';
+    public const KEY_QUOTA_SYNC_INTERVAL_SECONDS = 'quota_sync_interval_seconds';
     public const KEY_QUOTA_RESERVE_BYTES = 'quota_reserve_bytes';
     public const KEY_DELETE_DISABLE_POLICY = 'delete_disable_policy';
     public const KEY_EXTERNAL_STORAGE_AUTO_CREATE = 'external_storage_auto_create';
@@ -45,6 +46,7 @@ class AdminConfigService {
     public const VALIDATION_MISSING_PATH_TEMPLATE = 'missing_path_template';
     public const VALIDATION_INVALID_PATH_TEMPLATE = 'invalid_path_template';
     public const VALIDATION_INVALID_QUOTA_RESERVE = 'invalid_quota_reserve';
+    public const VALIDATION_INVALID_QUOTA_SYNC_INTERVAL = 'invalid_quota_sync_interval';
     public const VALIDATION_DELETE_OPT_IN_CONFIRMATION_REQUIRED = 'delete_opt_in_confirmation_required';
     public const VALIDATION_INVALID_TEMPLATE = 'invalid_template';
     public const VALIDATION_UNSUPPORTED_TEMPLATE_PLACEHOLDER = 'unsupported_template_placeholder';
@@ -53,6 +55,9 @@ class AdminConfigService {
     public const BROWSING_MODE_ADMIN_MANAGED = 'admin_managed';
 
     private const DEFAULT_QUOTA_RESERVE_BYTES = 268435456;
+    private const DEFAULT_QUOTA_SYNC_INTERVAL_SECONDS = 3600;
+    private const MIN_QUOTA_SYNC_INTERVAL_SECONDS = 300;
+    private const MAX_QUOTA_SYNC_INTERVAL_SECONDS = 604800;
 
     private const DEFAULTS = [
         self::KEY_IMMICH_BASE_URL => '',
@@ -68,6 +73,7 @@ class AdminConfigService {
         self::KEY_MOUNT_NAME_TEMPLATE => 'Immich Photos',
         self::KEY_MKDIR_POLICY_ENABLED => false,
         self::KEY_QUOTA_SYNC_MODE => 'disabled',
+        self::KEY_QUOTA_SYNC_INTERVAL_SECONDS => self::DEFAULT_QUOTA_SYNC_INTERVAL_SECONDS,
         self::KEY_QUOTA_RESERVE_BYTES => self::DEFAULT_QUOTA_RESERVE_BYTES,
         self::KEY_DELETE_DISABLE_POLICY => 'disable_suspend',
         self::KEY_EXTERNAL_STORAGE_AUTO_CREATE => false,
@@ -151,6 +157,12 @@ class AdminConfigService {
 
     public function isImmichDeleteEnabled(): bool {
         return $this->getAppBool(self::KEY_IMMICH_DELETE_ENABLED, false);
+    }
+
+    public function getQuotaSyncIntervalSeconds(): int {
+        $interval = $this->getAppInt(self::KEY_QUOTA_SYNC_INTERVAL_SECONDS, self::DEFAULT_QUOTA_SYNC_INTERVAL_SECONDS);
+
+        return $this->clampQuotaSyncInterval($interval);
     }
 
     public function setAdminConfig(array $values): void {
@@ -275,6 +287,21 @@ class AdminConfigService {
             );
         }
 
+        $quotaSyncInterval = $this->parseInt($values[self::KEY_QUOTA_SYNC_INTERVAL_SECONDS]);
+        if ($quotaSyncInterval === null
+            || $quotaSyncInterval < self::MIN_QUOTA_SYNC_INTERVAL_SECONDS
+            || $quotaSyncInterval > self::MAX_QUOTA_SYNC_INTERVAL_SECONDS) {
+            $errors[self::KEY_QUOTA_SYNC_INTERVAL_SECONDS] = $this->validationDetail(
+                self::KEY_QUOTA_SYNC_INTERVAL_SECONDS,
+                self::VALIDATION_INVALID_QUOTA_SYNC_INTERVAL,
+                'Quota sync interval seconds must be an integer between 300 and 604800.',
+                [
+                    'min' => self::MIN_QUOTA_SYNC_INTERVAL_SECONDS,
+                    'max' => self::MAX_QUOTA_SYNC_INTERVAL_SECONDS,
+                ]
+            );
+        }
+
         $initialPasswordPolicy = $this->normaliseInitialPasswordPolicy((string)$values[self::KEY_INITIAL_PASSWORD_POLICY]);
         if (!in_array($initialPasswordPolicy, self::VALID_INITIAL_PASSWORD_POLICIES, true)) {
             $errors[self::KEY_INITIAL_PASSWORD_POLICY] = $this->validationDetail(
@@ -337,6 +364,7 @@ class AdminConfigService {
             self::KEY_MOUNT_NAME_TEMPLATE => $this->getAppString(self::KEY_MOUNT_NAME_TEMPLATE, 'Immich Photos'),
             self::KEY_MKDIR_POLICY_ENABLED => $this->getAppBool(self::KEY_MKDIR_POLICY_ENABLED, false),
             self::KEY_QUOTA_SYNC_MODE => $this->getAppString(self::KEY_QUOTA_SYNC_MODE, 'disabled'),
+            self::KEY_QUOTA_SYNC_INTERVAL_SECONDS => $this->getQuotaSyncIntervalSeconds(),
             self::KEY_QUOTA_RESERVE_BYTES => $this->getAppInt(self::KEY_QUOTA_RESERVE_BYTES, self::DEFAULT_QUOTA_RESERVE_BYTES),
             self::KEY_DELETE_DISABLE_POLICY => $this->getAppString(self::KEY_DELETE_DISABLE_POLICY, 'disable_suspend'),
             self::KEY_EXTERNAL_STORAGE_AUTO_CREATE => $this->getAppBool(self::KEY_EXTERNAL_STORAGE_AUTO_CREATE, false),
@@ -364,6 +392,7 @@ class AdminConfigService {
             self::KEY_MOUNT_NAME_TEMPLATE => trim((string)$values[self::KEY_MOUNT_NAME_TEMPLATE]),
             self::KEY_MKDIR_POLICY_ENABLED => $this->parseBool($values[self::KEY_MKDIR_POLICY_ENABLED]) ?? false,
             self::KEY_QUOTA_SYNC_MODE => (string)$values[self::KEY_QUOTA_SYNC_MODE],
+            self::KEY_QUOTA_SYNC_INTERVAL_SECONDS => $this->clampQuotaSyncInterval($this->parseInt($values[self::KEY_QUOTA_SYNC_INTERVAL_SECONDS]) ?? self::DEFAULT_QUOTA_SYNC_INTERVAL_SECONDS),
             self::KEY_QUOTA_RESERVE_BYTES => $this->parseInt($values[self::KEY_QUOTA_RESERVE_BYTES]) ?? self::DEFAULT_QUOTA_RESERVE_BYTES,
             self::KEY_DELETE_DISABLE_POLICY => (string)$values[self::KEY_DELETE_DISABLE_POLICY],
             self::KEY_EXTERNAL_STORAGE_AUTO_CREATE => $this->parseBool($values[self::KEY_EXTERNAL_STORAGE_AUTO_CREATE]) ?? false,
@@ -383,6 +412,10 @@ class AdminConfigService {
         }
 
         return $values;
+    }
+
+    private function clampQuotaSyncInterval(int $interval): int {
+        return max(self::MIN_QUOTA_SYNC_INTERVAL_SECONDS, min(self::MAX_QUOTA_SYNC_INTERVAL_SECONDS, $interval));
     }
 
     private function normaliseInitialPasswordPolicy(string $policy): string {

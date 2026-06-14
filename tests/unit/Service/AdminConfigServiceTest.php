@@ -72,6 +72,7 @@ class AdminConfigServiceTest extends TestCase {
             'mount_name_template' => 'Immich/{uid}',
             'mkdir_policy_enabled' => false,
             'quota_sync_mode' => 'event_scheduled',
+            'quota_sync_interval_seconds' => '900',
             'quota_reserve_bytes' => 512,
             'delete_disable_policy' => 'disable_suspend',
             'external_storage_auto_create' => true,
@@ -92,6 +93,8 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame('random', $config['initial_password_policy']);
         $this->assertSame('random', $this->service->getInitialPasswordPolicy());
         $this->assertSame('event_scheduled', $config['quota_sync_mode']);
+        $this->assertSame(900, $config['quota_sync_interval_seconds']);
+        $this->assertSame(900, $this->service->getQuotaSyncIntervalSeconds());
         $this->assertSame(512, $config['quota_reserve_bytes']);
         $this->assertTrue($config['external_storage_auto_create']);
         $this->assertTrue($config['admin_api_key_configured']);
@@ -293,6 +296,27 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertArrayHasKey('quota_reserve_bytes', $errors);
     }
 
+    public function testQuotaSyncIntervalDefaultsAndBoundsAreValidated(): void {
+        $config = $this->service->getAdminConfig();
+
+        $this->assertSame(3600, $config[AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS]);
+        $this->assertSame(3600, $this->service->getQuotaSyncIntervalSeconds());
+
+        $tooSmall = $this->service->validateAdminConfigDetails([
+            AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS => 299,
+        ]);
+        $tooLarge = $this->service->validateAdminConfigDetails([
+            AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS => 604801,
+        ]);
+        $notInteger = $this->service->validateAdminConfigDetails([
+            AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS => 'soon',
+        ]);
+
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_QUOTA_SYNC_INTERVAL, $tooSmall[AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS]['code']);
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_QUOTA_SYNC_INTERVAL, $tooLarge[AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS]['code']);
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_QUOTA_SYNC_INTERVAL, $notInteger[AdminConfigService::KEY_QUOTA_SYNC_INTERVAL_SECONDS]['code']);
+    }
+
     public function testValidationDetailsExposeStableCodesAndLegacyMessages(): void {
         $details = $this->service->validateAdminConfigDetails([
             'immich_base_url' => 'ftp://photos.example.com',
@@ -307,6 +331,7 @@ class AdminConfigServiceTest extends TestCase {
             'mount_name_template' => 'Immich/{displayName}',
             'external_storage_auto_create' => 'sometimes',
             'quota_sync_mode' => 'realtime',
+            'quota_sync_interval_seconds' => 299,
             'initial_password_policy' => 'show_plaintext_password',
             'quota_reserve_bytes' => -1,
             'delete_disable_policy' => 'delete_opt_in',
@@ -321,6 +346,7 @@ class AdminConfigServiceTest extends TestCase {
             'host_path_template' => '',
             'nc_visible_path_template' => '/mnt/immich-library/../escape/{storageLabel}',
             'external_storage_auto_create' => 'sometimes',
+            'quota_sync_interval_seconds' => 299,
             'quota_reserve_bytes' => -1,
             'delete_disable_policy' => 'delete_opt_in',
         ]);
@@ -336,6 +362,7 @@ class AdminConfigServiceTest extends TestCase {
         $this->assertSame(AdminConfigService::VALIDATION_UNSUPPORTED_TEMPLATE_PLACEHOLDER, $details['mount_name_template']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_BOOLEAN, $details['external_storage_auto_create']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_ENUM, $details['quota_sync_mode']['code']);
+        $this->assertSame(AdminConfigService::VALIDATION_INVALID_QUOTA_SYNC_INTERVAL, $details['quota_sync_interval_seconds']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_ENUM, $details['initial_password_policy']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_INVALID_QUOTA_RESERVE, $details['quota_reserve_bytes']['code']);
         $this->assertSame(AdminConfigService::VALIDATION_DELETE_OPT_IN_CONFIRMATION_REQUIRED, $details['delete_disable_policy']['code']);
