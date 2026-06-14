@@ -10,8 +10,7 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\AppInfo;
 
-use OCA\IntegrationImmich\BackgroundJob\SyncQuotaJob;
-use OCA\IntegrationImmich\Db\SyncStateMapper;
+use OCA\IntegrationImmich\BackgroundJob\ScheduleQuotaSyncJob;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\IntegrationImmich\Listener\AccountUpdatedListener;
 use OCA\IntegrationImmich\Listener\CspListener;
@@ -26,7 +25,6 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\BackgroundJob\IJobList;
-use OCP\IDBConnection;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 
 class Application extends App implements IBootstrap {
@@ -71,12 +69,12 @@ class Application extends App implements IBootstrap {
     }
 
     public function boot(IBootContext $context): void {
-        $context->injectFn(function (IJobList $jobList, AdminConfigService $adminConfigService, IDBConnection $db): void {
-            $this->registerTimedJobs($jobList, $adminConfigService, $db);
+        $context->injectFn(function (IJobList $jobList, AdminConfigService $adminConfigService): void {
+            $this->registerTimedJobs($jobList, $adminConfigService);
         });
     }
 
-    public function registerTimedJobs(IJobList $jobList, AdminConfigService $adminConfigService, IDBConnection $db): void {
+    public function registerTimedJobs(IJobList $jobList, AdminConfigService $adminConfigService): void {
         $config = $adminConfigService->getAdminConfig();
         if (($config[AdminConfigService::KEY_PROVISIONING_ENABLED] ?? false) !== true) {
             return;
@@ -86,13 +84,7 @@ class Application extends App implements IBootstrap {
             $this->addJobIfAvailable($jobList, $jobClass, null);
         }
 
-        if (($config[AdminConfigService::KEY_QUOTA_SYNC_MODE] ?? 'disabled') !== 'event_scheduled') {
-            return;
-        }
-
-        foreach ($this->mappedUserIds($db) as $ncUid) {
-            $this->addJobIfAvailable($jobList, SyncQuotaJob::class, ['ncUid' => $ncUid]);
-        }
+        $this->addJobIfAvailable($jobList, ScheduleQuotaSyncJob::class, null);
     }
 
     private function addJobIfAvailable(IJobList $jobList, string $jobClass, mixed $argument): void {
@@ -101,30 +93,5 @@ class Application extends App implements IBootstrap {
         }
 
         $jobList->add($jobClass, $argument);
-    }
-
-    /**
-     * @return string[]
-     */
-    private function mappedUserIds(IDBConnection $db): array {
-        try {
-            $qb = $db->getQueryBuilder();
-            $qb->select('nc_uid', 'immich_user_id')
-                ->from(SyncStateMapper::TABLE_NAME);
-            $result = $qb->executeQuery();
-        } catch (\Throwable) {
-            return [];
-        }
-
-        $uids = [];
-        while (($row = $result->fetch()) !== false) {
-            $ncUid = is_string($row['nc_uid'] ?? null) ? trim($row['nc_uid']) : '';
-            $immichUserId = is_string($row['immich_user_id'] ?? null) ? trim($row['immich_user_id']) : '';
-            if ($ncUid !== '' && $immichUserId !== '') {
-                $uids[] = $ncUid;
-            }
-        }
-
-        return array_values(array_unique($uids));
     }
 }
