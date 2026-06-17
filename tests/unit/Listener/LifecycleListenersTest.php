@@ -170,38 +170,69 @@ class LifecycleListenersTest extends TestCase {
         $listener->handle(new ListenerGroupMembershipEvent(new ListenerGroup('family'), new ListenerUser('alice')));
     }
 
-    public function testUserDeletedListenerMarksMappingInactiveWithoutDeletingAssets(): void {
+    public function testUserDeletedListenerDeletesSyncStateAndDisablesImmichUser(): void {
         $syncStateService = $this->createMock(SyncStateService::class);
+        $immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
         $this->adminConfigService->method('getAdminConfig')->willReturn($this->config());
-        $syncStateService->expects($this->once())
-            ->method('updateMapping')
-            ->with('alice', [
-                'scopeStatus' => SyncStateService::STATUS_DELETED,
-                'lastSyncStatus' => SyncStateService::STATUS_DELETED,
-                'lastError' => null,
-            ]);
-        $this->jobList->expects($this->once())
-            ->method('has')
-            ->with(ReconcileUsersJob::class, ['ncUid' => 'alice'])
-            ->willReturn(false);
-        $this->jobList->expects($this->once())
-            ->method('add')
-            ->with(ReconcileUsersJob::class, ['ncUid' => 'alice']);
+        $this->adminConfigService->method('allowsDestructiveUserDelete')->willReturn(false);
+        $state = $this->state('alice', 'immich-alice');
+        $syncStateService->expects($this->once())->method('findByUid')->with('alice')->willReturn($state);
+        $immichUserAdminService->expects($this->once())->method('disableUser')->with('immich-alice');
+        $immichUserAdminService->expects($this->never())->method('deleteUser');
+        $syncStateService->expects($this->once())->method('deleteByUid')->with('alice')->willReturn(true);
 
-        $listener = new UserDeletedListener($this->adminConfigService, $this->jobList, $syncStateService);
+        $listener = new UserDeletedListener($this->adminConfigService, $syncStateService, $immichUserAdminService, $logger);
 
         $listener->handle(new ListenerUidEvent('alice'));
     }
 
-    public function testUserDeletedListenerStillQueuesReconcileWhenProvisioningDisabled(): void {
+    public function testUserDeletedListenerDeletesImmichUserWhenDestructivePolicyEnabled(): void {
         $syncStateService = $this->createMock(SyncStateService::class);
-        $syncStateService->expects($this->once())->method('updateMapping');
-        $this->jobList->expects($this->once())->method('has')->willReturn(false);
-        $this->jobList->expects($this->once())
-            ->method('add')
-            ->with(ReconcileUsersJob::class, ['ncUid' => 'alice']);
+        $immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $this->adminConfigService->method('getAdminConfig')->willReturn($this->config());
+        $this->adminConfigService->method('allowsDestructiveUserDelete')->willReturn(true);
+        $state = $this->state('alice', 'immich-alice');
+        $syncStateService->expects($this->once())->method('findByUid')->with('alice')->willReturn($state);
+        $immichUserAdminService->expects($this->once())->method('deleteUser')->with('immich-alice');
+        $immichUserAdminService->expects($this->never())->method('disableUser');
+        $syncStateService->expects($this->once())->method('deleteByUid')->with('alice')->willReturn(true);
 
-        $listener = new UserDeletedListener($this->adminConfigService, $this->jobList, $syncStateService);
+        $listener = new UserDeletedListener($this->adminConfigService, $syncStateService, $immichUserAdminService, $logger);
+
+        $listener->handle(new ListenerUidEvent('alice'));
+    }
+
+    public function testUserDeletedListenerStillDropsSyncStateWhenImmichCleanupFails(): void {
+        $syncStateService = $this->createMock(SyncStateService::class);
+        $immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $this->adminConfigService->method('getAdminConfig')->willReturn($this->config());
+        $this->adminConfigService->method('allowsDestructiveUserDelete')->willReturn(false);
+        $state = $this->state('alice', 'immich-alice');
+        $syncStateService->expects($this->once())->method('findByUid')->with('alice')->willReturn($state);
+        $immichUserAdminService->expects($this->once())
+            ->method('disableUser')
+            ->with('immich-alice')
+            ->willThrowException(new \RuntimeException('Immich admin endpoint unreachable'));
+        $syncStateService->expects($this->once())->method('deleteByUid')->with('alice')->willReturn(true);
+
+        $listener = new UserDeletedListener($this->adminConfigService, $syncStateService, $immichUserAdminService, $logger);
+
+        $listener->handle(new ListenerUidEvent('alice'));
+    }
+
+    public function testUserDeletedListenerSkipsImmichCleanupWhenNoMappingExists(): void {
+        $syncStateService = $this->createMock(SyncStateService::class);
+        $immichUserAdminService = $this->createMock(ImmichUserAdminService::class);
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $syncStateService->expects($this->once())->method('findByUid')->with('alice')->willReturn(null);
+        $immichUserAdminService->expects($this->never())->method('disableUser');
+        $immichUserAdminService->expects($this->never())->method('deleteUser');
+        $syncStateService->expects($this->once())->method('deleteByUid')->with('alice')->willReturn(false);
+
+        $listener = new UserDeletedListener($this->adminConfigService, $syncStateService, $immichUserAdminService, $logger);
 
         $listener->handle(new ListenerUidEvent('alice'));
     }
@@ -213,10 +244,13 @@ class LifecycleListenersTest extends TestCase {
             ExternalStorageProvisioner::class,
         ];
 
+        $deletedListenerAllowances = [
+            ImmichUserAdminService::class,
+        ];
+
         foreach ([
             UserCreatedListener::class,
             UserChangedListener::class,
-            UserDeletedListener::class,
             GroupMembershipListener::class,
             AccountUpdatedListener::class,
         ] as $listenerClass) {
@@ -233,6 +267,21 @@ class LifecycleListenersTest extends TestCase {
                 $this->assertNotContains($forbiddenType, $types, $listenerClass . ' must not call orchestration services directly.');
             }
         }
+
+        $constructor = (new ReflectionClass(UserDeletedListener::class))->getConstructor();
+        $types = [];
+        foreach ($constructor?->getParameters() ?? [] as $parameter) {
+            $type = $parameter->getType();
+            if ($type !== null) {
+                $types[] = (string)$type;
+            }
+        }
+        foreach ($forbidden as $forbiddenType) {
+            if (in_array($forbiddenType, $deletedListenerAllowances, true)) {
+                continue;
+            }
+            $this->assertNotContains($forbiddenType, $types, UserDeletedListener::class . ' may only depend on ImmichUserAdminService among orchestration services.');
+        }
     }
 
     private function config(array $overrides = []): array {
@@ -241,6 +290,14 @@ class LifecycleListenersTest extends TestCase {
             AdminConfigService::KEY_USER_SCOPE_MODE => 'all',
             AdminConfigService::KEY_USER_SCOPE_GROUPS => [],
         ], $overrides);
+    }
+
+    private function state(string $ncUid, string $immichUserId): \OCA\IntegrationImmich\Db\SyncState {
+        $state = new \OCA\IntegrationImmich\Db\SyncState();
+        $state->setNcUid($ncUid);
+        $state->setImmichUserId($immichUserId);
+        $state->setStorageLabel($ncUid);
+        return $state;
     }
 }
 

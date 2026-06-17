@@ -379,11 +379,30 @@ class ImmichUserAdminServiceTest extends TestCase {
         $this->service->deleteUser('immich-alice');
     }
 
-    public function testDisableUserFailsClearlyWhenImmichVersionHasNoDisableField(): void {
-        $this->client->expects($this->never())->method('put');
+    public function testDeleteUserSendsForceTrueUnderDestructivePolicy(): void {
+        $this->adminConfigService->method('allowsDestructiveUserDelete')->willReturn(true);
+        $this->client->expects($this->once())
+            ->method('delete')
+            ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertTrue($payload['force']);
+                return true;
+            }))
+            ->willReturn($this->response(200, ['id' => 'immich-alice']));
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('does not expose a non-destructive disable');
+        $this->service->deleteUser('immich-alice');
+    }
+
+    public function testDisableUserSoftDeletesViaAdminDeleteEndpointWithForceFalse(): void {
+        $this->client->expects($this->once())
+            ->method('delete')
+            ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertFalse($payload['force']);
+                return true;
+            }))
+            ->willReturn($this->response(200, ['id' => 'immich-alice', 'deletedAt' => '2026-01-01T00:00:00Z']));
+        $this->adminConfigService->expects($this->never())->method('allowsDestructiveUserDelete');
 
         $this->service->disableUser('immich-alice');
     }

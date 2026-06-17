@@ -67,6 +67,7 @@ class FrontendInitialStateService {
 		private ActionPolicyService $actionPolicyService,
 		private ExternalStorageProvisioner $externalStorageProvisioner,
 		private QuotaSyncService $quotaSyncService,
+		private ?ImmichUserAdminService $immichUserAdminService = null,
 	) {
 	}
 
@@ -236,7 +237,9 @@ class FrontendInitialStateService {
             'mode' => $mode,
             'ncQuota' => null,
             'ncUsed' => null,
+            'ncRemaining' => null,
             'immichUsage' => null,
+            'immichAvailable' => null,
             'computedImmichQuota' => null,
             'reserve' => $this->reserveBytes($config),
             'stale' => true,
@@ -256,20 +259,25 @@ class FrontendInitialStateService {
             $summary['lastSyncAt'] = $this->formatDateTime($syncState->getLastQuotaSyncAt());
         }
 
-        if ($ncUid === null || trim($ncUid) === '' || $syncState === null || trim((string)$syncState->getImmichUserId()) === '') {
+        $immichUserId = $syncState === null ? '' : trim((string)$syncState->getImmichUserId());
+        if ($ncUid === null || trim($ncUid) === '' || $immichUserId === '') {
             $this->setWarningFields($summary, self::CODE_QUOTA_NEEDS_MAPPING);
             return $summary;
         }
 
-		$quotaDetails = $this->quotaSyncService->computeNextcloudQuotaSnapshot($ncUid);
-		$summary['ncQuota'] = $quotaDetails['ncQuota'];
-		$summary['ncUsed'] = $quotaDetails['ncUsed'];
-		$summary['ncRemaining'] = $quotaDetails['ncRemaining'] ?? null;
-		$summary['reserve'] = $quotaDetails['reserve'];
+        $immichUsage = $this->safeImmichUsage($immichUserId);
+        $quotaDetails = $this->quotaSyncService->computeQuotaDetails($ncUid, $immichUsage);
+        $summary['ncQuota'] = $quotaDetails['ncQuota'];
+        $summary['ncUsed'] = $quotaDetails['ncUsed'];
+        $summary['ncRemaining'] = $quotaDetails['ncRemaining'] ?? null;
+        $summary['immichUsage'] = $quotaDetails['immichUsage'] ?? null;
+        $summary['immichAvailable'] = $quotaDetails['immichAvailable'] ?? null;
+        $summary['computedImmichQuota'] = $quotaDetails['computedImmichQuota'] ?? null;
+        $summary['reserve'] = $quotaDetails['reserve'];
 
-		if ($quotaDetails['error'] === null) {
-			$summary['status'] = 'ok';
-		}
+        if ($quotaDetails['error'] === null) {
+            $summary['status'] = 'ok';
+        }
 
         if ($quotaDetails['error'] !== null) {
             $summary['status'] = 'failed';
@@ -278,9 +286,9 @@ class FrontendInitialStateService {
             return $summary;
         }
 
-		if (($quotaDetails['unlimited'] ?? false) === true) {
-			$summary['status'] = 'unlimited';
-			$this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
+        if (($quotaDetails['unlimited'] ?? false) === true) {
+            $summary['status'] = 'unlimited';
+            $this->setWarningFields($summary, self::CODE_QUOTA_UNLIMITED);
             return $summary;
         }
 
@@ -289,6 +297,18 @@ class FrontendInitialStateService {
         }
 
         return $summary;
+    }
+
+    private function safeImmichUsage(string $immichUserId): ?int {
+        if ($this->immichUserAdminService === null) {
+            return null;
+        }
+
+        try {
+            return $this->immichUserAdminService->getUserQuotaUsage($immichUserId);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function safeActionCapabilities(?string $ncUid, array &$warnings): array {
@@ -408,7 +428,8 @@ class FrontendInitialStateService {
 		$status = 'ok';
 		$warningCode = null;
 		$lastError = $this->redactString((string)($state->getLastError() ?? '')) ?: null;
-		$details = $this->quotaSyncService->computeNextcloudQuotaSnapshot((string)$state->getNcUid());
+		$immichUsage = $this->safeImmichUsage($immichUserId);
+		$details = $this->quotaSyncService->computeQuotaDetails((string)$state->getNcUid(), $immichUsage);
 		if ($state->getLastSyncStatus() === SyncStateService::STATUS_QUOTA_FAILED) {
 			$status = 'failed';
 			$warningCode = self::CODE_QUOTA_UNAVAILABLE;
@@ -430,9 +451,9 @@ class FrontendInitialStateService {
 			'ncQuota' => $details['ncQuota'] ?? null,
 			'ncUsed' => $details['ncUsed'] ?? null,
 			'ncRemaining' => $details['ncRemaining'] ?? null,
-			'immichUsage' => null,
-			'immichAvailable' => null,
-			'computedImmichQuota' => null,
+			'immichUsage' => $details['immichUsage'] ?? null,
+			'immichAvailable' => $details['immichAvailable'] ?? null,
+			'computedImmichQuota' => $details['computedImmichQuota'] ?? null,
 			'reserve' => $details['reserve'] ?? $this->reserveBytes($config),
 			'warningCode' => $warningCode,
 			'warning' => $status === 'failed' ? $lastError : null,

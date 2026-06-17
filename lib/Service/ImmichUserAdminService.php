@@ -171,7 +171,13 @@ class ImmichUserAdminService {
     }
 
     public function disableUser(string $immichUserId): array {
-        throw new \RuntimeException('Immich admin API does not expose a non-destructive disable/suspend field for this version.');
+        // Immich does not expose an "isEnabled" toggle on the admin user API. The non-destructive
+        // equivalent is a soft delete via DELETE /admin/users/{id}, which queues account purge but
+        // leaves assets recoverable for the configured retention window. Callers that need an
+        // immediate purge use deleteUser() under the destructive-delete admin policy.
+        return $this->request('DELETE', '/admin/users/' . rawurlencode($immichUserId), [
+            'body' => ['force' => false],
+        ]);
     }
 
     public function deleteUser(string $immichUserId): array {
@@ -179,7 +185,9 @@ class ImmichUserAdminService {
             throw new \RuntimeException('Immich user deletion is disabled by admin policy.');
         }
 
-        return $this->request('DELETE', '/admin/users/' . rawurlencode($immichUserId), ['body' => []]);
+        return $this->request('DELETE', '/admin/users/' . rawurlencode($immichUserId), [
+            'body' => ['force' => true],
+        ]);
     }
 
 	public function getUserQuotaUsage(string $immichUserId): ?int {

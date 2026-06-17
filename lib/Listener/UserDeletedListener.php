@@ -9,19 +9,21 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\Listener;
 
-use OCA\IntegrationImmich\BackgroundJob\ReconcileUsersJob;
+use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Service\AdminConfigService;
+use OCA\IntegrationImmich\Service\ImmichUserAdminService;
 use OCA\IntegrationImmich\Service\SyncStateService;
-use OCP\BackgroundJob\IJobList;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
+use Psr\Log\LoggerInterface;
 
 /** @template-implements IEventListener<Event> */
 class UserDeletedListener implements IEventListener {
     public function __construct(
         private AdminConfigService $adminConfigService,
-        private IJobList $jobList,
         private SyncStateService $syncStateService,
+        private ImmichUserAdminService $immichUserAdminService,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -31,18 +33,48 @@ class UserDeletedListener implements IEventListener {
             return;
         }
 
+        $state = null;
         try {
-            $this->syncStateService->updateMapping($ncUid, [
-                'scopeStatus' => SyncStateService::STATUS_DELETED,
-                'lastSyncStatus' => SyncStateService::STATUS_DELETED,
-                'lastError' => null,
+            $state = $this->syncStateService->findByUid($ncUid);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to look up Immich sync state for deleted Nextcloud user "' . $ncUid . '": ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'ncUid' => $ncUid,
             ]);
-        } catch (\Throwable) {
-            // Deleting a user without an existing mapping is safe; periodic reconcile can clean up later.
         }
 
-        if (class_exists(ReconcileUsersJob::class) && !$this->jobList->has(ReconcileUsersJob::class, ['ncUid' => $ncUid])) {
-            $this->jobList->add(ReconcileUsersJob::class, ['ncUid' => $ncUid]);
+        $immichUserId = $state === null ? '' : trim((string)$state->getImmichUserId());
+        if ($immichUserId !== '') {
+            $this->cleanupImmichUser($immichUserId, $ncUid);
+        }
+
+        try {
+            $this->syncStateService->deleteByUid($ncUid);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to drop Immich sync state for deleted Nextcloud user "' . $ncUid . '": ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'ncUid' => $ncUid,
+            ]);
+        }
+    }
+
+    private function cleanupImmichUser(string $immichUserId, string $ncUid): void {
+        $destructive = $this->adminConfigService->allowsDestructiveUserDelete();
+
+        try {
+            if ($destructive) {
+                $this->immichUserAdminService->deleteUser($immichUserId);
+                return;
+            }
+
+            $this->immichUserAdminService->disableUser($immichUserId);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to clean up Immich user "' . $immichUserId . '" for deleted Nextcloud user "' . $ncUid . '": ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'ncUid' => $ncUid,
+                'immichUserId' => $immichUserId,
+                'destructive' => $destructive,
+            ]);
         }
     }
 

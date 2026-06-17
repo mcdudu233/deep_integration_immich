@@ -136,6 +136,18 @@ class SyncStateService {
         }
     }
 
+    public function deleteByUid(string $uid): bool {
+        $this->assertValidUid($uid);
+
+        $state = $this->findByUid($uid);
+        if ($state === null) {
+            return false;
+        }
+
+        $this->mapper->deleteState($state);
+        return true;
+    }
+
     /**
      * @return SyncState[]
      */

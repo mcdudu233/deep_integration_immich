@@ -210,14 +210,14 @@ class ReconcileUsersJobTest extends TestCase {
 		$this->immichUserAdminService->expects($this->once())
 			->method('disableUser')
 			->with('immich-alice')
-			->willThrowException(new \RuntimeException('Immich admin API does not expose a non-destructive disable/suspend field for this version.'));
+			->willThrowException(new \RuntimeException('Immich admin endpoint returned HTTP 500.'));
 		$this->syncStateService->expects($this->once())
 			->method('updateMapping')
 			->with('alice', $this->callback(function (array $fields): bool {
 				$this->assertSame(SyncStateService::STATUS_OUT_OF_SCOPE, $fields['scopeStatus']);
 				$this->assertSame(SyncStateService::STATUS_FAILED, $fields['lastSyncStatus']);
 				$this->assertStringContainsString('disable/suspend is pending', $fields['lastError']);
-				$this->assertStringContainsString('does not expose', $fields['lastError']);
+				$this->assertStringContainsString('HTTP 500', $fields['lastError']);
 				return true;
 			}));
 

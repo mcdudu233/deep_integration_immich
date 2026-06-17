@@ -107,4 +107,10 @@ class SyncStateMapper extends QBMapper {
         $updated = $this->update($syncState);
         return $updated;
     }
+
+    public function deleteState(SyncState $syncState): SyncState {
+        /** @var SyncState $deleted */
+        $deleted = $this->delete($syncState);
+        return $deleted;
+    }
 }
