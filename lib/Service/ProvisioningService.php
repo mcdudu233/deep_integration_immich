@@ -184,7 +184,7 @@ class ProvisioningService {
         ];
 
         if ($createdPassword !== null) {
-            $fields['immichPassword'] = $createdPassword;
+            $fields['immichPassword'] = $this->crypto->encrypt($createdPassword);
         }
 
         if ($apiKey !== null) {
@@ -283,7 +283,25 @@ class ProvisioningService {
         }
 
         $password = $state->getImmichPassword();
-        return is_string($password) && $password !== '' ? $password : null;
+        if (!is_string($password) || $password === '') {
+            return null;
+        }
+
+        return $this->decryptCredential($password);
+    }
+
+    private function decryptCredential(string $value): string {
+        if ($value === '') {
+            return '';
+        }
+
+        try {
+            return $this->crypto->decrypt($value);
+        } catch (\Throwable) {
+            // Pre-encryption rollout stored credentials in plaintext. Tolerate that until the
+            // migration command rewrites the row; the value still works for Immich logins.
+            return $value;
+        }
     }
 
     private function userApiKeyForMapping(?SyncState $state, string $email, ?string $password, string $ncUid): ?string {

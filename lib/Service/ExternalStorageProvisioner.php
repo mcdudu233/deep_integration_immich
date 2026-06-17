@@ -49,7 +49,41 @@ class ExternalStorageProvisioner {
 			$this->persistMountIdIfMappingExists($ncUid, $result['mount_id']);
 		}
 
+		// Heal a stuck "template_verification_required" state: the library folder now exists
+		// and admin enabled auto-create, but no built-in mount record was persisted yet because
+		// the previous provisioning attempt ran before the folder appeared. Promote verify into
+		// a one-shot provision so refreshing the admin page recovers the user automatically.
+		if ($result['status'] === 'template_verification_required' && $this->shouldAutoHeal($ncUid)) {
+			return $this->provisionMount($ncUid);
+		}
+
 		return $result;
+	}
+
+	private function shouldAutoHeal(string $ncUid): bool {
+		$config = $this->adminConfigService->getAdminConfig();
+		if (!$this->boolConfig($config, AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE)) {
+			return false;
+		}
+
+		$capability = $this->externalStorageAutoCreateCapability();
+		if (!($capability['supported'] ?? false)) {
+			return false;
+		}
+
+		// Only auto-heal when this app owns the storage adapter, otherwise we may collide with
+		// the files_external app's per-user mounts. Adapters announce ownership via the duck-typed
+		// "ownsBuiltinImmichMounts" method, which BuiltinExternalStorageService implements.
+		$service = $this->externalStorageConfigService;
+		if (!is_object($service) || !method_exists($service, 'ownsBuiltinImmichMounts')) {
+			return false;
+		}
+
+		try {
+			return (bool)$service->ownsBuiltinImmichMounts();
+		} catch (\Throwable) {
+			return false;
+		}
 	}
 
 	public function provisionMount(string $ncUid): array {

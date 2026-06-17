@@ -217,4 +217,12 @@ class BuiltinExternalStorageService {
 	public static function backendLabel(): string {
 		return self::BACKEND_LABEL;
 	}
+
+	/**
+	 * Duck-typed marker that lets ExternalStorageProvisioner know this adapter owns the
+	 * built-in Immich library mounts. files_external-based adapters do not implement this.
+	 */
+	public function ownsBuiltinImmichMounts(): bool {
+		return true;
+	}
 }

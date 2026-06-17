@@ -227,6 +227,35 @@ class BrowsingAuthServiceTest extends TestCase {
         $this->assertNull($handoff['password']);
     }
 
+    public function testLegacyPasswordLoginHandoffDecryptsStoredCredential(): void {
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichUsername('alice@immich.local');
+        $state->setImmichPassword('encrypted:plaintext-password');
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+
+        $handoff = $this->service->resolveLegacyPasswordLoginHandoff('alice');
+
+        $this->assertSame(BrowsingAuthService::HANDOFF_READY, $handoff['status']);
+        $this->assertSame('alice@immich.local', $handoff['username']);
+        $this->assertSame('plaintext-password', $handoff['password']);
+    }
+
+    public function testLegacyPasswordLoginHandoffFallsBackToPlaintextForLegacyRows(): void {
+        $state = $this->syncState('alice', 'immich-alice');
+        $state->setImmichUsername('alice@immich.local');
+        $state->setImmichPassword('legacy-plaintext-password');
+        $this->adminConfigService->method('isConfigured')->willReturn(true);
+        $this->adminConfigService->method('getImmichBaseUrl')->willReturn('https://admin.example.com');
+        $this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+
+        $handoff = $this->service->resolveLegacyPasswordLoginHandoff('alice');
+
+        $this->assertSame(BrowsingAuthService::HANDOFF_READY, $handoff['status']);
+        $this->assertSame('legacy-plaintext-password', $handoff['password']);
+    }
+
     public function testCreateImmichLoginSessionPostsCredentialsServerSideAndReturnsCookieOnly(): void {
         $handoff = [
             'status' => BrowsingAuthService::HANDOFF_READY,

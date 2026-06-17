@@ -102,7 +102,7 @@ class ProvisioningServiceTest extends TestCase {
                 $this->assertSame('immich-alice', $fields['immichUserId']);
                 $this->assertSame('alice@immich.local', $fields['immichEmail']);
                 $this->assertSame('alice@immich.local', $fields['immichUsername']);
-                $this->assertSame('generated-password', $fields['immichPassword']);
+                $this->assertSame('encrypted:generated-password', $fields['immichPassword']);
                 if ($mappingUpdates === 1) {
                     $this->assertArrayNotHasKey('immichApiKey', $fields);
                 } else {

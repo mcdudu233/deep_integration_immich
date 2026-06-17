@@ -52,4 +52,7 @@ Seamlessly integrates your [Immich](https://immich.app) photo library into Nextc
         <personal>OCA\IntegrationImmich\Settings\PersonalSettings</personal>
         <personal-section>OCA\IntegrationImmich\Settings\PersonalSection</personal-section>
     </settings>
+    <commands>
+        <command>OCA\IntegrationImmich\Command\MigrateCredentialsCommand</command>
+    </commands>
 </info>

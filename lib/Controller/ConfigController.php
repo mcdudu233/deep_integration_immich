@@ -157,7 +157,7 @@ class ConfigController extends Controller {
 
         $fields = [
             'immichUsername' => $username,
-            'immichPassword' => $password,
+            'immichPassword' => $this->crypto->encrypt($password),
         ];
         if ($apiKey !== '') {
             $fields['immichApiKey'] = $this->crypto->encrypt($apiKey);
@@ -272,13 +272,14 @@ class ConfigController extends Controller {
         }
 
         $apiKey = $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
+        $password = $this->decryptNullable((string)($state->getImmichPassword() ?? ''));
 
         return [
             'enabled' => true,
             'mapped' => trim((string)$state->getImmichUserId()) !== '',
             'server_url' => $this->adminConfigService->getImmichBaseUrl(),
             'username' => (string)($state->getImmichUsername() ?? ''),
-            'password' => (string)($state->getImmichPassword() ?? ''),
+            'password' => $password,
             'api_key' => $apiKey,
             'api_key_set' => $apiKey !== '',
         ];

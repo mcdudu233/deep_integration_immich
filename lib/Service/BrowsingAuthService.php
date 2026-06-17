@@ -112,7 +112,7 @@ class BrowsingAuthService {
         }
 
         $username = trim((string)$syncState->getImmichUsername());
-        $password = (string)$syncState->getImmichPassword();
+        $password = $this->decryptStoredCredential((string)$syncState->getImmichPassword());
         if ($username === '' || $password === '') {
             return $this->handoffUnavailable(self::HANDOFF_CREDENTIALS_MISSING);
         }
@@ -328,6 +328,19 @@ class BrowsingAuthService {
                 'immichUserId' => (string)$syncState->getImmichUserId(),
             ]);
             return $apiKey;
+        }
+    }
+
+    private function decryptStoredCredential(string $value): string {
+        if ($value === '') {
+            return '';
+        }
+
+        try {
+            return $this->crypto->decrypt($value);
+        } catch (\Throwable) {
+            // Tolerate legacy plaintext rows; the migrate-credentials command rewrites them.
+            return $value;
         }
     }
 

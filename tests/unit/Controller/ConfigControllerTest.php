@@ -93,7 +93,7 @@ class ConfigControllerTest extends TestCase {
 		$state->setNcUid('testuser');
 		$state->setImmichUserId('immich-user');
 		$state->setImmichUsername('alice@immich.local');
-		$state->setImmichPassword('generated-password');
+		$state->setImmichPassword('encrypted:generated-password');
 		$state->setImmichApiKey('encrypted:user-api-key');
 		$this->adminConfigService->method('getAdminConfig')->willReturn([
 			AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
@@ -110,6 +110,25 @@ class ConfigControllerTest extends TestCase {
 		$this->assertSame('generated-password', $connection['password']);
 		$this->assertSame('user-api-key', $connection['api_key']);
 		$this->assertTrue($connection['api_key_set']);
+	}
+
+	public function testGetConfigTransparentlyHandlesLegacyPlaintextPassword(): void {
+		$state = new SyncState();
+		$state->setNcUid('testuser');
+		$state->setImmichUserId('immich-user');
+		$state->setImmichUsername('alice@immich.local');
+		// Row stored before the encryption rollout: raw plaintext that the crypto mock cannot decrypt.
+		$state->setImmichPassword('legacy-plaintext-password');
+		$state->setImmichApiKey('encrypted:user-api-key');
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_IMMICH_BROWSING_MODE => AdminConfigService::BROWSING_MODE_ADMIN_MANAGED,
+		]);
+		$this->syncStateService->method('findByUid')->with('testuser')->willReturn($state);
+
+		$response = $this->controller->getConfig();
+		$connection = $response->getData()['admin_managed_connection'];
+
+		$this->assertSame('legacy-plaintext-password', $connection['password']);
 	}
 
 	public function testGetConfigReturnsApiKeyNotSetWhenEmpty(): void {
@@ -225,7 +244,7 @@ class ConfigControllerTest extends TestCase {
 			->method('updateMapping')
 			->with('testuser', [
 				'immichUsername' => 'alice@immich.local',
-				'immichPassword' => 'generated-password',
+				'immichPassword' => 'encrypted:generated-password',
 				'immichApiKey' => 'encrypted:new-api-key',
 			]);
 
@@ -316,7 +335,7 @@ class ConfigControllerTest extends TestCase {
 		$this->assertSame('alice', $updateCalls[0]['storageLabel']);
 		$this->assertSame(SyncStateService::STATUS_ACTIVE, $updateCalls[0]['scopeStatus']);
 		$this->assertSame('alice@immich.local', $updateCalls[1]['immichUsername']);
-		$this->assertSame('generated-password', $updateCalls[1]['immichPassword']);
+		$this->assertSame('encrypted:generated-password', $updateCalls[1]['immichPassword']);
 		$this->assertSame('encrypted:pre-existing-key', $updateCalls[1]['immichApiKey']);
 	}
 

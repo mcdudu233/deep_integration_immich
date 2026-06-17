@@ -18,7 +18,7 @@ class ExternalStorageProvisionerTest extends TestCase {
 	private AdminConfigService&MockObject $adminConfigService;
 	private CapabilityService&MockObject $capabilityService;
 	private SyncStateService&MockObject $syncStateService;
-	private FakeExternalStorageConfigService $mounts;
+	private object $mounts;
 	/** @var array<string, array{exists?: bool, readable?: bool, link?: bool}> */
 	private array $filesystem = [];
 
@@ -271,6 +271,41 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->assertStringContainsString('symbolic links', implode('; ', $result['errors']));
 	}
 
+	public function testVerifyHealsTemplateVerificationRequiredWithBuiltinAdapter(): void {
+		$builtin = new FakeBuiltinAdapterMarker();
+		$this->mounts = $builtin;
+		$this->mockConfig(true, false);
+		$this->mockAutoCreateCapability(true);
+		$state = $this->state('alice', 'alice');
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->syncStateService->expects($this->once())->method('getOrCreateForUid')->with('alice');
+		$this->syncStateService->method('findByMountId')->willReturn(null);
+		$this->syncStateService->expects($this->once())->method('updateMapping')->with('alice', ['ncMountId' => 99]);
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('ok', $result['status']);
+		$this->assertCount(1, $builtin->created);
+		$this->assertSame('/mnt/immich-library/alice', $builtin->created[0]['targetPath']);
+	}
+
+	public function testVerifyDoesNotHealWhenAutoCreateDisabled(): void {
+		$builtin = new FakeBuiltinAdapterMarker();
+		$this->mounts = $builtin;
+		$this->mockConfig(false, false);
+		$this->mockAutoCreateCapability(true);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('template_verification_required', $result['status']);
+		$this->assertSame([], $builtin->created);
+	}
+
 	private function service(): ExternalStorageProvisioner {
 		return new ExternalStorageProvisioner(
 			$this->adminConfigService,
@@ -353,6 +388,29 @@ final class FakeExternalStorageConfigService {
 		$mount = new FakeStorageMount($knownMountId ?? 99, $mountName, $targetPath, ['readonly' => $readOnly], [$uid], []);
 		$this->mounts[] = $mount;
 		return $mount;
+	}
+}
+
+final class FakeBuiltinAdapterMarker {
+	/** @var list<FakeStorageMount> */
+	public array $mounts = [];
+	/** @var list<array{uid: string, mountName: string, targetPath: string, readOnly: bool, knownMountId: int|null}> */
+	public array $created = [];
+
+	/** @return list<FakeStorageMount> */
+	public function getUserStorages(string $uid): array {
+		return $this->mounts;
+	}
+
+	public function createOrUpdateLocalMount(string $uid, string $mountName, string $targetPath, bool $readOnly, ?int $knownMountId): FakeStorageMount {
+		$this->created[] = compact('uid', 'mountName', 'targetPath', 'readOnly', 'knownMountId');
+		$mount = new FakeStorageMount($knownMountId ?? 99, $mountName, $targetPath, ['readonly' => $readOnly], [$uid], []);
+		$this->mounts[] = $mount;
+		return $mount;
+	}
+
+	public function ownsBuiltinImmichMounts(): bool {
+		return true;
 	}
 }
 
