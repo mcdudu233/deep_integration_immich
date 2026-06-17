@@ -60,7 +60,12 @@ class CapabilityService {
             return ['error' => 'appinfo/info.xml not found'];
         }
 
-        $xml = @simplexml_load_file($this->infoXmlPath);
+		$contents = @file_get_contents($this->infoXmlPath);
+		if ($contents === false) {
+			return ['error' => 'appinfo/info.xml could not be read'];
+		}
+
+		$xml = @simplexml_load_string($contents, 'SimpleXMLElement', LIBXML_NONET);
         if ($xml === false) {
             return ['error' => 'appinfo/info.xml could not be parsed'];
         }

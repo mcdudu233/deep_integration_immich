@@ -124,6 +124,18 @@ class SyncStateService {
         }
     }
 
+    public function findByMountId(int $mountId): ?SyncState {
+        if ($mountId < 1) {
+            return null;
+        }
+
+        try {
+            return $this->mapper->findByMountId($mountId);
+        } catch (DoesNotExistException) {
+            return null;
+        }
+    }
+
     /**
      * @return SyncState[]
      */

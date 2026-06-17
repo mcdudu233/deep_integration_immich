@@ -139,6 +139,17 @@ class CapabilityServiceTest extends TestCase {
         $this->assertStringContainsString('not registered', $capabilities['adminSettings']['reason']);
     }
 
+    public function testInfoXmlParsingDoesNotDependOnExternalEntityLoader(): void {
+        $this->mockAdminConfig('', '');
+        $this->client->expects($this->never())->method('get');
+        $service = $this->newService($this->infoXml(true), $this->allSymbolsAvailable());
+
+        $capabilities = $service->getCapabilities();
+
+        $this->assertTrue($capabilities['nextcloudDependencyRange']['supported']);
+        $this->assertTrue($capabilities['adminSettings']['supported']);
+    }
+
 	private function newService(string $infoXmlPath, array $symbols): CapabilityService {
 		return new CapabilityService(
 			$this->adminConfigService,

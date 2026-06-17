@@ -99,11 +99,30 @@ class ImmichUserAdminService {
     }
 
     public function updateUser(string $immichUserId, array $fields): array {
-        $updated = $this->request('PUT', '/admin/users/' . rawurlencode($immichUserId), [
-            'body' => $this->normaliseUserPayload($fields, false),
-        ]);
+        $updated = $this->updateUserWithMethod('PUT', $immichUserId, $fields);
 
         return $this->withoutPassword($updated);
+    }
+
+    public function updateUserQuota(string $immichUserId, ?int $quotaSizeInBytes): void {
+        try {
+            $this->updateUserWithMethod('PUT', $immichUserId, ['quotaSizeInBytes' => $quotaSizeInBytes]);
+        } catch (\RuntimeException $e) {
+            $this->logger->warning('Immich quota PUT update failed, retrying with PATCH: ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'immichUserId' => $immichUserId,
+            ]);
+            $this->updateUserWithMethod('PATCH', $immichUserId, ['quotaSizeInBytes' => $quotaSizeInBytes]);
+        }
+
+        if ($this->quotaMatches($immichUserId, $quotaSizeInBytes)) {
+            return;
+        }
+
+        $this->updateUserWithMethod('PATCH', $immichUserId, ['quotaSizeInBytes' => $quotaSizeInBytes]);
+        if (!$this->quotaMatches($immichUserId, $quotaSizeInBytes)) {
+            throw new \RuntimeException('Immich quota update did not persist for user "' . $immichUserId . '".');
+        }
     }
 
     public function createUserApiKey(string $email, string $password, string $name = 'Nextcloud Immich integration'): string {
@@ -240,6 +259,21 @@ class ImmichUserAdminService {
         }
 
         return $payload;
+    }
+
+    private function updateUserWithMethod(string $method, string $immichUserId, array $fields): array {
+        return $this->request($method, '/admin/users/' . rawurlencode($immichUserId), [
+            'body' => $this->normaliseUserPayload($fields, false),
+        ]);
+    }
+
+    private function quotaMatches(string $immichUserId, ?int $expectedQuota): bool {
+        $quotaState = $this->getUserQuotaState($immichUserId);
+        if (!$quotaState['found']) {
+            throw new \RuntimeException('Mapped Immich user "' . $immichUserId . '" was not found after quota update.');
+        }
+
+        return $quotaState['quotaSizeInBytes'] === $expectedQuota;
     }
 
     private function request(string $method, string $endpoint, array $options = [], ?string $baseUrl = null, ?string $apiKey = null): array {

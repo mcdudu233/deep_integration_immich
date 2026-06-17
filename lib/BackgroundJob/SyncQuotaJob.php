@@ -110,9 +110,7 @@ class SyncQuotaJob extends QueuedJob {
 
 			$quotaChanged = $currentQuota !== $computedQuota;
             if ($quotaChanged) {
-                $this->immichUserAdminService->updateUser($immichUserId, [
-                    'quotaSizeInBytes' => $computedQuota,
-                ]);
+                $this->immichUserAdminService->updateUserQuota($immichUserId, $computedQuota);
             }
 
             $this->persistSuccess($ncUid, $lastSyncAt);

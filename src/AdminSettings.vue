@@ -17,7 +17,7 @@
 								value="personal"
 								type="radio"
 								data-testid="immich-browsing-mode-personal">
-								{{ t('deep_integration_immich', 'Personal Immich') }}
+								{{ t('deep_integration_immich', 'Personal Management Mode') }}
 							</NcCheckboxRadioSwitch>
 						</label>
 						<label class="control-hit-target" @click.capture.stop.prevent="form.immich_browsing_mode = 'admin_managed'">
@@ -26,7 +26,7 @@
 								value="admin_managed"
 								type="radio"
 								data-testid="immich-browsing-mode-admin-managed">
-								{{ t('deep_integration_immich', 'Administrator-managed Immich') }}
+								{{ t('deep_integration_immich', 'Administrator Management Mode') }}
 							</NcCheckboxRadioSwitch>
 						</label>
 					</div>
@@ -43,7 +43,7 @@
 				<NcNoteCard v-if="!isAdminManagedMode"
 					type="info"
 					data-testid="personal-browsing-mode-note">
-					{{ t('deep_integration_immich', 'Personal Immich mode restores the original per-user connection flow. Users configure their own Immich server URL and API key in Immich Personal Connection.') }}
+					{{ t('deep_integration_immich', 'Personal Management Mode restores the original per-user connection flow. Users configure their own Immich server URL and API key in Immich Personal Connection.') }}
 				</NcNoteCard>
 
 				<div v-if="isAdminManagedMode" class="field" data-testid="immich-admin-url">
@@ -910,7 +910,7 @@ const saveFieldErrorsByField = computed(() => {
 
 const isAdminManagedMode = computed(() => form.immich_browsing_mode === 'admin_managed')
 const browsingModeHint = computed(() => isAdminManagedMode.value
-	? t('deep_integration_immich', 'Administrator-managed mode uses one Immich admin connection for provisioning, quotas, mounts, and centralized browsing.')
+	? t('deep_integration_immich', 'Administrator Management Mode uses one Immich admin connection for provisioning, quotas, mounts, and centralized browsing.')
 	: t('deep_integration_immich', 'Personal mode lets each user connect their own Immich account with a personal URL and API key.'))
 
 // ── Lifecycle ─────────────────────────────────────────────────────────

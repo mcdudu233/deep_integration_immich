@@ -284,6 +284,66 @@ class ImmichUserAdminServiceTest extends TestCase {
         ]);
     }
 
+    public function testUpdateUserQuotaVerifiesPersistedQuota(): void {
+        $this->client->expects($this->once())
+            ->method('put')
+            ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertSame(123456, $payload['quotaSizeInBytes']);
+                return true;
+            }))
+            ->willReturn($this->response(200, ['id' => 'immich-alice']));
+        $this->client->expects($this->once())
+            ->method('get')
+            ->willReturn($this->response(200, [
+                ['id' => 'immich-alice', 'quotaUsageInBytes' => 12, 'quotaSizeInBytes' => 123456],
+            ]));
+        $this->client->expects($this->never())->method('patch');
+
+        $this->service->updateUserQuota('immich-alice', 123456);
+    }
+
+    public function testUpdateUserQuotaFallsBackToPatchWhenPutDoesNotPersistQuota(): void {
+        $this->client->expects($this->once())
+            ->method('put')
+            ->willReturn($this->response(200, ['id' => 'immich-alice']));
+        $this->client->expects($this->once())
+            ->method('patch')
+            ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertSame(123456, $payload['quotaSizeInBytes']);
+                return true;
+            }))
+            ->willReturn($this->response(200, ['id' => 'immich-alice']));
+        $this->client->expects($this->exactly(2))
+            ->method('get')
+            ->willReturnOnConsecutiveCalls(
+                $this->response(200, [['id' => 'immich-alice', 'quotaSizeInBytes' => 111]]),
+                $this->response(200, [['id' => 'immich-alice', 'quotaSizeInBytes' => 123456]]),
+            );
+
+        $this->service->updateUserQuota('immich-alice', 123456);
+    }
+
+    public function testUpdateUserQuotaFallsBackToPatchWhenPutFails(): void {
+        $this->client->expects($this->once())
+            ->method('put')
+            ->willReturn($this->response(405, ['message' => 'method not allowed']));
+        $this->client->expects($this->once())
+            ->method('patch')
+            ->with('https://photos.example.com/api/admin/users/immich-alice', $this->callback(function (array $options): bool {
+                $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
+                $this->assertSame(123456, $payload['quotaSizeInBytes']);
+                return true;
+            }))
+            ->willReturn($this->response(200, ['id' => 'immich-alice']));
+        $this->client->expects($this->once())
+            ->method('get')
+            ->willReturn($this->response(200, [['id' => 'immich-alice', 'quotaSizeInBytes' => 123456]]));
+
+        $this->service->updateUserQuota('immich-alice', 123456);
+    }
+
     public function testCreateUserApiKeyLogsInAndCreatesKeyWithBearerToken(): void {
         $this->client->expects($this->exactly(2))
             ->method('post')

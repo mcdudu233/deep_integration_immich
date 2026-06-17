@@ -36,6 +36,7 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->mockConfig(false, false);
 		$state = $this->state('alice', 'alice');
 		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->syncStateService->method('findByMountId')->with(42)->willReturn(null);
 		$this->syncStateService->expects($this->once())->method('updateMapping')->with('alice', ['ncMountId' => 42]);
 		$this->markPath('/srv/immich/originals/library/alice', true, true);
 		$this->markPath('/mnt/immich-library/alice', true, true);
@@ -53,6 +54,23 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->assertTrue($result['available_only_to_uid']);
 		$this->assertTrue($result['not_root_storage']);
 		$this->assertTrue($result['target_matches']);
+		$this->assertSame(42, $result['mount_id']);
+	}
+
+	public function testVerifyDoesNotPersistMountIdOwnedByDifferentUser(): void {
+		$this->mockConfig(false, false);
+		$state = $this->state('alice', 'alice');
+		$owner = $this->state('bob', 'bob');
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->syncStateService->method('findByMountId')->with(42)->willReturn($owner);
+		$this->syncStateService->expects($this->never())->method('updateMapping');
+		$this->markPath('/srv/immich/originals/library/alice', true, true);
+		$this->markPath('/mnt/immich-library/alice', true, true);
+		$this->mounts->mounts[] = new FakeStorageMount(42, '/Immich Photos', '/mnt/immich-library/alice', ['readonly' => true], ['alice'], []);
+
+		$result = $this->service()->verifyMount('alice');
+
+		$this->assertSame('ok', $result['status']);
 		$this->assertSame(42, $result['mount_id']);
 	}
 
@@ -91,6 +109,7 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$state = $this->state('alice', 'alice');
 		$state->setImmichUserId('550e8400-e29b-41d4-a716-446655440000');
 		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->syncStateService->method('findByMountId')->with(99)->willReturn(null);
 		$this->syncStateService->expects($this->once())->method('getOrCreateForUid')->with('alice');
 		$this->syncStateService->expects($this->once())->method('updateMapping')->with('alice', ['ncMountId' => 99]);
 		$this->markPath('/srv/immich/originals/library/alice', true, true);
@@ -218,6 +237,7 @@ class ExternalStorageProvisionerTest extends TestCase {
 		$this->mockConfig(true, true);
 		$this->mockAutoCreateCapability(true);
 		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
+		$this->syncStateService->method('findByMountId')->with(99)->willReturn(null);
 		$this->syncStateService->expects($this->once())->method('getOrCreateForUid')->with('alice');
 		$this->syncStateService->expects($this->once())->method('updateMapping')->with('alice', ['ncMountId' => 99]);
 		$this->markPath('/srv/immich/originals/library/alice', false, false);

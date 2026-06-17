@@ -55,9 +55,8 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
         $this->immichUserAdminService->expects($this->once())
-            ->method('updateUser')
-            ->with('immich-alice', ['quotaSizeInBytes' => 400])
-            ->willReturn(['id' => 'immich-alice']);
+            ->method('updateUserQuota')
+            ->with('immich-alice', 400);
         $this->syncStateService->expects($this->once())
             ->method('updateMapping')
             ->with('alice', $this->callback(function (array $fields): bool {
@@ -89,9 +88,8 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(true);
         $this->immichUserAdminService->expects($this->once())
-            ->method('updateUser')
-            ->with('immich-alice', ['quotaSizeInBytes' => null])
-            ->willReturn(['id' => 'immich-alice']);
+            ->method('updateUserQuota')
+            ->with('immich-alice', null);
         $this->syncStateService->expects($this->once())->method('updateMapping');
 
         $result = $this->job()->syncForUser('alice');
@@ -110,6 +108,7 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('computeQuotaDetails')->with('alice', 200)->willReturn($this->quotaDetails(null, 700, 200, 500, 100, null, false, 'Nextcloud quota must be a finite byte value or unlimited.'));
         $this->quotaSyncService->method('getLastError')->willReturn('Nextcloud quota must be a finite byte value or unlimited.');
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
+		$this->immichUserAdminService->expects($this->never())->method('updateUserQuota');
         $this->syncStateService->expects($this->once())
             ->method('updateMapping')
             ->with('alice', $this->callback(function (array $fields): bool {
@@ -135,9 +134,8 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
         $this->immichUserAdminService->expects($this->once())
-            ->method('updateUser')
-            ->with('immich-alice', ['quotaSizeInBytes' => 500])
-            ->willReturn(['id' => 'immich-alice']);
+            ->method('updateUserQuota')
+            ->with('immich-alice', 500);
         $this->syncStateService->expects($this->once())->method('updateMapping');
 
         $result = $this->job()->syncForUser('alice');
@@ -156,6 +154,7 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
+		$this->immichUserAdminService->expects($this->never())->method('updateUserQuota');
         $this->syncStateService->expects($this->once())->method('updateMapping');
 
         $result = $this->job()->syncForUser('alice');
@@ -173,6 +172,7 @@ class SyncQuotaJobTest extends TestCase {
         $this->quotaSyncService->method('getLastError')->willReturn(null);
         $this->quotaSyncService->method('wasLastQuotaUnlimited')->willReturn(false);
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
+		$this->immichUserAdminService->expects($this->never())->method('updateUserQuota');
         $this->syncStateService->expects($this->once())
             ->method('updateMapping')
             ->with('alice', $this->callback(function (array $fields): bool {
@@ -192,6 +192,7 @@ class SyncQuotaJobTest extends TestCase {
         $this->immichUserAdminService->expects($this->never())->method('getUserQuotaState');
         $this->quotaSyncService->expects($this->never())->method('computeQuotaDetails');
         $this->immichUserAdminService->expects($this->never())->method('updateUser');
+		$this->immichUserAdminService->expects($this->never())->method('updateUserQuota');
         $this->syncStateService->expects($this->never())->method('updateMapping');
 
         $result = $this->job()->syncForUser('alice');

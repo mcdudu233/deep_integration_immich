@@ -480,13 +480,17 @@ class ExternalStorageProvisioner {
 			return;
 		}
 
+		if (!$this->mountIdMayBePersisted($ncUid, $mountId)) {
+			return;
+		}
+
 		$this->syncStateService->getOrCreateForUid($ncUid);
 		$this->syncStateService->updateMapping($ncUid, ['ncMountId' => $mountId]);
 	}
 
 	private function persistMountIdIfMappingExists(string $ncUid, int $mountId): void {
 		try {
-			if ($this->syncStateService->findByUid($ncUid) !== null) {
+			if ($this->syncStateService->findByUid($ncUid) !== null && $this->mountIdMayBePersisted($ncUid, $mountId)) {
 				$this->syncStateService->updateMapping($ncUid, ['ncMountId' => $mountId]);
 			}
 		} catch (\Throwable $e) {
@@ -495,6 +499,19 @@ class ExternalStorageProvisioner {
 				'ncUid' => $ncUid,
 			]);
 		}
+	}
+
+	private function mountIdMayBePersisted(string $ncUid, int $mountId): bool {
+		$owner = $this->syncStateService->findByMountId($mountId);
+		if ($owner === null || $owner->getNcUid() === $ncUid) {
+			return true;
+		}
+
+		$this->logger->warning('Verified Nextcloud mount id ' . $mountId . ' for user "' . $ncUid . '" is already mapped to user "' . $owner->getNcUid() . '"; leaving sync state unchanged.', [
+			'app' => Application::APP_ID,
+			'ncUid' => $ncUid,
+		]);
+		return false;
 	}
 
 	private function pathExists(string $path): bool {

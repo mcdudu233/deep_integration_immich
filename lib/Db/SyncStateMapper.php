@@ -52,6 +52,17 @@ class SyncStateMapper extends QBMapper {
         return $syncState;
     }
 
+    public function findByMountId(int $mountId): SyncState {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('*')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('nc_mount_id', $qb->createNamedParameter($mountId)));
+
+        /** @var SyncState $syncState */
+        $syncState = $this->findEntity($qb);
+        return $syncState;
+    }
+
     /**
      * @return SyncState[]
      */

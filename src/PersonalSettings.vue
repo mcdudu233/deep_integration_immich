@@ -8,7 +8,7 @@
 			:description="sectionDescription">
 			<div v-if="adminManagedBrowsing" class="immich-personal-settings-form">
 				<NcNoteCard type="warning" data-testid="admin-managed-connection-warning">
-					<p>{{ t('deep_integration_immich', '请勿随意修改') }}</p>
+					<p>{{ t('deep_integration_immich', 'Please do not make arbitrary modifications as it may result in connection failure!') }}</p>
 				</NcNoteCard>
 
 				<NcTextField v-model="adminForm.server_url"
