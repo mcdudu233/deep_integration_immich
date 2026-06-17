@@ -185,12 +185,14 @@ Read-only:                true
 Operator requirements:
 
 1. Bind the Immich library root into the Nextcloud runtime as a read-only path.
-2. Enable Nextcloud's External Storage app and the Local backend.
+2. Enable Nextcloud's External Storage app and the Local backend, **or** leave it disabled and rely on this app's built-in mount provider (`OCA\IntegrationImmich\Mount\ImmichLibraryMountProvider`) which surfaces the per-user mirror without `files_external` being installed.
 3. Configure or allow provisioning of a Local External Storage mount for each scoped user.
 4. Scope each mount to the matching NC user, not all users.
 5. Keep the mount outside the Nextcloud `data/` directory and never configure it as root storage.
 6. Mark the mount read-only in Nextcloud storage options and enforce read-only access at the container/filesystem layer when possible.
 7. If the Immich personal library folder does not exist yet, leave the mount pending until the first Immich upload creates it unless the admin has explicitly enabled empty directory creation.
+
+The built-in mount provider is registered automatically in `OCA\IntegrationImmich\AppInfo\Application::boot()` and is gated by the admin toggle "Auto-create the per-user external storage mount". When enabled, each scoped user's `/Immich Photos` mount is emitted with a `PermissionsMask` wrapper that allows only `PERMISSION_READ`, so Nextcloud never writes to Immich-owned files.
 
 If the running Nextcloud version does not expose a stable external-storage provisioning API, administrators can preconfigure matching template mounts and use the app only to verify path, scope, and read-only status.
 

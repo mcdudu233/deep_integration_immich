@@ -29,6 +29,13 @@ class CapabilityService {
         'OC\\Files\\External\\Service\\DBConfigService' => 'class',
 	];
 
+    private const BUILTIN_EXTERNAL_STORAGE_APIS = [
+        'OCP\\Files\\Config\\IMountProvider' => 'interface',
+        'OC\\Files\\Storage\\Local' => 'class',
+        'OC\\Files\\Storage\\Wrapper\\PermissionsMask' => 'class',
+        'OC\\Files\\Mount\\MountPoint' => 'class',
+    ];
+
 	public function __construct(
 		private AdminConfigService $adminConfigService,
 		private IClientService $clientService,
@@ -170,13 +177,31 @@ class CapabilityService {
             }
         }
 
+        $builtinAvailable = $this->detectBuiltinExternalStorage();
+        if ($builtinAvailable) {
+            $available[] = 'builtin:deep_integration_immich';
+        }
+
         if ($available === []) {
             return $this->unsupported('blocking', 'No supported Nextcloud external-storage provisioning API was detected.', 'Install/enable the external storage app or configure mounts manually and let this app verify them.');
         }
 
-        $capability = $this->supported('A known Nextcloud external-storage provisioning API is available.');
+        $capability = $this->supported($builtinAvailable
+            ? 'Built-in Immich library mount provider is available; no Nextcloud external storage app is required.'
+            : 'A known Nextcloud external-storage provisioning API is available.');
         $capability['availableApis'] = $available;
+        $capability['builtinProvider'] = $builtinAvailable;
         return $capability;
+    }
+
+    private function detectBuiltinExternalStorage(): bool {
+        foreach (self::BUILTIN_EXTERNAL_STORAGE_APIS as $symbol => $type) {
+            if (!$this->symbolExists($symbol, $type)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function detectSafeProxyBrowsing(array $adminConfig): array {

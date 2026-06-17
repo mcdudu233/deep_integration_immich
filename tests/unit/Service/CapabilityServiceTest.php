@@ -83,6 +83,10 @@ class CapabilityServiceTest extends TestCase {
         $symbols = $this->allSymbolsAvailable();
         $symbols['OCP\\Files\\External\\IExternalMountProvider'] = false;
         $symbols['OC\\Files\\External\\Service\\DBConfigService'] = false;
+        $symbols['OCP\\Files\\Config\\IMountProvider'] = false;
+        $symbols['OC\\Files\\Storage\\Local'] = false;
+        $symbols['OC\\Files\\Storage\\Wrapper\\PermissionsMask'] = false;
+        $symbols['OC\\Files\\Mount\\MountPoint'] = false;
 
         $service = $this->newService($this->infoXml(true), $symbols);
 
@@ -91,6 +95,24 @@ class CapabilityServiceTest extends TestCase {
         $this->assertFalse($capabilities['nextcloudExternalStorageAutoCreate']['supported']);
         $this->assertSame('blocking', $capabilities['nextcloudExternalStorageAutoCreate']['severity']);
         $this->assertStringContainsString('external-storage provisioning API', $capabilities['nextcloudExternalStorageAutoCreate']['reason']);
+    }
+
+    public function testBuiltinMountProviderSatisfiesExternalStorageAutoCreate(): void {
+        $this->mockAdminConfig('https://photos.example.com', 'secret-admin-key');
+        $this->client->method('get')->willReturn($this->response(200));
+
+        $symbols = $this->allSymbolsAvailable();
+        $symbols['OCP\\Files\\External\\IExternalMountProvider'] = false;
+        $symbols['OC\\Files\\External\\Service\\DBConfigService'] = false;
+
+        $service = $this->newService($this->infoXml(true), $symbols);
+
+        $capabilities = $service->getCapabilities();
+
+        $this->assertTrue($capabilities['nextcloudExternalStorageAutoCreate']['supported']);
+        $this->assertTrue($capabilities['nextcloudExternalStorageAutoCreate']['builtinProvider']);
+        $this->assertContains('builtin:deep_integration_immich', $capabilities['nextcloudExternalStorageAutoCreate']['availableApis']);
+        $this->assertStringContainsString('Built-in', $capabilities['nextcloudExternalStorageAutoCreate']['reason']);
     }
 
     public function testMissingOptionalEventClassReturnsWarningWithoutFatalError(): void {
@@ -192,6 +214,10 @@ class CapabilityServiceTest extends TestCase {
             'OCP\\Group\\Events\\UserRemovedEvent' => true,
             'OCP\\Files\\External\\IExternalMountProvider' => true,
             'OC\\Files\\External\\Service\\DBConfigService' => true,
+            'OCP\\Files\\Config\\IMountProvider' => true,
+            'OC\\Files\\Storage\\Local' => true,
+            'OC\\Files\\Storage\\Wrapper\\PermissionsMask' => true,
+            'OC\\Files\\Mount\\MountPoint' => true,
             'OCA\\IntegrationImmich\\Service\\SyncStateService' => true,
         ];
     }

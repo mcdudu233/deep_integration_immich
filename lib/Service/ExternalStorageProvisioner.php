@@ -11,6 +11,7 @@ namespace OCA\IntegrationImmich\Service;
 
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Db\SyncState;
+use OCA\IntegrationImmich\Mount\BuiltinExternalStorageService;
 use OCP\Files\Config\IMountProviderCollection;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
@@ -36,9 +37,10 @@ class ExternalStorageProvisioner {
 		?callable $filesystem = null,
 		private ?IMountProviderCollection $mountProviderCollection = null,
 		private ?IUserManager $userManager = null,
+		private ?BuiltinExternalStorageService $builtinStorageService = null,
 	) {
 		$this->filesystem = $filesystem;
-		$this->externalStorageConfigService ??= new NextcloudExternalStorageConfigService();
+		$this->externalStorageConfigService ??= $this->builtinStorageService ?? new NextcloudExternalStorageConfigService();
 	}
 
 	public function verifyMount(string $ncUid): array {
@@ -347,7 +349,7 @@ class ExternalStorageProvisioner {
 	}
 
 	private function manualSetupRemediation(string $ncUid, string $mountName, string $targetPath): string {
-		return 'Enable the Nextcloud External storage app with the Local backend available, then create or update a read-only Local mount named "' . $mountName . '" pointing to "' . $targetPath . '" and make it applicable only to user "' . $ncUid . '" with no applicable groups.';
+		return 'Enable the built-in Immich library mount provider in this app, or enable the Nextcloud External storage app with the Local backend available, then create or update a read-only Local mount named "' . $mountName . '" pointing to "' . $targetPath . '" and make it applicable only to user "' . $ncUid . '" with no applicable groups.';
 	}
 
 	private function mountTargetPath(object $mount): ?string {

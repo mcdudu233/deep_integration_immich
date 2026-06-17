@@ -19,13 +19,16 @@ use OCA\IntegrationImmich\Listener\LoadAdditionalScriptsListener;
 use OCA\IntegrationImmich\Listener\UserChangedListener;
 use OCA\IntegrationImmich\Listener\UserCreatedListener;
 use OCA\IntegrationImmich\Listener\UserDeletedListener;
+use OCA\IntegrationImmich\Mount\ImmichLibraryMountProvider;
 use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\BackgroundJob\IJobList;
+use OCP\Files\Config\IMountProviderCollection;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
+use OCP\Server;
 
 class Application extends App implements IBootstrap {
     public const APP_ID = 'deep_integration_immich';
@@ -71,6 +74,10 @@ class Application extends App implements IBootstrap {
     public function boot(IBootContext $context): void {
         $context->injectFn(function (IJobList $jobList, AdminConfigService $adminConfigService): void {
             $this->registerTimedJobs($jobList, $adminConfigService);
+        });
+
+        $context->injectFn(function (IMountProviderCollection $mountProviderCollection): void {
+            $mountProviderCollection->registerProvider(Server::get(ImmichLibraryMountProvider::class));
         });
     }
 
