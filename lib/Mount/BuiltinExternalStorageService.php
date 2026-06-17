@@ -11,6 +11,7 @@ namespace OCA\IntegrationImmich\Mount;
 
 use OCA\IntegrationImmich\AppInfo\Application;
 use OCA\IntegrationImmich\Db\SyncState;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\PathTemplateService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\Files\Config\IUserMountCache;
@@ -30,6 +31,7 @@ class BuiltinExternalStorageService {
 		private PathTemplateService $pathTemplateService,
 		private IUserManager $userManager,
 		private LoggerInterface $logger,
+		private ?AdminConfigService $adminConfigService = null,
 		private ?IUserMountCache $userMountCache = null,
 	) {
 	}
@@ -81,13 +83,75 @@ class BuiltinExternalStorageService {
 			return null;
 		}
 
+		$descriptor = $this->descriptorForState($state);
+		if ($descriptor === null) {
+			// We have a persisted mount id but no admin config to rebuild paths from.
+			// Returning an opaque entry still lets ExternalStorageProvisioner detect that the
+			// mount exists; callers that need the path information will fall back to inspectMount.
+			return new BuiltinStorageMount(
+				$mountId,
+				'',
+				'',
+				$state->getNcUid(),
+				true,
+			);
+		}
+
 		return new BuiltinStorageMount(
 			$mountId,
-			'',
-			'',
+			$descriptor['mount_point'],
+			$descriptor['target_path'],
 			$state->getNcUid(),
 			true,
 		);
+	}
+
+	/**
+	 * @return array{mount_point: string, target_path: string}|null
+	 */
+	private function descriptorForState(SyncState $state): ?array {
+		if ($this->adminConfigService === null) {
+			return null;
+		}
+
+		try {
+			$config = $this->adminConfigService->getAdminConfig();
+			$storageLabel = $this->storageLabelForState($state, $config);
+
+			$mountTemplate = trim((string)($config[AdminConfigService::KEY_MOUNT_NAME_TEMPLATE] ?? 'Immich Photos'));
+			$ncVisible = trim((string)($config[AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE] ?? ''));
+			$hostPath = trim((string)($config[AdminConfigService::KEY_HOST_PATH_TEMPLATE] ?? ''));
+			$pathTemplate = $ncVisible !== '' ? $ncVisible : $hostPath;
+			if ($mountTemplate === '' || $pathTemplate === '') {
+				return null;
+			}
+
+			$mountName = $this->normalizeMountPoint(
+				$this->pathTemplateService->expandPathTemplate($mountTemplate, $state->getNcUid(), $storageLabel),
+			);
+			$targetPath = $this->pathTemplateService->expandPathTemplate($pathTemplate, $state->getNcUid(), $storageLabel);
+
+			return [
+				'mount_point' => $mountName,
+				'target_path' => $targetPath,
+			];
+		} catch (\Throwable $e) {
+			$this->logger->debug('Failed to rebuild built-in mount descriptor for user "' . $state->getNcUid() . '": ' . $e->getMessage(), [
+				'app' => Application::APP_ID,
+				'ncUid' => $state->getNcUid(),
+			]);
+			return null;
+		}
+	}
+
+	private function storageLabelForState(SyncState $state, array $config): string {
+		$label = trim((string)$state->getStorageLabel());
+		if ($label !== '') {
+			return $this->pathTemplateService->sanitizeStorageLabel($label);
+		}
+
+		$template = (string)($config[AdminConfigService::KEY_STORAGE_LABEL_TEMPLATE] ?? '{uid}');
+		return $this->pathTemplateService->expandStorageLabelTemplate($template, $state->getNcUid());
 	}
 
 	private function allocateMountId(string $ncUid): int {

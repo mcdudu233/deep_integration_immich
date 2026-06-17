@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\IntegrationImmich\Tests\Unit\Mount;
 
-use OCA\IntegrationImmich\Mount\BuiltinExternalStorageService;
 use OCA\IntegrationImmich\Db\SyncState;
+use OCA\IntegrationImmich\Mount\BuiltinExternalStorageService;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\PathTemplateService;
 use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\Files\Config\IUserMountCache;
@@ -19,6 +20,7 @@ class BuiltinExternalStorageServiceTest extends TestCase {
 	private SyncStateService&MockObject $syncStateService;
 	private IUserManager&MockObject $userManager;
 	private IUserMountCache&MockObject $userMountCache;
+	private AdminConfigService&MockObject $adminConfigService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -26,6 +28,7 @@ class BuiltinExternalStorageServiceTest extends TestCase {
 		$this->syncStateService = $this->createMock(SyncStateService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->userMountCache = $this->createMock(IUserMountCache::class);
+		$this->adminConfigService = $this->createMock(AdminConfigService::class);
 	}
 
 	public function testCreateOrUpdateLocalMountAllocatesStableIdForUser(): void {
@@ -93,13 +96,37 @@ class BuiltinExternalStorageServiceTest extends TestCase {
 	public function testGetUserStoragesReturnsBuiltinMountWhenMappingExists(): void {
 		$state = $this->state('alice', 'alice', 17);
 		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_HOST_PATH_TEMPLATE => '/srv/immich/originals/library/{storageLabel}',
+			AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE => '/mnt/immich-library/{storageLabel}',
+			AdminConfigService::KEY_MOUNT_NAME_TEMPLATE => 'Immich Photos',
+			AdminConfigService::KEY_STORAGE_LABEL_TEMPLATE => '{uid}',
+		]);
 
 		$mounts = $this->service()->getUserStorages('alice');
 
 		$this->assertCount(1, $mounts);
 		$this->assertSame(17, $mounts[0]->getId());
+		$this->assertSame('/Immich Photos', $mounts[0]->getMountPoint());
+		$this->assertSame(['datadir' => '/mnt/immich-library/alice'], $mounts[0]->getBackendOptions());
 		$this->assertSame(['alice'], $mounts[0]->getApplicableUsers());
 		$this->assertSame(['readonly' => true], $mounts[0]->getMountOptions());
+	}
+
+	public function testGetUserStoragesFallsBackToHostPathWhenNcVisibleTemplateIsEmpty(): void {
+		$state = $this->state('alice', 'alice', 17);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_HOST_PATH_TEMPLATE => '/srv/immich/originals/library/{storageLabel}',
+			AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE => '',
+			AdminConfigService::KEY_MOUNT_NAME_TEMPLATE => 'Immich Photos',
+			AdminConfigService::KEY_STORAGE_LABEL_TEMPLATE => '{uid}',
+		]);
+
+		$mounts = $this->service()->getUserStorages('alice');
+
+		$this->assertCount(1, $mounts);
+		$this->assertSame(['datadir' => '/srv/immich/originals/library/alice'], $mounts[0]->getBackendOptions());
 	}
 
 	private function service(): BuiltinExternalStorageService {
@@ -108,6 +135,7 @@ class BuiltinExternalStorageServiceTest extends TestCase {
 			new PathTemplateService(),
 			$this->userManager,
 			$this->createMock(LoggerInterface::class),
+			$this->adminConfigService,
 			$this->userMountCache,
 		);
 	}

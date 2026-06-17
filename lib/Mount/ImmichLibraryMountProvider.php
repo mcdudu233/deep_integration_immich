@@ -128,14 +128,19 @@ class ImmichLibraryMountProvider implements IMountProvider {
 		}
 
 		$pathTemplate = trim((string)($config[AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE] ?? ''));
+		$hostTemplate = trim((string)($config[AdminConfigService::KEY_HOST_PATH_TEMPLATE] ?? ''));
 		$mountTemplate = trim((string)($config[AdminConfigService::KEY_MOUNT_NAME_TEMPLATE] ?? 'Immich Photos'));
-		if ($pathTemplate === '' || $mountTemplate === '') {
+
+		// In built-in mode the Nextcloud runtime reads from the same host path that Immich writes,
+		// so fall back to the host template when no separate NC-visible mount has been configured.
+		$effectivePathTemplate = $pathTemplate !== '' ? $pathTemplate : $hostTemplate;
+		if ($effectivePathTemplate === '' || $mountTemplate === '') {
 			return null;
 		}
 
 		$storageLabel = $this->storageLabelForState($state, $config, $ncUid);
 
-		$targetPath = $this->pathTemplateService->expandPathTemplate($pathTemplate, $ncUid, $storageLabel);
+		$targetPath = $this->pathTemplateService->expandPathTemplate($effectivePathTemplate, $ncUid, $storageLabel);
 		$mountName = $this->normalizeMountName(
 			$this->pathTemplateService->expandPathTemplate($mountTemplate, $ncUid, $storageLabel),
 		);

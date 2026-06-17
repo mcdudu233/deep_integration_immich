@@ -126,8 +126,16 @@ class ExternalStorageProvisioner {
 			$config = $this->adminConfigService->getAdminConfig();
 			$storageLabel = $this->storageLabelForUid($ncUid, $state, $config);
 
-			$hostPath = $this->expandAndValidateConfiguredPath((string)($config[AdminConfigService::KEY_HOST_PATH_TEMPLATE] ?? ''), $ncUid, $storageLabel);
-			$targetPath = $this->expandAndValidateConfiguredPath((string)($config[AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE] ?? ''), $ncUid, $storageLabel);
+			$hostTemplate = (string)($config[AdminConfigService::KEY_HOST_PATH_TEMPLATE] ?? '');
+			$ncVisibleTemplate = (string)($config[AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE] ?? '');
+			// In built-in mode the Nextcloud runtime usually reads from the same host path that
+			// Immich writes, so fall back to the host template when no separate NC-visible mount
+			// has been configured. This keeps the MountProvider, this inspect step, and the
+			// persisted descriptor in agreement.
+			$effectiveNcVisibleTemplate = trim($ncVisibleTemplate) !== '' ? $ncVisibleTemplate : $hostTemplate;
+
+			$hostPath = $this->expandAndValidateConfiguredPath($hostTemplate, $ncUid, $storageLabel);
+			$targetPath = $this->expandAndValidateConfiguredPath($effectiveNcVisibleTemplate, $ncUid, $storageLabel);
 			$mountName = $this->expandMountName((string)($config[AdminConfigService::KEY_MOUNT_NAME_TEMPLATE] ?? 'Immich Photos'), $ncUid, $storageLabel);
 
 			$this->assertNoExistingSymlinkSegment($hostPath);

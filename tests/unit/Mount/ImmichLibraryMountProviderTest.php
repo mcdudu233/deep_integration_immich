@@ -103,6 +103,25 @@ class ImmichLibraryMountProviderTest extends TestCase {
 		$this->assertSame([], $this->provider()->getMountsForUser($this->user('alice'), $this->factory()));
 	}
 
+	public function testFallsBackToHostPathWhenNcVisibleTemplateIsEmpty(): void {
+		$state = $this->state('alice', 'alice');
+		$state->setNcMountId(7);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->adminConfigService->method('getAdminConfig')->willReturn([
+			AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE => true,
+			AdminConfigService::KEY_NC_VISIBLE_PATH_TEMPLATE => '',
+			AdminConfigService::KEY_HOST_PATH_TEMPLATE => '/srv/immich/originals/library/{storageLabel}',
+			AdminConfigService::KEY_MOUNT_NAME_TEMPLATE => 'Immich Photos',
+			AdminConfigService::KEY_STORAGE_LABEL_TEMPLATE => '{uid}',
+		]);
+		$this->existingPaths['/srv/immich/originals/library/alice'] = true;
+
+		$mounts = $this->provider()->getMountsForUser($this->user('alice'), $this->factory());
+
+		$this->assertCount(1, $mounts);
+		$this->assertSame('/alice/files/Immich Photos/', $mounts[0]->getMountPoint());
+	}
+
 	private function provider(): ImmichLibraryMountProvider {
 		return new ImmichLibraryMountProvider(
 			$this->adminConfigService,
