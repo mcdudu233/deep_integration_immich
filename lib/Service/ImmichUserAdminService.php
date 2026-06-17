@@ -170,6 +170,94 @@ class ImmichUserAdminService {
         }
     }
 
+    /**
+     * Resolve an Immich user record from a user-supplied API key. Used when a Nextcloud user
+     * binds an Immich account that was created outside of this plugin (no admin provisioning).
+     *
+     * Strategy: validate the API key, then call /users/me with the same key to read the user id
+     * and storage label. Falls back to scanning the admin user list by email when the
+     * dedicated profile endpoint is unavailable on older Immich versions.
+     *
+     * @return array{success: true, user: array{id: string, email: string, name: string, storageLabel: string}}|array{success: false, error: string}
+     */
+    public function findUserByApiKey(string $apiKey): array {
+        $validation = $this->validateUserApiKey($apiKey);
+        if (($validation['success'] ?? false) !== true) {
+            return ['success' => false, 'error' => (string)($validation['error'] ?? 'Immich API key validation failed.')];
+        }
+
+        try {
+            $me = $this->requestWithHeaders('GET', '/users/me', [
+                'headers' => [
+                    'x-api-key' => $apiKey,
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            $id = (string)($me['id'] ?? $me['userId'] ?? '');
+            if ($id !== '') {
+                return [
+                    'success' => true,
+                    'user' => [
+                        'id' => $id,
+                        'email' => (string)($me['email'] ?? ''),
+                        'name' => (string)($me['name'] ?? ''),
+                        'storageLabel' => (string)($me['storageLabel'] ?? ''),
+                    ],
+                ];
+            }
+        } catch (\Throwable $e) {
+            $this->logger->debug('GET /users/me failed, falling back to admin user list: ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+            ]);
+        }
+
+        // Fallback: extract identity from /auth/validateToken response payload when /users/me is unavailable.
+        $tokenInfo = is_array($validation['data'] ?? null) ? $validation['data'] : [];
+        $authUser = is_array($tokenInfo['user'] ?? null) ? $tokenInfo['user'] : (is_array($tokenInfo['userInfo'] ?? null) ? $tokenInfo['userInfo'] : []);
+        $tokenEmail = strtolower(trim((string)($authUser['email'] ?? '')));
+        $tokenId = trim((string)($authUser['id'] ?? $authUser['userId'] ?? ''));
+
+        if ($tokenId !== '') {
+            return [
+                'success' => true,
+                'user' => [
+                    'id' => $tokenId,
+                    'email' => (string)($authUser['email'] ?? ''),
+                    'name' => (string)($authUser['name'] ?? ''),
+                    'storageLabel' => (string)($authUser['storageLabel'] ?? ''),
+                ],
+            ];
+        }
+
+        if ($tokenEmail === '') {
+            return ['success' => false, 'error' => 'Immich API key validated but no user identity was returned by Immich.'];
+        }
+
+        try {
+            foreach ($this->listUsers() as $user) {
+                if (!is_array($user)) {
+                    continue;
+                }
+                if (strtolower(trim((string)($user['email'] ?? ''))) === $tokenEmail) {
+                    return [
+                        'success' => true,
+                        'user' => [
+                            'id' => (string)($user['id'] ?? $user['userId'] ?? ''),
+                            'email' => (string)($user['email'] ?? ''),
+                            'name' => (string)($user['name'] ?? ''),
+                            'storageLabel' => (string)($user['storageLabel'] ?? ''),
+                        ],
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => 'Admin user list lookup failed: ' . $e->getMessage()];
+        }
+
+        return ['success' => false, 'error' => 'Immich API key is valid but no matching Immich user could be located.'];
+    }
+
     public function disableUser(string $immichUserId): array {
         // Immich does not expose an "isEnabled" toggle on the admin user API. The non-destructive
         // equivalent is a soft delete via DELETE /admin/users/{id}, which queues account purge but

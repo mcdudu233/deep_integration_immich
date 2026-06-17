@@ -14,7 +14,9 @@ use OCA\IntegrationImmich\Db\SyncState;
 use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\PathTemplateService;
 use OCA\IntegrationImmich\Service\SyncStateService;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\Config\IUserMountCache;
+use OCP\Files\Events\InvalidateMountCacheEvent;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
@@ -33,6 +35,7 @@ class BuiltinExternalStorageService {
 		private LoggerInterface $logger,
 		private ?AdminConfigService $adminConfigService = null,
 		private ?IUserMountCache $userMountCache = null,
+		private ?IEventDispatcher $eventDispatcher = null,
 	) {
 	}
 
@@ -175,22 +178,34 @@ class BuiltinExternalStorageService {
 	}
 
 	private function refreshUserCache(string $ncUid): void {
-		if ($this->userMountCache === null) {
+		$user = $this->userManager->get($ncUid);
+		if ($user === null) {
 			return;
 		}
 
-		try {
-			$user = $this->userManager->get($ncUid);
-			if ($user === null) {
-				return;
+		if ($this->userMountCache !== null) {
+			try {
+				$this->userMountCache->removeUserMounts($user);
+			} catch (\Throwable $e) {
+				$this->logger->debug('Failed to refresh user mount cache for "' . $ncUid . '": ' . $e->getMessage(), [
+					'app' => Application::APP_ID,
+					'ncUid' => $ncUid,
+				]);
 			}
+		}
 
-			$this->userMountCache->removeUserMounts($user);
-		} catch (\Throwable $e) {
-			$this->logger->debug('Failed to refresh user mount cache for "' . $ncUid . '": ' . $e->getMessage(), [
-				'app' => Application::APP_ID,
-				'ncUid' => $ncUid,
-			]);
+		// The SetupManager keeps a per-user "filesystem already set up" verdict in a 5 minute
+		// distributed cache. Without invalidation, the next Files request reuses the stale
+		// verdict and never asks our IMountProvider for the freshly-provisioned mount.
+		if ($this->eventDispatcher !== null && class_exists(InvalidateMountCacheEvent::class)) {
+			try {
+				$this->eventDispatcher->dispatchTyped(new InvalidateMountCacheEvent($user));
+			} catch (\Throwable $e) {
+				$this->logger->debug('Failed to dispatch InvalidateMountCacheEvent for "' . $ncUid . '": ' . $e->getMessage(), [
+					'app' => Application::APP_ID,
+					'ncUid' => $ncUid,
+				]);
+			}
 		}
 	}
 

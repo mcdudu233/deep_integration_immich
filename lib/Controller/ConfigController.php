@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Controller;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\Db\SyncState;
 use OCA\IntegrationImmich\Service\ActionPolicyService;
 use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\ImmichService;
@@ -119,16 +120,14 @@ class ConfigController extends Controller {
             return new JSONResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
         }
 
-        $state = $this->syncStateService->findByUid($this->userId);
-        if ($state === null || trim((string)$state->getImmichUserId()) === '') {
-            return $this->errorResponse('mapping_missing', 'No active Immich mapping exists for this Nextcloud user.', Http::STATUS_PRECONDITION_FAILED);
-        }
-
         $username = trim((string)$this->request->getParam('immich_username', ''));
         $password = (string)$this->request->getParam('immich_password', '');
         $apiKey = trim((string)$this->request->getParam('immich_api_key', ''));
-        $storedApiKey = $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
+
+        $state = $this->syncStateService->findByUid($this->userId);
+        $storedApiKey = $state === null ? '' : $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
         $effectiveApiKey = $apiKey !== '' ? $apiKey : $storedApiKey;
+        $hasExistingMapping = $state !== null && trim((string)$state->getImmichUserId()) !== '';
 
         if ($username === '' || $password === '' || $effectiveApiKey === '') {
             return $this->errorResponse('connection_fields_required', 'Immich username, password, and API key are required.', Http::STATUS_BAD_REQUEST);
@@ -146,6 +145,14 @@ class ConfigController extends Controller {
             return $this->errorResponse('immich_api_key_validation_failed', 'Immich API key validation failed.', Http::STATUS_BAD_REQUEST, [
                 'detail' => $this->redactString((string)($apiKeyValidation['error'] ?? 'unknown')),
             ]);
+        }
+
+        if (!$hasExistingMapping) {
+            $bindResult = $this->bindExistingImmichUser($effectiveApiKey, $username);
+            if ($bindResult instanceof JSONResponse) {
+                return $bindResult;
+            }
+            $state = $bindResult;
         }
 
         $fields = [
@@ -168,6 +175,70 @@ class ConfigController extends Controller {
                 'api_key_set' => true,
             ],
         ]);
+    }
+
+    private function bindExistingImmichUser(string $apiKey, string $loginEmail): JSONResponse|SyncState {
+        $lookup = $this->immichUserAdminService->findUserByApiKey($apiKey);
+        if (($lookup['success'] ?? false) !== true) {
+            return $this->errorResponse(
+                'immich_user_lookup_failed',
+                'Cannot bind Immich account: ' . (string)($lookup['error'] ?? 'unknown'),
+                Http::STATUS_BAD_REQUEST,
+                ['detail' => $this->redactString((string)($lookup['error'] ?? 'unknown'))],
+            );
+        }
+
+        $immichUser = $lookup['user'];
+        $immichUserId = trim((string)$immichUser['id']);
+        if ($immichUserId === '') {
+            return $this->errorResponse(
+                'immich_user_lookup_failed',
+                'Immich API key validated but no user id was resolved.',
+                Http::STATUS_BAD_REQUEST,
+            );
+        }
+
+        // Refuse to hijack another Nextcloud user's mapping.
+        $existing = $this->syncStateService->findByImmichUserId($immichUserId);
+        if ($existing !== null && $existing->getNcUid() !== $this->userId) {
+            return $this->errorResponse(
+                'immich_user_already_mapped',
+                'This Immich account is already bound to a different Nextcloud user.',
+                Http::STATUS_CONFLICT,
+            );
+        }
+
+        $email = trim((string)$immichUser['email']) !== '' ? (string)$immichUser['email'] : $loginEmail;
+        $storageLabel = trim((string)$immichUser['storageLabel']);
+
+        $state = $this->syncStateService->getOrCreateForUid($this->userId);
+        $mapping = [
+            'immichUserId' => $immichUserId,
+            'immichEmail' => $email,
+            'scopeStatus' => SyncStateService::STATUS_ACTIVE,
+            'lastSyncStatus' => SyncStateService::STATUS_ACTIVE,
+            'lastError' => null,
+        ];
+        if ($storageLabel !== '') {
+            $mapping['storageLabel'] = $storageLabel;
+        }
+
+        try {
+            $this->syncStateService->updateMapping($this->userId, $mapping);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to persist user-initiated Immich mapping for "' . $this->userId . '": ' . $e->getMessage(), [
+                'app' => Application::APP_ID,
+                'ncUid' => $this->userId,
+            ]);
+            return $this->errorResponse(
+                'immich_mapping_persist_failed',
+                'Failed to persist the Immich mapping.',
+                Http::STATUS_INTERNAL_SERVER_ERROR,
+                ['detail' => $this->redactString($e->getMessage())],
+            );
+        }
+
+        return $this->syncStateService->findByUid($this->userId) ?? $state;
     }
 
     private function isAdminManagedConnectionUpdate(): bool {

@@ -263,4 +263,96 @@ class ConfigControllerTest extends TestCase {
 		$this->assertSame('Invalid api_key=[redacted]', $data['error']['details']['detail']);
 	}
 
+	public function testSetAdminManagedConnectionBindsExistingImmichUserWhenNoMapping(): void {
+		$createdState = new SyncState();
+		$createdState->setNcUid('testuser');
+		$boundState = new SyncState();
+		$boundState->setNcUid('testuser');
+		$boundState->setImmichUserId('immich-existing');
+		$boundState->setImmichEmail('alice@immich.local');
+
+		$this->request->method('getParam')->willReturnMap([
+			['immich_username', null, 'alice@immich.local'],
+			['immich_password', null, 'generated-password'],
+			['immich_api_key', null, 'pre-existing-key'],
+			['immich_username', '', 'alice@immich.local'],
+			['immich_password', '', 'generated-password'],
+			['immich_api_key', '', 'pre-existing-key'],
+		]);
+		$this->syncStateService->method('findByUid')
+			->with('testuser')
+			->willReturnOnConsecutiveCalls(null, $createdState, $boundState);
+		$this->immichUserAdminService->method('validateUserLogin')->willReturn(['success' => true]);
+		$this->immichUserAdminService->method('validateUserApiKey')->willReturn(['success' => true]);
+		$this->immichUserAdminService->method('findUserByApiKey')->with('pre-existing-key')->willReturn([
+			'success' => true,
+			'user' => [
+				'id' => 'immich-existing',
+				'email' => 'alice@immich.local',
+				'name' => 'Alice',
+				'storageLabel' => 'alice',
+			],
+		]);
+		$this->syncStateService->method('findByImmichUserId')->with('immich-existing')->willReturn(null);
+		$this->syncStateService->expects($this->once())
+			->method('getOrCreateForUid')
+			->with('testuser')
+			->willReturn($createdState);
+
+		$updateCalls = [];
+		$this->syncStateService->expects($this->exactly(2))
+			->method('updateMapping')
+			->willReturnCallback(function (string $uid, array $fields) use (&$updateCalls): void {
+				$updateCalls[] = $fields;
+			});
+
+		$response = $this->controller->setConfig();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+		$this->assertCount(2, $updateCalls);
+		$this->assertSame('immich-existing', $updateCalls[0]['immichUserId']);
+		$this->assertSame('alice@immich.local', $updateCalls[0]['immichEmail']);
+		$this->assertSame('alice', $updateCalls[0]['storageLabel']);
+		$this->assertSame(SyncStateService::STATUS_ACTIVE, $updateCalls[0]['scopeStatus']);
+		$this->assertSame('alice@immich.local', $updateCalls[1]['immichUsername']);
+		$this->assertSame('generated-password', $updateCalls[1]['immichPassword']);
+		$this->assertSame('encrypted:pre-existing-key', $updateCalls[1]['immichApiKey']);
+	}
+
+	public function testSetAdminManagedConnectionRefusesToHijackExistingMapping(): void {
+		$existingOwner = new SyncState();
+		$existingOwner->setNcUid('someone-else');
+		$existingOwner->setImmichUserId('immich-existing');
+
+		$this->request->method('getParam')->willReturnMap([
+			['immich_username', null, 'alice@immich.local'],
+			['immich_password', null, 'generated-password'],
+			['immich_api_key', null, 'pre-existing-key'],
+			['immich_username', '', 'alice@immich.local'],
+			['immich_password', '', 'generated-password'],
+			['immich_api_key', '', 'pre-existing-key'],
+		]);
+		$this->syncStateService->method('findByUid')->with('testuser')->willReturn(null);
+		$this->immichUserAdminService->method('validateUserLogin')->willReturn(['success' => true]);
+		$this->immichUserAdminService->method('validateUserApiKey')->willReturn(['success' => true]);
+		$this->immichUserAdminService->method('findUserByApiKey')->willReturn([
+			'success' => true,
+			'user' => [
+				'id' => 'immich-existing',
+				'email' => 'alice@immich.local',
+				'name' => 'Alice',
+				'storageLabel' => 'alice',
+			],
+		]);
+		$this->syncStateService->method('findByImmichUserId')->with('immich-existing')->willReturn($existingOwner);
+		$this->syncStateService->expects($this->never())->method('updateMapping');
+
+		$response = $this->controller->setConfig();
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		$this->assertSame('immich_user_already_mapped', $data['error']['code']);
+	}
+
 }
