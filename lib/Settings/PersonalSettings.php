@@ -11,11 +11,15 @@ declare(strict_types=1);
 namespace OCA\IntegrationImmich\Settings;
 
 use OCA\IntegrationImmich\AppInfo\Application;
+use OCA\IntegrationImmich\Controller\ConfigController;
+use OCA\IntegrationImmich\Service\AdminConfigService;
 use OCA\IntegrationImmich\Service\FrontendInitialStateService;
 use OCA\IntegrationImmich\Service\ImmichService;
+use OCA\IntegrationImmich\Service\SyncStateService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\IUserSession;
+use OCP\Security\ICrypto;
 use OCP\Settings\ISettings;
 
 class PersonalSettings implements ISettings {
@@ -24,13 +28,26 @@ class PersonalSettings implements ISettings {
         private FrontendInitialStateService $frontendInitialStateService,
         private IInitialState $initialState,
         private IUserSession $userSession,
+        private AdminConfigService $adminConfigService,
+        private SyncStateService $syncStateService,
+        private ICrypto $crypto,
     ) {
     }
 
     public function getForm(): TemplateResponse {
-        $state = $this->frontendInitialStateService->buildUserState($this->userSession->getUser()?->getUID());
+        $uid = $this->userSession->getUser()?->getUID();
+        $state = $this->frontendInitialStateService->buildUserState($uid);
         $state['server_url'] = $this->immichService->getServerUrl();
         $state['api_key_set'] = $this->immichService->getApiKey() !== '';
+        // Pre-fill the admin-managed connection block so the Vue form renders the provisioned
+        // username/password/API key on first paint instead of waiting for the async getConfig()
+        // round-trip (which leaves the fields blank on initial render and entirely if it fails).
+        $state['admin_managed_connection'] = ConfigController::buildAdminManagedConnectionState(
+            $uid,
+            $this->adminConfigService,
+            $this->syncStateService,
+            $this->crypto,
+        );
 
         $this->initialState->provideInitialState('personal-config', $state);
 

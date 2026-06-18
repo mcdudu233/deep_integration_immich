@@ -28,7 +28,6 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\BackgroundJob\IJobList;
 use OCP\Files\Config\IMountProviderCollection;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
-use OCP\Server;
 
 class Application extends App implements IBootstrap {
     public const APP_ID = 'deep_integration_immich';
@@ -76,9 +75,19 @@ class Application extends App implements IBootstrap {
             $this->registerTimedJobs($jobList, $adminConfigService);
         });
 
-        $context->injectFn(function (IMountProviderCollection $mountProviderCollection): void {
-            $mountProviderCollection->registerProvider(Server::get(ImmichLibraryMountProvider::class));
-        });
+        // Use method-reference + DI for the mount provider, matching the canonical pattern used
+        // by files_sharing. The previous closure form using Server::get(...) silently failed to
+        // register the provider in some contexts (CLI, post-Setup web requests), so Files never
+        // saw the per-user Immich library mount even though the provider itself worked when
+        // invoked directly.
+        $context->injectFn([$this, 'registerMountProviders']);
+    }
+
+    public function registerMountProviders(
+        IMountProviderCollection $mountProviderCollection,
+        ImmichLibraryMountProvider $immichLibraryMountProvider,
+    ): void {
+        $mountProviderCollection->registerProvider($immichLibraryMountProvider);
     }
 
     public function registerTimedJobs(IJobList $jobList, AdminConfigService $adminConfigService): void {

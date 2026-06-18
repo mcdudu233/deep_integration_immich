@@ -67,12 +67,25 @@ class ImmichLibraryMountProvider implements IMountProvider {
 			return [];
 		}
 
-		if (!($this->pathExists)($descriptor['target_path'])) {
+		$targetExists = ($this->pathExists)($descriptor['target_path']);
+		// Only suppress the mount when the Immich library folder has never appeared AND no prior
+		// provisioning persisted a mount id. Once mount_id is on record we keep emitting the
+		// mount so the Files UI stays consistent with the filecache rows that already drive the
+		// user's quota; transient path-stat failures (perm flips, container restarts) must not
+		// silently hide a previously working mount.
+		if (!$targetExists && $descriptor['mount_id'] === null) {
 			$this->logger->debug('Immich library mount target does not exist yet for user "' . $ncUid . '": ' . $descriptor['target_path'], [
 				'app' => Application::APP_ID,
 				'ncUid' => $ncUid,
 			]);
 			return [];
+		}
+
+		if (!$targetExists) {
+			$this->logger->warning('Immich library mount target is missing for user "' . $ncUid . '" but a mount id is persisted; surfacing the mount so the Files UI matches the recorded state. Path: ' . $descriptor['target_path'], [
+				'app' => Application::APP_ID,
+				'ncUid' => $ncUid,
+			]);
 		}
 
 		$mountPoint = '/' . $ncUid . '/files' . $descriptor['mount_name'];
@@ -123,7 +136,11 @@ class ImmichLibraryMountProvider implements IMountProvider {
 		}
 
 		$config = $this->adminConfigService->getAdminConfig();
-		if (filter_var($config[AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) !== true) {
+		$autoCreateEnabled = filter_var($config[AdminConfigService::KEY_EXTERNAL_STORAGE_AUTO_CREATE] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true;
+		// Keep emitting the mount when a previous provisioning run already persisted a mount id,
+		// even if the admin later disables auto-create. Hiding a working mount silently leaves the
+		// user's quota counting bytes from a folder they can no longer browse in Files.
+		if (!$autoCreateEnabled && $state->getNcMountId() === null) {
 			return null;
 		}
 

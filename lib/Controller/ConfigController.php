@@ -252,18 +252,38 @@ class ConfigController extends Controller {
     }
 
     private function adminManagedConnectionState(): array {
-        $config = $this->adminConfigService->getAdminConfig();
+        return self::buildAdminManagedConnectionState(
+            $this->userId,
+            $this->adminConfigService,
+            $this->syncStateService,
+            $this->crypto,
+        );
+    }
+
+    /**
+     * Shared payload builder so PersonalSettings can inject the same admin-managed connection
+     * snapshot into the Vue initial state that this controller returns from getConfig().
+     *
+     * @return array{enabled: bool, mapped?: bool, server_url?: string, username?: string, password?: string, api_key?: string, api_key_set?: bool}
+     */
+    public static function buildAdminManagedConnectionState(
+        ?string $userId,
+        AdminConfigService $adminConfigService,
+        SyncStateService $syncStateService,
+        ICrypto $crypto,
+    ): array {
+        $config = $adminConfigService->getAdminConfig();
         $adminManaged = ($config[AdminConfigService::KEY_IMMICH_BROWSING_MODE] ?? AdminConfigService::BROWSING_MODE_ADMIN_MANAGED) === AdminConfigService::BROWSING_MODE_ADMIN_MANAGED;
-        if (!$adminManaged || $this->userId === null) {
+        if (!$adminManaged || $userId === null || trim($userId) === '') {
             return ['enabled' => false];
         }
 
-        $state = $this->syncStateService->findByUid($this->userId);
+        $state = $syncStateService->findByUid($userId);
         if ($state === null) {
             return [
                 'enabled' => true,
                 'mapped' => false,
-                'server_url' => $this->adminConfigService->getImmichBaseUrl(),
+                'server_url' => $adminConfigService->getImmichBaseUrl(),
                 'username' => '',
                 'password' => '',
                 'api_key' => '',
@@ -271,13 +291,13 @@ class ConfigController extends Controller {
             ];
         }
 
-        $apiKey = $this->decryptNullable((string)($state->getImmichApiKey() ?? ''));
-        $password = $this->decryptNullable((string)($state->getImmichPassword() ?? ''));
+        $apiKey = self::decryptStoredCredential((string)($state->getImmichApiKey() ?? ''), $crypto);
+        $password = self::decryptStoredCredential((string)($state->getImmichPassword() ?? ''), $crypto);
 
         return [
             'enabled' => true,
             'mapped' => trim((string)$state->getImmichUserId()) !== '',
-            'server_url' => $this->adminConfigService->getImmichBaseUrl(),
+            'server_url' => $adminConfigService->getImmichBaseUrl(),
             'username' => (string)($state->getImmichUsername() ?? ''),
             'password' => $password,
             'api_key' => $apiKey,
@@ -285,16 +305,21 @@ class ConfigController extends Controller {
         ];
     }
 
-    private function decryptNullable(string $value): string {
+    private static function decryptStoredCredential(string $value, ICrypto $crypto): string {
         if ($value === '') {
             return '';
         }
 
         try {
-            return $this->crypto->decrypt($value);
+            return $crypto->decrypt($value);
         } catch (\Throwable) {
+            // Tolerate legacy plaintext rows; the migrate-credentials command rewrites them.
             return $value;
         }
+    }
+
+    private function decryptNullable(string $value): string {
+        return self::decryptStoredCredential($value, $this->crypto);
     }
 
     private function errorResponse(string $code, string $message, int $status, array $details = [], array $legacy = []): JSONResponse {

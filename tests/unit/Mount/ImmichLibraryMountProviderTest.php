@@ -42,12 +42,46 @@ class ImmichLibraryMountProviderTest extends TestCase {
 		$this->assertSame([], $this->provider()->getMountsForUser($this->user('alice'), $this->factory()));
 	}
 
+	public function testKeepsMountWhenAutoCreateDisabledButMountIdPersisted(): void {
+		// Once provisioning has run and persisted a mount id, toggling the admin auto-create flag
+		// off later must not silently hide the mount; otherwise the user's quota keeps counting
+		// bytes from a folder they can no longer browse in Files.
+		$state = $this->state('alice', 'alice');
+		$state->setNcMountId(42);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->mockConfig(false);
+		$this->existingPaths['/mnt/immich-library/alice'] = true;
+
+		$mounts = $this->provider()->getMountsForUser($this->user('alice'), $this->factory());
+
+		$this->assertCount(1, $mounts);
+		$this->assertSame('/alice/files/Immich Photos/', $mounts[0]->getMountPoint());
+		$this->assertSame(42, $mounts[0]->getMountId());
+	}
+
 	public function testReturnsEmptyWhenTargetPathDoesNotExist(): void {
 		$this->syncStateService->method('findByUid')->with('alice')->willReturn($this->state('alice', 'alice'));
 		$this->mockConfig(true);
 		// no path marked as existing
 
 		$this->assertSame([], $this->provider()->getMountsForUser($this->user('alice'), $this->factory()));
+	}
+
+	public function testKeepsMountWhenPathStatFailsButMountIdPersisted(): void {
+		// Transient path-stat failures (perm flips, container restarts, bind-mount drops) must
+		// not hide a previously working mount, because the filecache still drives quota off the
+		// existing storage rows. Surfacing the mount lets Files render it (and Local storage will
+		// raise its own visible error if reads truly fail).
+		$state = $this->state('alice', 'alice');
+		$state->setNcMountId(99);
+		$this->syncStateService->method('findByUid')->with('alice')->willReturn($state);
+		$this->mockConfig(true);
+		// no path marked as existing
+
+		$mounts = $this->provider()->getMountsForUser($this->user('alice'), $this->factory());
+
+		$this->assertCount(1, $mounts);
+		$this->assertSame('/alice/files/Immich Photos/', $mounts[0]->getMountPoint());
 	}
 
 	public function testReturnsEmptyWhenScopeIsDisabled(): void {

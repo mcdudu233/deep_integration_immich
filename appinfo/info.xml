@@ -28,6 +28,14 @@ Seamlessly integrates your [Immich](https://immich.app) photo library into Nextc
     <licence>AGPL-3.0-or-later</licence>
     <author mail="gh@grenzallee.eu">Marcel Meyer</author>
     <namespace>IntegrationImmich</namespace>
+    <types>
+        <!-- Mark this app as filesystem-relevant so Nextcloud loads it (and runs Application::boot)
+             BEFORE filesystem setup queries IMountProviderCollection. Without this, our
+             ImmichLibraryMountProvider was registered too late, causing Files to render the user
+             root without the per-user Immich library mount even though the provider worked when
+             invoked directly. -->
+        <filesystem/>
+    </types>
     <category>multimedia</category>
     <website>https://github.com/xXRoxXeRXx/integration_immich</website>
     <bugs>https://github.com/xXRoxXeRXx/integration_immich/issues</bugs>
