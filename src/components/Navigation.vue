@@ -477,33 +477,35 @@ function localizeStatusCode(code, params = {}, legacyMessage = '') {
 }
 
 .immich-quota-card {
-	margin: 8px 0;
-	padding: 8px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large);
-	background: var(--color-background-hover);
+	margin: 4px 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
 }
 
 .immich-quota-row {
 	display: flex;
 	justify-content: space-between;
-	gap: 12px;
-	padding: 2px 0;
-	font-size: 12px;
+	gap: 8px;
+	padding: 4px 0;
+	font-size: var(--default-font-size);
 }
 
 .immich-quota-label {
 	color: var(--color-text-maxcontrast);
+	font-size: var(--default-font-size);
 }
 
 .immich-quota-value {
 	font-weight: 600;
 	text-align: end;
 	word-break: break-word;
+	font-size: 13px;
 }
 
 .immich-quota-caveat {
-	margin: 6px 0 0;
+	margin: 4px 0 0;
 	font-size: 12px;
 	line-height: 1.3;
 	color: var(--color-warning);
