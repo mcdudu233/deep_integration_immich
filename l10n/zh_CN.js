@@ -383,7 +383,21 @@ OC.L10N.register(
     "Immich password": "Immich 密码",
     "Immich API key": "Immich API 密钥",
     "The provisioned API key is already configured. Leave blank to keep the current key.": "已配置 API 密钥。留空以保留当前密钥。",
-    "Immich personal connection saved and validated.": "Immich 连接已经验证，保存所有参数。"
+    "Immich personal connection saved and validated.": "Immich 连接已经验证，保存所有参数。",
+    "Scheduled sync interval (seconds)": "计划同步间隔（秒）",
+    "How often the scheduled quota sync job refreshes Nextcloud usage and updates Immich quotas. Allowed range: 300 to 604800 seconds.": "计划配额同步任务刷新 Nextcloud 用量并更新 Immich 配额的频率。允许范围：300 到 604800 秒。",
+    "Initial password policy must be random.": "初始密码策略必须为随机。",
+    "Quota sync interval must be an integer between 300 and 604800 seconds.": "配额同步间隔必须为 300 到 604800 秒之间的整数。",
+    "Quota sync failed. Run quota sync from the admin settings for authoritative status.": "配额同步失败。请从管理员设置运行配额同步以获取权威状态。",
+    "Nextcloud external-storage quota inclusion is not enabled; Immich quota values may not enforce the combined quota.": "Nextcloud 外部存储配额包含功能未启用；Immich 配额值可能无法强制执行合并配额限制。",
+    "Nextcloud usage refresh failed before quota sync. If external storage usage appears stale, schedule files_external:scan outside the app.": "配额同步前 Nextcloud 用量刷新失败。如果外部存储用量显示过期，请在应用外安排 files_external:scan。",
+    "Immich browsing status is temporarily unavailable.": "Immich 浏览状态暂时不可用。",
+    "Immich admin configuration is incomplete. Ask an administrator to configure Immich browsing.": "Immich 管理员配置不完整。请联系管理员配置 Immich 浏览。",
+    "Immich mirror mount requires manual administrator setup before browsing is ready.": "Immich 镜像挂载需要管理员手动设置后才能浏览。",
+    "Immich mirror mount is pending. Upload through Immich first or ask an administrator to reconcile provisioning.": "Immich 镜像挂载正在等待中。请先通过 Immich 上传，或联系管理员执行预配对账。",
+    "Used": "已用",
+    "Remaining": "剩余",
+    "Last sync": "上次同步"
   },
   "nplurals=1; plural=0;"
 );
